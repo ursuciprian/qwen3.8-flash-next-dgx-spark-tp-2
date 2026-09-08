@@ -32,11 +32,12 @@ defaults:
   speculative_num_steps: 3
   speculative_num_draft_tokens: 4
 
+mods:
+  - sglang-sm121-qsa-guard
+
 executor_config:
   cap_add:
     - SYS_PTRACE
-  volumes:
-    - /home/nvidia/GEN-AI/flashnext/patches/qsa_upstream_fix.py:/sgl-workspace/sglang/python/sglang/srt/layers/attention/qwen_sparse_attn_backend.py:ro
 
 env:
   PYTHONUNBUFFERED: '1'

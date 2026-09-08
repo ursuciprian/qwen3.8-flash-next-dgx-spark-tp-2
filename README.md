@@ -8,8 +8,8 @@ the box; the recipes here boot, and the numbers behind them are in
 
 Two sets of recipes:
 
-- **`recipes/sparkarena/`**: the two recipes published on Spark Arena, exactly
-  as uploaded, with the patches they mount.
+- **`recipes/sparkarena/`**: the two recipes published on Spark Arena, same
+  flags as uploaded, patches applied as mods.
 - **`recipes/latest/`**: the three recipes I run today. Faster, on newer images,
   and with a correctness fix the published SGLang recipe does not have.
 
@@ -20,7 +20,7 @@ Two sets of recipes:
 | Chat, one or two agents, cached history | `latest/flashnext-bigkv-g8-c4096.yaml` | SGLang | Best single-stream decode: 36-40 tok/s on prose, 62 tok/s median on a 40-prompt category harness (coding 65). 110k context, 0.9M-token KV pool. |
 | Five or more streams, batch prefill | `latest/flashnext-bigkv-nospec.yaml` | SGLang | Same recipe without the drafter: prefill +20%, c5 decode 75-85 tok/s at depth. Single stream drops to 26; use at c5 and above. |
 | Long documents revisited across turns, many agents, capacity | `latest/flashnext-vllm-cached.yaml` | vLLM | Prefix caching that really reuses, drafter on: a fresh 2k turn after a cached 16k context prefills at 2176 tok/s (SGLang 946). Decode 43 tok/s single stream, 52-61 at c5 and depth. 262k context, 2.0M-token KV pool. |
-| Reproduce the Spark Arena entries | `sparkarena/*.yaml` | both | The published configurations, unchanged. |
+| Reproduce the Spark Arena entries | `sparkarena/*.yaml` | both | The published configurations; patches as mods. |
 
 Decode on this model depends more on how predictable the output is than on
 engine or flags: the same server decodes prose at 38 tok/s and JSON at 62.
@@ -42,10 +42,10 @@ The vLLM recipe declares `mods: [vllm-flashnext-nightly-8a728663]`; the mod's
 `run.sh` copies the six overlays over the image's files inside every container
 before serve. sparkrun will ask you to confirm the hook the first time unless
 you pass `--trust`. The Spark Arena copies sit in a second, hidden registry
-entry (`@qwen38-flashnext-sparkarena/...`); they still carry their original
-absolute bind-mount paths, so run those through `scripts/run.sh`, which
-rewrites the paths, or use the mods `sglang-sm121-qsa-guard` and
-`vllm-ple-fp8` in their place.
+entry (`@qwen38-flashnext-sparkarena/...`). In the registry they carry their
+patches as mods too (`sglang-sm121-qsa-guard`, `vllm-ple-fp8`) instead of the
+absolute bind-mount lines of the uploaded files; flags and everything else are
+unchanged.
 
 Adjust the NCCL interface and HCA names in `env:` to your nodes before the
 first launch (`sparkrun run ... -o` overrides do not reach `env:`; edit the
@@ -69,8 +69,7 @@ scripts/run.sh vllm-sparkarena      # published vLLM recipe
 DEPTHS="0 16384" CONCURRENCY="1 2 5" scripts/run.sh vllm --bench
 ```
 
-`run.sh` checks both nodes, rewrites the recipes' bind-mount paths to this
-checkout, syncs the checkout to the worker, fetches the checkpoint and mirrors
+`run.sh` checks both nodes, syncs the checkout to the worker, fetches the checkpoint and mirrors
 it over CX-7, drops the page cache on both nodes, launches, and waits for the
 port. Loads take 10-15 minutes. Stop with `sparkrun stop --all`. Launch by hand
 with `sparkrun run <recipe> --cluster <name> --tp 2` after editing the mount

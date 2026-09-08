@@ -24,12 +24,13 @@ defaults:
   max_num_batched_tokens: 8192
   num_speculative_tokens: 3
 
+mods:
+  - vllm-ple-fp8
+
 executor_config:
   entrypoint: ''
   cap_add:
     - SYS_PTRACE
-  volumes:
-    - /home/nvidia/GEN-AI/qwen38-opt/patches/vllm_ple_layer.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/nvidia/ple_layer.py:ro
 
 env:
   VLLM_PLE_CPU_OFFLOAD: '0'

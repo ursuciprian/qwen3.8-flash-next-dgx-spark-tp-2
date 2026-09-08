@@ -1,10 +1,9 @@
 # Patches
 
-The same files exist twice: here, for reading and for the bind-mount form used
-by the Spark Arena recipes (`scripts/run.sh` rewrites the mount paths to this
-clone), and under `mods/`, where a `run.sh` copies them into the container
-before serve. The registry recipes in `recipes/latest/` use the mods, so they
-work from a `sparkrun registry add` checkout without any path edits.
+The same files exist twice: here, for reading, and under `mods/`, where a
+`run.sh` copies them into the container before serve. Every recipe in this
+registry that needs a patch references its mod, so nothing depends on a clone
+path.
 
 ## `qsa_upstream_fix.py` (SGLang, published recipe only)
 
