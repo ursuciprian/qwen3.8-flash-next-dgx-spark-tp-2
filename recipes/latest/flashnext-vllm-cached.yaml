@@ -24,19 +24,15 @@ defaults:
   max_num_batched_tokens: 4096
   num_speculative_tokens: 3
 
+mods:
+  - vllm-flashnext-nightly-8a728663
+
 executor_config:
   entrypoint: ""
   cap_add:
     - SYS_PTRACE
     - IPC_LOCK
   shm_size: 32gb
-  volumes:
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/ops_ple.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/ple.py:ro
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/ops_qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/qsa.py:ro
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/qsa.py:ro
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/platforms_interface.py:/usr/local/lib/python3.12/dist-packages/vllm/platforms/interface.py:ro
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/modelopt.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py:ro
-    - /home/nvidia/GEN-AI/qwen3.8-flash-next/patches/vllm-nightly-8a728663/kv_cache_utils.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_utils.py:ro
 
 env:
   HF_HUB_OFFLINE: '1'

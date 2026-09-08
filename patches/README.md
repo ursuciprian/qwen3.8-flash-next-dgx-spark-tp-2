@@ -1,8 +1,10 @@
 # Patches
 
-Every file here is bind-mounted read-only over the matching file inside the
-container. The recipes carry the mount lines; `scripts/run.sh` rewrites the
-absolute source paths to wherever this repository is cloned, on both nodes.
+The same files exist twice: here, for reading and for the bind-mount form used
+by the Spark Arena recipes (`scripts/run.sh` rewrites the mount paths to this
+clone), and under `mods/`, where a `run.sh` copies them into the container
+before serve. The registry recipes in `recipes/latest/` use the mods, so they
+work from a `sparkrun registry add` checkout without any path edits.
 
 ## `qsa_upstream_fix.py` (SGLang, published recipe only)
 

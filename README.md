@@ -26,6 +26,31 @@ Decode on this model depends more on how predictable the output is than on
 engine or flags: the same server decodes prose at 38 tok/s and JSON at 62.
 Measure your own workload before trusting one figure.
 
+## Use as a sparkrun registry
+
+This repository is a sparkrun recipe registry (`.sparkrun/registry.yaml`).
+The overlays ship as mods, so nothing needs a path edit:
+
+```sh
+sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
+sparkrun recipe search flashnext
+sparkrun run @qwen38-flashnext/flashnext-bigkv-g8-c4096 --cluster <your-cluster> --tp 2
+sparkrun run @qwen38-flashnext/flashnext-vllm-cached     --cluster <your-cluster> --tp 2
+```
+
+The vLLM recipe declares `mods: [vllm-flashnext-nightly-8a728663]`; the mod's
+`run.sh` copies the six overlays over the image's files inside every container
+before serve. sparkrun will ask you to confirm the hook the first time unless
+you pass `--trust`. The Spark Arena copies sit in a second, hidden registry
+entry (`@qwen38-flashnext-sparkarena/...`); they still carry their original
+absolute bind-mount paths, so run those through `scripts/run.sh`, which
+rewrites the paths, or use the mods `sglang-sm121-qsa-guard` and
+`vllm-ple-fp8` in their place.
+
+Adjust the NCCL interface and HCA names in `env:` to your nodes before the
+first launch (`sparkrun run ... -o` overrides do not reach `env:`; edit the
+YAML or copy it).
+
 ## Quick start
 
 On the head node, with a two-host sparkrun cluster on the CX-7 addresses:
@@ -126,7 +151,9 @@ group annotation is vllm-project/vllm #55390.
 |---|---|
 | `recipes/sparkarena/` | The two published recipes, verbatim |
 | `recipes/latest/` | The three maintained recipes |
-| `patches/` | Bind-mount overlays with a README explaining each |
+| `patches/` | The overlay files with a README explaining each |
+| `mods/` | The same overlays as sparkrun mods (`run.sh` copies them into the container); referenced by the registry recipes |
+| `.sparkrun/registry.yaml` | Registry manifest: `qwen38-flashnext` (recipes/latest) and the hidden `qwen38-flashnext-sparkarena` |
 | `scripts/run.sh` | One launcher, one option per recipe |
 | `scripts/recipe_metadata.py` | Reads recipes, rewrites mount paths to this checkout |
 | `results/` | Grids as CSV and `RESULTS.md` with the tables |
