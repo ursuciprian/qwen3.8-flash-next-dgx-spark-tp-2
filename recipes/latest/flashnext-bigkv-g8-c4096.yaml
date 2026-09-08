@@ -1,0 +1,91 @@
+description: Qwen3.8-Flash-Next TP2 deep-context candidate - decode graphs 1 through 10, enlarged KV, explicit overflow rejection
+name: qwen38-flash-next-nvfp4-bigkv-g8-c4096-sep03-sglang
+model: RadixArk/Qwen3.8-Flash-Next-NVFP4
+runtime: sglang
+container: lmsysorg/sglang:qwen38flashnext-sep03
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  recipe_revision: 2026-09-08-sep03
+  description: Fast sparse-attention profile with BF16 Mamba state, chunked prefill 4096,
+    decode CUDA graphs for every batch 1-10 and an enlarged KV pool, on the public
+    2026-09-03 SGLang image which carries upstream's own SM121 kernel. Network flags
+    pin NCCL to this cluster's CX-7 HCAs (enp1s0f1np1 / rocep1s0f1); on defaults NCCL
+    falls back to TCP over WiFi and adds 18-65 ms of jitter per decode step.
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.8
+  max_model_len: 110000
+  max_num_seqs: 10
+  served_model_name: qwen3.8-flash-next
+  revision: 7b719225242aacd3dbd3f9407468c2ee9a9d2594
+  max_total_tokens: 900000
+  chunked_prefill_size: 4096
+  speculative_num_steps: 3
+  speculative_num_draft_tokens: 4
+
+executor_config:
+  cap_add:
+    - SYS_PTRACE
+
+env:
+  PYTHONUNBUFFERED: '1'
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_NET: IB
+  NCCL_NET_PLUGIN: none
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+
+command: |
+  taskset -c 5-9,15-19 python3 -m sglang.launch_server \
+    --model-path {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --tp-size {tensor_parallel} \
+    --quantization modelopt_fp4 \
+    --attention-backend flashinfer \
+    --fp4-gemm-backend flashinfer_cutlass \
+    --page-size 64 \
+    --mamba-ssm-dtype bfloat16 \
+    --mamba-radix-cache-strategy extra_buffer \
+    --mamba-track-interval 64 \
+    --max-mamba-cache-size 97 \
+    --mem-fraction-static {gpu_memory_utilization} \
+    --context-length {max_model_len} \
+    --max-total-tokens {max_total_tokens} \
+    --max-running-requests {max_num_seqs} \
+    --chunked-prefill-size {chunked_prefill_size} \
+    --speculative-algorithm NEXTN \
+    --speculative-num-steps {speculative_num_steps} \
+    --speculative-eagle-topk 1 \
+    --speculative-num-draft-tokens {speculative_num_draft_tokens} \
+    --speculative-attention-mode decode \
+    --reasoning-parser auto \
+    --tool-call-parser auto \
+    --enable-metrics \
+    --enable-cache-report \
+    --ple-offload-embedding \
+    --disable-prefill-cuda-graph \
+    --cuda-graph-bs-decode 1 2 3 4 5 6 7 8 9 10 \
+    --disable-cuda-graph-padding \
+    --trust-remote-code
+
+recipe_version: '2'
+builder: ursuciprian

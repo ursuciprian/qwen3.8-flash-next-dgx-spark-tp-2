@@ -1,0 +1,52 @@
+--- kv_cache_utils.orig.py	2026-09-04 08:33:54
++++ kv_cache_utils.py	2026-09-07 22:24:56
+@@ -2068,8 +2068,16 @@
+     if spec_config is None or not spec_config.use_eagle():
+         return False
+     model_config = vllm_config.model_config
+-    return (
+-        model_config is not None and model_config.hf_config.model_type == "deepseek_v4"
++    # Qwen3.8-Flash-Next (qwen4_exp) is in the same situation as DeepseekV4: its
++    # MTP block is a plain full_attention Qwen4ExpDecoderLayer registered after
++    # the target layers (mtp.layers.<num_hidden_layers>), carries no spec marker,
++    # and without this fallback every group - the four GDN groups included - is
++    # flagged as a draft group, which disables prefix-cache reuse across requests
++    # (see _warn_if_unannotated_eagle_mamba). Measured 2026-09-07 on TP2 GB10:
++    # pp2048@d32k 164 tok/s with caching "on", identical to caching off.
++    return model_config is not None and model_config.hf_config.model_type in (
++        "deepseek_v4",
++        "qwen4_exp",
+     )
+ 
+ 
+@@ -2121,9 +2129,15 @@
+     if not use_deepseek_v4_fallback:
+         return
+     last_layer = next(reversed(kv_cache_spec))
+-    for group in kv_cache_groups:
++    for idx, group in enumerate(kv_cache_groups):
+         if last_layer in group.layer_names:
+             group.is_eagle_group = True
++            logger.info(
++                "Flagged KV cache group %d as the drafter's (last registered "
++                "layer %s); other groups keep normal prefix-cache reuse.",
++                idx,
++                last_layer,
++            )
+             break
+ 
+ 
+@@ -2261,7 +2275,12 @@
+             aligned = replace(spec, block_size=new_bs, page_size_padded=common_page)
+             groups.append(KVCacheGroupSpec([name], aligned))
+ 
+-    _annotate_eagle_groups(vllm_config, kv_cache_spec, groups)
++    _annotate_eagle_groups(
++        vllm_config,
++        kv_cache_spec,
++        groups,
++        use_deepseek_v4_fallback=_is_deepseek_v4_eagle(vllm_config),
++    )
+     _warn_if_unannotated_eagle_mamba(vllm_config, groups)
+     return groups
+ 

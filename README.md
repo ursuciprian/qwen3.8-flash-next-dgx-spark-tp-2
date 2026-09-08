@@ -1,0 +1,142 @@
+# Qwen3.8-Flash-Next NVFP4 on two DGX Sparks (TP=2)
+
+Recipes, patches and measurements for serving `Qwen3.8-Flash-Next-NVFP4`
+(180B MoE) across two NVIDIA DGX Spark (GB10, SM121) over ConnectX-7, with
+sparkrun, on SGLang and on vLLM. Neither engine supports this hardware out of
+the box; the recipes here boot, and the numbers behind them are in
+[results/RESULTS.md](results/RESULTS.md).
+
+Two sets of recipes:
+
+- **`recipes/sparkarena/`**: the two recipes published on Spark Arena, exactly
+  as uploaded, with the patches they mount.
+- **`recipes/latest/`**: the three recipes I run today. Faster, on newer images,
+  and with a correctness fix the published SGLang recipe does not have.
+
+## Which recipe
+
+| You are serving | Recipe | Engine | What you get |
+|---|---|---|---|
+| Chat, one or two agents, cached history | `latest/flashnext-bigkv-g8-c4096.yaml` | SGLang | Best single-stream decode: 36-40 tok/s on prose, 62 tok/s median on a 40-prompt category harness (coding 65). 110k context, 0.9M-token KV pool. |
+| Five or more streams, batch prefill | `latest/flashnext-bigkv-nospec.yaml` | SGLang | Same recipe without the drafter: prefill +20%, c5 decode 75-85 tok/s at depth. Single stream drops to 26; use at c5 and above. |
+| Long documents revisited across turns, many agents, capacity | `latest/flashnext-vllm-cached.yaml` | vLLM | Prefix caching that really reuses, drafter on: a fresh 2k turn after a cached 16k context prefills at 2176 tok/s (SGLang 946). Decode 43 tok/s single stream, 52-61 at c5 and depth. 262k context, 2.0M-token KV pool. |
+| Reproduce the Spark Arena entries | `sparkarena/*.yaml` | both | The published configurations, unchanged. |
+
+Decode on this model depends more on how predictable the output is than on
+engine or flags: the same server decodes prose at 38 tok/s and JSON at 62.
+Measure your own workload before trusting one figure.
+
+## Quick start
+
+On the head node, with a two-host sparkrun cluster on the CX-7 addresses:
+
+```sh
+git clone https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2 ~/GEN-AI/qwen3.8-flash-next
+cd ~/GEN-AI/qwen3.8-flash-next
+
+scripts/run.sh sglang --check       # validate cluster and nodes, launch nothing
+scripts/run.sh sglang               # latest SGLang, interactive
+scripts/run.sh sglang-nospec        # latest SGLang, 5+ streams
+scripts/run.sh vllm                 # latest vLLM, cached long context
+scripts/run.sh sglang-sparkarena    # published SGLang recipe
+scripts/run.sh vllm-sparkarena      # published vLLM recipe
+
+DEPTHS="0 16384" CONCURRENCY="1 2 5" scripts/run.sh vllm --bench
+```
+
+`run.sh` checks both nodes, rewrites the recipes' bind-mount paths to this
+checkout, syncs the checkout to the worker, fetches the checkpoint and mirrors
+it over CX-7, drops the page cache on both nodes, launches, and waits for the
+port. Loads take 10-15 minutes. Stop with `sparkrun stop --all`. Launch by hand
+with `sparkrun run <recipe> --cluster <name> --tp 2` after editing the mount
+paths in the recipe.
+
+Before every launch, on both nodes:
+
+```sh
+sync; echo 3 | sudo tee /proc/sys/vm/drop_caches
+```
+
+GB10 shares one 128 GB pool between CPU and GPU. A warm page cache starves
+the GPU allocator about 20 minutes into the load; `free -g` misreports it.
+
+## The recipes, briefly
+
+**Published SGLang** (`qwen38-flash-next-nvfp4-fastqsa4096bigkv-g8-sglang`,
+2026-08-30): day-0 image with an SM121 guard fix bind-mounted, NEXTN
+speculative decoding (3 steps, 4 draft tokens), BF16 Mamba state, chunked
+prefill 4096, decode CUDA graphs at batch 1/2/4/8, KV pool enlarged to 900k
+tokens. The only configuration in the August grid that kept five streams alive
+at 65k depth. Known issue: on SM121 the guard-fixed kernel path silently
+corrupts contexts above roughly 95k tokens (sgl-project/sglang #36806), and
+the image tag is not pinned. Use the latest recipe.
+
+**Latest SGLang** (`flashnext-bigkv-g8-c4096`): same tuning on the
+2026-09-03 image, which carries upstream's dedicated SM121 kernel
+(sgl-project/sglang #36845), so nothing is mounted. Decode graphs cover every
+batch 1 to 10. `--allow-auto-truncate` removed: over-length requests fail
+explicitly. Fresh shallow prefill about 10% lower than the published recipe,
+decode unchanged, long context correct.
+
+**Latest SGLang without drafter** (`flashnext-bigkv-nospec`): the same file
+minus the five speculative flags. The drafter accepts about 2 of 4 tokens on
+prose; at five or more streams verification costs more than it returns.
+
+**Published vLLM** (`qwen3.8-flash-next-nvfp4-tp2`): RadixArk checkpoint on
+`vllm/vllm-openai:qwen38-flash-next`, MTP with 3 draft tokens, compilation
+mode 0 (Inductor compile on this model consumed 40 GB outside the memory
+budget and locked both nodes; CUDA graph capture itself is fine), decode
+graphs at batch 1-4, patched PLE loader. Single-stream decode nearly flat to
+64k context. Prefix caching was on but not reusing anything across turns on
+that build, so deep turns re-prefilled the whole context.
+
+**Latest vLLM** (`flashnext-vllm-cached`): NVIDIA checkpoint
+`nvidia/Qwen3.8-Flash-Next-NVFP4` at `fc694b54` on nightly `8a728663`, MTP
+with 3 draft tokens, fp8 KV, six overlays (see
+[patches/README.md](patches/README.md)), and one speculative-config flag,
+`disable_eagle_block_drop`. Why: vLLM's Mamba "align" caching keeps only the
+GDN state at the prompt's last block boundary, and the MTP block drop looks one
+block earlier, so a prompt's first pass is never reusable. Disabling the drop
+makes the lookup land (same 20k prompt three times: 0 / 19,200 / 19,200
+tokens reused, second request 1.7 s instead of 10 s). The drop guards against
+reusing KV written under the next-token lookahead; on six 6k-18k prompts,
+cached and fresh greedy outputs diverged at the same rate with and without it,
+with the same two near-tied continuations swapping sides, so that divergence
+is batch-shape numerics rather than the flag. The stock-semantics alternative,
+`--prefix-cache-retention-interval 3200`, keeps the drop and reuses one block
+less per turn, halving cached prefill. Written up for upstream; the drafter
+group annotation is vllm-project/vllm #55390.
+
+## Hardware
+
+- 2x DGX Spark: GB10, SM121, 128 GB LPDDR5X unified, about 273 GB/s per node.
+- CX-7 RoCE between the nodes on `192.168.100.x` (interface `enp1s0f1np1`,
+  HCAs `rocep1s0f1,roceP2p1s0f1`, GID index 3). The recipes pin NCCL to it;
+  on defaults NCCL falls back to TCP over WiFi and adds 18-65 ms per decode
+  step. Adjust the interface and HCA names to your nodes.
+- CPUs 5-9 and 15-19 run at 3900 MHz, the rest at 2808; recipes pin the
+  server to the fast ones with `taskset`.
+- Checkpoints: `RadixArk/Qwen3.8-Flash-Next-NVFP4` at `7b719225` (SGLang and
+  published vLLM), `nvidia/Qwen3.8-Flash-Next-NVFP4` at `fc694b54` (latest
+  vLLM). About 135 GB each on disk, 73 GB of weights per node at TP=2.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `recipes/sparkarena/` | The two published recipes, verbatim |
+| `recipes/latest/` | The three maintained recipes |
+| `patches/` | Bind-mount overlays with a README explaining each |
+| `scripts/run.sh` | One launcher, one option per recipe |
+| `scripts/recipe_metadata.py` | Reads recipes, rewrites mount paths to this checkout |
+| `results/` | Grids as CSV and `RESULTS.md` with the tables |
+
+## Credits
+
+RadixArk for the NVFP4 checkpoint and the day-0 engine work. tonyd2wild for
+the vLLM SM121 overlays, the SPEED profile the latest vLLM recipe grew from,
+and the 40-prompt category harness used for the coding/JSON/prose figures.
+MiaAI for the fast sparse-attention SGLang profile the SGLang recipes grew
+from. Their work made this run faster on my setup and my workloads; the
+measurements, the cache-reuse diagnosis and the fixes here are mine, and so
+are any mistakes.
