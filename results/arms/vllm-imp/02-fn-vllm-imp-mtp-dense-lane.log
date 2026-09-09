@@ -1,0 +1,35 @@
+== vllm_imp-mtp-dense start 18:03:57  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== vllm_imp-mtp-dense C1 18:03:57
+    narrative  auto=0.7  ttft=0.17s  decode=36.2  tokens=279
+    summary    auto=0.75  ttft=0.16s  decode=39.6  tokens=30
+    format     auto=1.0  ttft=0.17s  decode=38.4  tokens=21
+== vllm_imp-mtp-dense C2 18:06:41
+    narrative  auto=0.693  ttft=0.2s  decode=31.9  tokens=341
+    summary    auto=0.75  ttft=0.2s  decode=32.9  tokens=38
+    format     auto=1.0  ttft=0.19s  decode=26.8  tokens=21
+== vllm_imp-mtp-dense C4 18:08:59
+    narrative  auto=0.593  ttft=0.26s  decode=30.1  tokens=300
+    summary    auto=0.75  ttft=0.26s  decode=28.4  tokens=30
+    format     auto=1.0  ttft=0.26s  decode=25.0  tokens=21
+== vllm_imp-mtp-dense C6 18:10:55
+    narrative  auto=0.66  ttft=0.33s  decode=24.8  tokens=379
+    summary    auto=0.75  ttft=0.3s  decode=22.6  tokens=30
+    format     auto=1.0  ttft=0.3s  decode=22.6  tokens=21
+== vllm_imp-mtp-dense cold prefill ladder 18:12:27
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=2.4s total=2.6s prefill~2952 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=9.8s total=9.9s prefill~2880 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=16.5s total=16.6s prefill~3419 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=23.5s total=23.6s prefill~3745 tok/s finish=stop answer='PELICAN-7' OK
+== vllm_imp-mtp-dense counting ceiling (peak row only, never a headline) 18:13:20
+  c1: agg   63.2 tok/s | per-stream  63.2 | w2w med  5.06s p90  5.12s | TTFT  0.77s | prefill 2211 tok/s
+  c2: agg  118.0 tok/s | per-stream  59.1 | w2w med  5.41s p90  5.49s | TTFT  1.40s
+  c4: agg  198.7 tok/s | per-stream  50.3 | w2w med  6.36s p90  6.60s | TTFT  2.60s
+  c5: agg  249.7 tok/s | per-stream  50.0 | w2w med  6.40s p90  6.88s | TTFT  3.17s
+  c6: agg  292.2 tok/s | per-stream  48.7 | w2w med  6.57s p90  6.72s | TTFT  3.67s
+JSON -> results/sweep_vllm_imp-mtp-dense.json
+== vllm_imp-mtp-dense done 18:15:19
+LANE_DONE

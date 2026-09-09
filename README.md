@@ -22,7 +22,7 @@ Two sets of recipes:
 
 | You are serving | Recipe | Engine | What you get |
 |---|---|---|---|
-| Chat, one or two agents, cached history | `latest/flashnext-bigkv-g8-c4096.yaml` | SGLang | Best single-stream decode: 36-40 tok/s on prose, 62 tok/s median on a 40-prompt category harness (coding 65). 110k context, 0.9M-token KV pool. |
+| Chat, one or two agents, cached history | `latest/flashnext-bigkv-g8-c4096.yaml` | SGLang | Best single-stream decode: 37-41 tok/s on prose, 58-61 tok/s median on a 40-prompt category harness (coding 63). 110k context, 0.9M-token KV pool. |
 | Five or more streams, batch prefill | `latest/flashnext-bigkv-nospec.yaml` | SGLang | Same recipe without the drafter: prefill +20%, c5 decode 75-85 tok/s at depth. Single stream drops to 26; use at c5 and above. |
 | Long documents revisited across turns, many agents, capacity | `latest/flashnext-vllm-cached.yaml` | vLLM | Prefix caching that really reuses, drafter on: a fresh 2k turn after a cached 16k context prefills at 2176 tok/s (SGLang 946). Decode 43 tok/s single stream, 52-61 at c5 and depth. 262k context, 2.0M-token KV pool. |
 | Reproduce the Spark Arena entries | `sparkarena/*.yaml` | both | The published configurations; patches as mods. |
@@ -114,7 +114,10 @@ the image tag is not pinned. Use the latest recipe.
 2026-09-03 image, which carries upstream's dedicated SM121 kernel
 (sgl-project/sglang #36845), so nothing is mounted. Decode graphs cover every
 batch 1 to 10. `--allow-auto-truncate` removed: over-length requests fail
-explicitly. Fresh shallow prefill about 10% lower than the published recipe,
+explicitly. `--no-ple-offload-embedding` since 2026-09-09: on unified memory
+the n-gram offload is a pinned host copy out of the same pool, so keeping the
+table GPU-resident and sharded is free speed (8 of 36 grid cells above a
+three-boot control envelope, none below, repeated on a second boot). Fresh shallow prefill about 10% lower than the published recipe,
 decode unchanged, long context correct.
 
 **Latest SGLang without drafter** (`flashnext-bigkv-nospec`): the same file

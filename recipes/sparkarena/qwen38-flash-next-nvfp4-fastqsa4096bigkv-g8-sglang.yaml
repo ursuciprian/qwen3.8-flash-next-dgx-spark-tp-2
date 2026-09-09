@@ -1,8 +1,12 @@
+# Pinned 2026-09-09 to the day-0 build this recipe was validated on. The tag it originally named,
+# lmsysorg/sglang:qwen38flashnext, moved on 2026-09-03 to a build that carries upstream's own SM121
+# kernel; the guard mod below would overwrite that kernel with the path that corrupts long context
+# (sgl-project/sglang#36806). Prefer recipes/sparkarena-fixed/, which uses the newer build and no mod.
 description: Qwen3.8-Flash-Next NVFP4 TP=2 - fast QSA, BF16 mamba, chunked prefill 4096, decode graphs 1/2/4/8, enlarged KV pool
 name: qwen38-flash-next-nvfp4-fastqsa4096bigkv-g8-sglang
 model: RadixArk/Qwen3.8-Flash-Next-NVFP4
 runtime: sglang
-container: lmsysorg/sglang:qwen38flashnext
+container: lmsysorg/sglang@sha256:12d3392bdc8be8d35e9a95f191df6aef99c5114bdbefd41bfdc7e760e6d25ec1
 
 min_nodes: 2
 max_nodes: 2

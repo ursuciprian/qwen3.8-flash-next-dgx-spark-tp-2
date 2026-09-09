@@ -1,0 +1,68 @@
+=== 02:53:47 01-fn-vllm-imp-ep start
+served: qwen3.8-flash-next  image: 1891ada1256a
+Capturing CUDA graphs (FULL):   0%|          | 0/2 [00:00<?, ?it/s]
+Capturing CUDA graphs (FULL):   0%|          | 0/4 [00:00<?, ?it/s]
+Capturing CUDA graphs (FULL): 100%|██████████| 2/2 [00:00<00:00,  3.93it/s]
+Capturing CUDA graphs (FULL): 100%|██████████| 2/2 [00:00<00:00,  4.32it/s]
+Capturing CUDA graphs (FULL): 100%|██████████| 4/4 [00:00<00:00,  9.89it/s]
+Capturing CUDA graphs (FULL):  25%|██▌       | 1/4 [00:00<00:00,  8.79it/s]
+Capturing CUDA graphs (FULL):  50%|█████     | 1/2 [00:00<00:00,  2.60it/s]
+Capturing CUDA graphs (FULL):  75%|███████▌  | 3/4 [00:00<00:00, 10.33it/s]
+mem: 24G avail head, 26G worker
+--- 03:07:02 reuse probe (same 20k prompt x3, exclusive)
+req1 ttft=9.9s hits+0 queries+19839
+req2 ttft=1.64s hits+19200 queries+19839
+req3 ttft=0.4s hits+19200 queries+19839
+REUSE FIRST_PASS_REUSE
+--- 03:07:14 prefix gate
+GATE {"requests": 68, "failures": 0, "cached_hits": 0, "max_cached_tokens": 0, "server_prefix_hit_tokens": 585600.0, "health": true, "verdict": "PASS"}
+--- 03:09:07 benchy grid depths=[0 2048 4096 8192 16384 32768] conc=[1 2 5]
+benchy accepted_drafts_per_cycle 1.117  drafts 19876
+  qwen3.8-flash-next pp2048(c1) 2889.59±81.15
+  qwen3.8-flash-next tg128(c1) 39.84±3.57
+  qwen3.8-flash-next pp2048(c2) 2773.12±25.61
+  qwen3.8-flash-next tg128(c2) 53.60±4.94
+  qwen3.8-flash-next pp2048(c5) 2772.99±10.39
+  qwen3.8-flash-next tg128(c5) 71.41±3.41
+  qwen3.8-flash-next pp2048@d2048(c1) 1378.67±16.97
+  qwen3.8-flash-next tg128@d2048(c1) 31.28±3.15
+  qwen3.8-flash-next pp2048@d2048(c2) 1381.84±9.15
+  qwen3.8-flash-next tg128@d2048(c2) 42.76±0.35
+  qwen3.8-flash-next pp2048@d2048(c5) 1378.62±3.40
+  qwen3.8-flash-next tg128@d2048(c5) 51.05±2.77
+  qwen3.8-flash-next pp2048@d4096(c1) 2011.92±13.82
+  qwen3.8-flash-next tg128@d4096(c1) 30.41±0.48
+  qwen3.8-flash-next pp2048@d4096(c2) 1961.73±15.27
+  qwen3.8-flash-next tg128@d4096(c2) 44.07±3.34
+  qwen3.8-flash-next pp2048@d4096(c5) 1997.77±2.33
+  qwen3.8-flash-next tg128@d4096(c5) 55.81±5.36
+  qwen3.8-flash-next pp2048@d8192(c1) 1420.59±6.01
+  qwen3.8-flash-next tg128@d8192(c1) 35.76±4.47
+  qwen3.8-flash-next pp2048@d8192(c2) 1445.72±22.40
+  qwen3.8-flash-next tg128@d8192(c2) 43.01±10.36
+  qwen3.8-flash-next pp2048@d8192(c5) 1525.77±14.22
+  qwen3.8-flash-next tg128@d8192(c5) 55.11±1.12
+  qwen3.8-flash-next pp2048@d16384(c1) 2281.50±28.66
+  qwen3.8-flash-next tg128@d16384(c1) 34.27±1.84
+  qwen3.8-flash-next pp2048@d16384(c2) 2229.25±11.02
+  qwen3.8-flash-next tg128@d16384(c2) 46.86±2.40
+  qwen3.8-flash-next pp2048@d16384(c5) 2290.06±4.01
+  qwen3.8-flash-next tg128@d16384(c5) 63.39±3.63
+  qwen3.8-flash-next pp2048@d32768(c1) 1924.23±18.05
+  qwen3.8-flash-next tg128@d32768(c1) 38.56±6.13
+  qwen3.8-flash-next pp2048@d32768(c2) 1935.04±7.09
+  qwen3.8-flash-next tg128@d32768(c2) 46.00±1.30
+  qwen3.8-flash-next pp2048@d32768(c5) 1993.86±1.20
+  qwen3.8-flash-next tg128@d32768(c5) 62.13±0.26
+--- 03:33:46 tony lane
+lane accepted_drafts_per_cycle 2.222  drafts 16473
+=== 03:45:18 01-fn-vllm-imp-ep done
+=== 03:45:38 02-fn-vllm-imp-localargmax start
+!!! 02-fn-vllm-imp-localargmax never became healthy, see /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/arms/vllm-imp/02-fn-vllm-imp-localargmax-serve.log
+(Worker_TP0 pid=185) ERROR 09-09 00:56:55 [multiproc_executor.py:944]     raise ValueError(
+(Worker_TP0 pid=185) ERROR 09-09 00:56:55 [multiproc_executor.py:944] ValueError: use_local_argmax_reduction is enabled but draft model Qwen4ExpMTP does not implement get_top_tokens().
+=== 04:15:56 03-fn-vllm-imp-miaai start
+!!! 03-fn-vllm-imp-miaai never became healthy, see /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/arms/vllm-imp/03-fn-vllm-imp-miaai-serve.log
+(Worker_TP0_EP0 pid=189) ERROR 09-09 01:27:21 [multiproc_executor.py:944]     raise ValueError(
+(Worker_TP0_EP0 pid=189) ERROR 09-09 01:27:21 [multiproc_executor.py:944] ValueError: use_local_argmax_reduction is enabled but draft model Qwen4ExpMTP does not implement get_top_tokens().
+LADDER_DONE

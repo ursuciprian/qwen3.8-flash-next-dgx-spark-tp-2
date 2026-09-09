@@ -1,4 +1,29 @@
-# Image pinned by digest, same build as flashnext-bigkv-g8-c4096.
+# 2026-09-09: --ple-offload-embedding -> --no-ple-offload-embedding. On GB10's unified memory the
+# 'offloaded' n-gram table is a pinned host copy out of the same 128 GB pool, so it frees nothing
+# and costs a host-side gather per decode step. Keeping it GPU-resident and TP-sharded measured
+# above a three-boot control envelope on 8 of 36 grid cells with none below, repeated on a second
+# boot: category-harness median 58-61 tok/s vs 49, coding 63 vs 50, decode at 16k depth c5 84-86
+# vs 71. Acceptance unchanged. See results/ALL-RESULTS.md (2026-09-08/09).
+# Image pinned by digest 2026-09-09: 'qwen38flashnext-sep03' was a local tag on these nodes, so a
+# clone elsewhere could not pull it. This digest is the 2026-09-03 build with upstream's SM121 kernel;
+# the public tag lmsysorg/sglang:qwen38flashnext points here today but has moved before.
+# c5+ / prefill preset: the shipped flashnext-bigkv-g8-c4096.yaml with NEXTN removed.
+#
+# Measured 2026-09-07, A/B/A, fresh boot per arm, against two control boots of the
+# shipped recipe (docs/SPECULATION-FINDINGS.md, Grafana "A/B/A Ladders" ladder=spec):
+#   tg128  c1   -22% to -27% at every depth      <- do NOT use this for c1-c2
+#   tg128  c5   +6% to +43%                       <- use this at c5+
+#   pp2048      +8% to +34%, median +19%          <- and for any prefill-heavy load
+# Nospec c1 is a flat 26 tok/s at every depth: the raw bandwidth floor of this
+# model on GB10 TP2. The drafter lifts c1 to 29-38 even at accept_len ~2, so
+# speculation stays on for low concurrency. At c5 the verify passes over rejected
+# drafts compete with real batches and lose. Same split as the 27B presets.
+#
+# Everything else identical to the shipped recipe: sep03 image, no QSA mount,
+# chunk 4096, util 0.8, KV 900k, mamba 97, decode graphs 1..10. Only the five
+# --speculative-* flags are gone. Boot evidence for the arm this came from:
+# speculative_algorithm= (empty), one target-decode graph at num_tokens_per_req=1,
+# KV 899,968 (vs 869,952 with the drafter - its workspace costs 30k tokens).
 description: Qwen3.8-Flash-Next TP2 c5+ / prefill preset - shipped bigkv-g8-c4096 with speculation OFF
 name: qwen38-flash-next-nvfp4-bigkv-nospec-sglang
 model: RadixArk/Qwen3.8-Flash-Next-NVFP4
@@ -9,11 +34,12 @@ min_nodes: 2
 max_nodes: 2
 
 metadata:
-  description: Fast sparse-attention profile with BF16 Mamba state, chunked prefill 4096,
-    decode CUDA graphs for every batch 1-10 and an enlarged KV pool, on the public
-    2026-09-03 SGLang image which carries upstream's own SM121 kernel. Network flags
-    pin NCCL to this cluster's CX-7 HCAs (enp1s0f1np1 / rocep1s0f1); on defaults NCCL
-    falls back to TCP over WiFi and adds 18-65 ms of jitter per decode step.
+  description: MiaAI fast-QSA candidate, adapted. Runs the public 2026-09-03
+    rebuild unmodified - it ships upstream's own SM121 QSA kernel (#36845), so
+    the guard-extension bind mount used on the Aug-26 image is gone.
+    Network flags retargeted from their enp1s0f0np0 / rocep1s0f0 to this
+    cluster's enp1s0f1np1 / rocep1s0f1 - left unchanged, NCCL would fall back
+    to TCP over WiFi and cost 18-65 ms of jitter per decode step.
   model_dtype: nvfp4
   quantization: nvfp4
 
@@ -76,7 +102,7 @@ command: |
     --tool-call-parser auto \
     --enable-metrics \
     --enable-cache-report \
-    --ple-offload-embedding \
+    --no-ple-offload-embedding \
     --disable-prefill-cuda-graph \
     --cuda-graph-bs-decode 1 2 3 4 5 6 7 8 9 10 \
     --disable-cuda-graph-padding \

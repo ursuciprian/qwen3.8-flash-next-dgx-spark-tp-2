@@ -1,0 +1,35 @@
+== sgl_bigkv-control start 02:40:22  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== sgl_bigkv-control C1 02:40:22
+    narrative  auto=0.593  ttft=0.18s  decode=34.7  tokens=361
+    summary    auto=0.75  ttft=0.17s  decode=40.2  tokens=36
+    format     auto=1.0  ttft=0.18s  decode=42.5  tokens=19
+== sgl_bigkv-control C2 02:43:35
+    narrative  auto=0.66  ttft=0.22s  decode=31.6  tokens=365
+    summary    auto=0.75  ttft=0.21s  decode=35.0  tokens=31
+    format     auto=1.0  ttft=0.21s  decode=28.7  tokens=20
+== sgl_bigkv-control C4 02:45:59
+    narrative  auto=0.66  ttft=0.28s  decode=33.3  tokens=334
+    summary    auto=0.75  ttft=0.28s  decode=28.8  tokens=31
+    format     auto=1.0  ttft=0.28s  decode=26.4  tokens=20
+== sgl_bigkv-control C6 02:47:59
+    narrative  auto=0.633  ttft=0.3s  decode=28.8  tokens=324
+    summary    auto=0.75  ttft=0.28s  decode=24.3  tokens=29
+    format     auto=1.0  ttft=0.28s  decode=22.0  tokens=21
+== sgl_bigkv-control cold prefill ladder 02:49:40
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=4.5s total=4.7s prefill~1560 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=13.5s total=13.6s prefill~2094 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=14.6s total=14.7s prefill~3862 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=27.9s total=28.0s prefill~3159 tok/s finish=stop answer='PELICAN-7' OK
+== sgl_bigkv-control counting ceiling (peak row only, never a headline) 02:50:41
+  c1: agg   65.2 tok/s | per-stream  65.2 | w2w med  4.91s p90  4.93s | TTFT  0.75s | prefill 2260 tok/s
+  c2: agg   91.5 tok/s | per-stream  45.8 | w2w med  6.99s p90  7.15s | TTFT  0.33s
+  c4: agg  225.6 tok/s | per-stream  56.4 | w2w med  5.67s p90  5.69s | TTFT  0.38s
+  c5: agg  246.9 tok/s | per-stream  49.5 | w2w med  6.47s p90  9.30s | TTFT  0.60s
+  c6: agg  301.9 tok/s | per-stream  50.3 | w2w med  6.36s p90  9.68s | TTFT  0.41s
+JSON -> results/sweep_sgl_bigkv-control.json
+== sgl_bigkv-control done 02:52:37
+LANE_DONE

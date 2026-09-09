@@ -1,0 +1,35 @@
+== sgl_sgl-ours-nople-trk256 start 10:21:45  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== sgl_sgl-ours-nople-trk256 C1 10:21:45
+    narrative  auto=0.66  ttft=0.18s  decode=38.6  tokens=364
+    summary    auto=0.75  ttft=0.17s  decode=40.4  tokens=36
+    format     auto=1.0  ttft=0.18s  decode=39.5  tokens=21
+== sgl_sgl-ours-nople-trk256 C2 10:24:31
+    narrative  auto=0.66  ttft=0.22s  decode=35.9  tokens=327
+    summary    auto=0.75  ttft=0.2s  decode=38.0  tokens=31
+    format     auto=1.0  ttft=0.2s  decode=33.3  tokens=21
+== sgl_sgl-ours-nople-trk256 C4 10:26:43
+    narrative  auto=0.66  ttft=0.27s  decode=34.5  tokens=343
+    summary    auto=0.75  ttft=0.27s  decode=31.9  tokens=40
+    format     auto=1.0  ttft=0.27s  decode=26.0  tokens=20
+== sgl_sgl-ours-nople-trk256 C6 10:28:25
+    narrative  auto=0.66  ttft=0.3s  decode=27.7  tokens=365
+    summary    auto=0.75  ttft=0.28s  decode=24.1  tokens=31
+    format     auto=1.0  ttft=0.28s  decode=21.7  tokens=21
+== sgl_sgl-ours-nople-trk256 cold prefill ladder 10:29:52
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=2.3s total=2.4s prefill~3091 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=9.1s total=9.2s prefill~3094 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=14.6s total=14.8s prefill~3851 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=21.8s total=22.0s prefill~4034 tok/s finish=stop answer='PELICAN-7' OK
+== sgl_sgl-ours-nople-trk256 counting ceiling (peak row only, never a headline) 10:30:41
+  c1: agg   65.2 tok/s | per-stream  65.2 | w2w med  4.91s p90  4.92s | TTFT  0.76s | prefill 2232 tok/s
+  c2: agg  119.4 tok/s | per-stream  60.1 | w2w med  5.32s p90  5.53s | TTFT  0.33s
+  c4: agg  223.6 tok/s | per-stream  55.9 | w2w med  5.72s p90  5.74s | TTFT  0.38s
+  c5: agg  251.7 tok/s | per-stream  50.4 | w2w med  6.35s p90  6.63s | TTFT  0.40s
+  c6: agg  304.8 tok/s | per-stream  50.8 | w2w med  6.30s p90  6.30s | TTFT  0.41s
+JSON -> results/sweep_sgl_sgl-ours-nople-trk256.json
+== sgl_sgl-ours-nople-trk256 done 10:32:26
+LANE_DONE

@@ -1,0 +1,35 @@
+== sgl_sgl-upstream-nvda start 01:49:19  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== sgl_sgl-upstream-nvda C1 01:49:19
+    narrative  auto=0.66  ttft=0.18s  decode=38.4  tokens=322
+    summary    auto=0.75  ttft=0.17s  decode=39.5  tokens=31
+    format     auto=1.0  ttft=0.18s  decode=55.3  tokens=20
+== sgl_sgl-upstream-nvda C2 01:52:03
+    narrative  auto=0.62  ttft=0.2s  decode=35.5  tokens=342
+    summary    auto=0.75  ttft=0.19s  decode=38.1  tokens=31
+    format     auto=1.0  ttft=0.19s  decode=46.8  tokens=21
+== sgl_sgl-upstream-nvda C4 01:54:12
+    narrative  auto=0.633  ttft=0.25s  decode=34.1  tokens=335
+    summary    auto=0.75  ttft=0.25s  decode=29.1  tokens=31
+    format     auto=1.0  ttft=0.25s  decode=26.3  tokens=20
+== sgl_sgl-upstream-nvda C6 01:55:59
+    narrative  auto=0.66  ttft=0.28s  decode=27.6  tokens=384
+    summary    auto=0.75  ttft=0.27s  decode=23.2  tokens=30
+    format     auto=1.0  ttft=0.27s  decode=21.1  tokens=21
+== sgl_sgl-upstream-nvda cold prefill ladder 01:57:28
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=2.3s total=2.4s prefill~3103 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=9.1s total=9.2s prefill~3098 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=14.8s total=14.9s prefill~3814 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=21.9s total=22.0s prefill~4026 tok/s finish=stop answer='PELICAN-7' OK
+== sgl_sgl-upstream-nvda counting ceiling (peak row only, never a headline) 01:58:17
+  c1: agg   65.1 tok/s | per-stream  65.1 | w2w med  4.92s p90  4.95s | TTFT  0.76s | prefill 2252 tok/s
+  c2: agg  123.2 tok/s | per-stream  61.6 | w2w med  5.19s p90  5.49s | TTFT  0.32s
+  c4: agg  219.6 tok/s | per-stream  54.9 | w2w med  5.83s p90  5.84s | TTFT  0.37s
+  c5: agg  245.0 tok/s | per-stream  49.4 | w2w med  6.48s p90  6.70s | TTFT  0.40s
+  c6: agg  283.2 tok/s | per-stream  47.2 | w2w med  6.78s p90  6.82s | TTFT  0.43s
+JSON -> results/sweep_sgl_sgl-upstream-nvda.json
+== sgl_sgl-upstream-nvda done 02:00:04
+LANE_DONE

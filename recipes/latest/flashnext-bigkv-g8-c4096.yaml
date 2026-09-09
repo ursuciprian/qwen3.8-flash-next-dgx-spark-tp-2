@@ -1,5 +1,53 @@
-# Image pinned by digest: this is the 2026-09-03 build (the mutable tag lmsysorg/sglang:qwen38flashnext
-# pointed here on 2026-09-08 and has moved before). It carries upstream's SM121 sparse-attention kernel.
+# 2026-09-09: --ple-offload-embedding -> --no-ple-offload-embedding. On GB10's unified memory the
+# 'offloaded' n-gram table is a pinned host copy out of the same 128 GB pool, so it frees nothing
+# and costs a host-side gather per decode step. Keeping it GPU-resident and TP-sharded measured
+# above a three-boot control envelope on 8 of 36 grid cells with none below, repeated on a second
+# boot: category-harness median 58-61 tok/s vs 49, coding 63 vs 50, decode at 16k depth c5 84-86
+# vs 71. Acceptance unchanged. See results/ALL-RESULTS.md (2026-09-08/09).
+# Image pinned by digest 2026-09-09: 'qwen38flashnext-sep03' was a local tag on these nodes, so a
+# clone elsewhere could not pull it. This digest is the 2026-09-03 build with upstream's SM121 kernel;
+# the public tag lmsysorg/sglang:qwen38flashnext points here today but has moved before.
+# Revision 2026-09-08-sep03 (see metadata.recipe_revision and the name suffix; sparkrun's
+# recipe_version field caps at 2). The 2026-08-30 revision, still circulating, used the mutable
+# lmsysorg/sglang:qwen38flashnext tag with a qsa_upstream_fix.py bind mount, decode graphs
+# 1 2 4 8 and --allow-auto-truncate. Do not run version 2: the mount forces the trtllm sparse
+# decode path that corrupts long contexts on SM121 (sglang #36806), and on the sep03 image it
+# overwrites upstream's fixed kernel.
+#
+# Retested 2026-09-06 against the Aug-30 baseline (bigkv-g8-c4096-grid-0-65k.csv),
+# same image and revision, only the two lines below changed. Result was
+# INCONCLUSIVE - no performance claim attaches to this recipe yet.
+#
+# The single-run delta looked like +34.2% tg128 at c5 @ 65k (64.97 -> 87.22), but
+# repeating just the corner cells against the same server with no reload put that
+# cell at 65.72, back at baseline. Within-boot spread reaches 29.4% on
+# pp2048/tg128 - the same size as the effect. ctx_pp is not a usable control
+# either: it agreed to +/-0.7% across the two boots, then moved -17.3% within one.
+#
+# The mechanism is still sound - `1 2 4 8` has no bucket for batch 5, so c5
+# decoded eager, and `1..10` gives it one. Proving it pays needs an A/B/A ladder
+# with a fresh boot per arm. Do not cite a number for this recipe until then.
+# Results and the repeat: results/retest-bigkv-g8/.
+#
+# Image: lmsysorg/sglang:qwen38flashnext-sep03 (local tag of the 2026-09-03 rebuild,
+# image id f52b4afd4fbd, sglang g593134d17). Adopted 2026-09-06 after an A/B/A against
+# the Aug-26 build + our QSA guard-extension mount (results/arms/sep03-aba.csv):
+#   decode   tg128  1/17 cells significant, that one positive; median drift 10.2%.
+#            Free.
+#   prefill  pp2048 5/18 significant, all negative, -6% to -22%, concentrated at
+#            c1/c2 fresh-prompt prefill; c5 mostly unaffected. Median drift 1.9%,
+#            so these are real. d2048 c1 -13.7% against 0.0% control drift.
+#   accept_len 2.13 / 2.13 / 2.21 across arms - drafter untouched.
+# Why pay ~10% fresh prefill at c1: the Aug-26 path routed trtllm-gen sparse
+# decode on SM121 via our guard extension (sglang#36556). Upstream #36806 found
+# that kernel silently corrupts long context on SM121 - token-ID-0 output, HTTP
+# 200 throughout, 1 run in 4 at 120K, 4 in 4 at 210K. The sep03 image gates
+# trtllm to SM100/SM120 with an in-source warning and routes SM121 to a dedicated
+# qwen38_qsa_sm121_varlen kernel (#36845). The serve log confirms it:
+#   "Using the Codex/Kimi K3 KDA Qwen3.8 QSA kernel on SM121"
+# The old bind mount (patches/qsa_upstream_fix.py) MUST NOT be reintroduced on
+# this image - it would overwrite upstream's fix with the corrupting path.
+# max_model_len 110000 is now inside a validated range for the first time.
 description: Qwen3.8-Flash-Next TP2 deep-context candidate - decode graphs 1 through 10, enlarged KV, explicit overflow rejection
 name: qwen38-flash-next-nvfp4-bigkv-g8-c4096-sep03-sglang
 model: RadixArk/Qwen3.8-Flash-Next-NVFP4
@@ -11,11 +59,12 @@ max_nodes: 2
 
 metadata:
   recipe_revision: 2026-09-08-sep03
-  description: Fast sparse-attention profile with BF16 Mamba state, chunked prefill 4096,
-    decode CUDA graphs for every batch 1-10 and an enlarged KV pool, on the public
-    2026-09-03 SGLang image which carries upstream's own SM121 kernel. Network flags
-    pin NCCL to this cluster's CX-7 HCAs (enp1s0f1np1 / rocep1s0f1); on defaults NCCL
-    falls back to TCP over WiFi and adds 18-65 ms of jitter per decode step.
+  description: MiaAI fast-QSA candidate, adapted. Runs the public 2026-09-03
+    rebuild unmodified - it ships upstream's own SM121 QSA kernel (#36845), so
+    the guard-extension bind mount used on the Aug-26 image is gone.
+    Network flags retargeted from their enp1s0f0np0 / rocep1s0f0 to this
+    cluster's enp1s0f1np1 / rocep1s0f1 - left unchanged, NCCL would fall back
+    to TCP over WiFi and cost 18-65 ms of jitter per decode step.
   model_dtype: nvfp4
   quantization: nvfp4
 
@@ -83,7 +132,7 @@ command: |
     --tool-call-parser auto \
     --enable-metrics \
     --enable-cache-report \
-    --ple-offload-embedding \
+    --no-ple-offload-embedding \
     --disable-prefill-cuda-graph \
     --cuda-graph-bs-decode 1 2 3 4 5 6 7 8 9 10 \
     --disable-cuda-graph-padding \

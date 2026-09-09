@@ -1,0 +1,35 @@
+== vllm_tony-speed-pc start 22:14:11  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== vllm_tony-speed-pc C1 22:14:11
+    narrative  auto=0.7  ttft=0.17s  decode=35.8  tokens=279
+    summary    auto=0.75  ttft=0.16s  decode=39.1  tokens=30
+    format     auto=1.0  ttft=0.17s  decode=38.7  tokens=21
+== vllm_tony-speed-pc C2 22:16:56
+    narrative  auto=0.693  ttft=0.2s  decode=33.0  tokens=341
+    summary    auto=0.75  ttft=0.21s  decode=32.6  tokens=38
+    format     auto=1.0  ttft=0.19s  decode=26.5  tokens=21
+== vllm_tony-speed-pc C4 22:19:12
+    narrative  auto=0.593  ttft=0.25s  decode=30.8  tokens=300
+    summary    auto=0.75  ttft=0.25s  decode=29.2  tokens=30
+    format     auto=1.0  ttft=0.25s  decode=23.5  tokens=21
+== vllm_tony-speed-pc C6 22:21:07
+    narrative  auto=0.7  ttft=0.34s  decode=23.5  tokens=316
+    summary    auto=0.75  ttft=0.3s  decode=22.7  tokens=30
+    format     auto=1.0  ttft=0.31s  decode=22.7  tokens=21
+== vllm_tony-speed-pc cold prefill ladder 22:22:41
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=2.5s total=2.6s prefill~2876 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=9.8s total=10.0s prefill~2878 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=19.8s total=19.9s prefill~2849 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=27.9s total=28.0s prefill~3156 tok/s finish=stop answer='PELICAN-7' OK
+== vllm_tony-speed-pc counting ceiling (peak row only, never a headline) 22:23:41
+  c1: agg   63.0 tok/s | per-stream  63.0 | w2w med  5.08s p90  5.18s | TTFT  0.76s | prefill 2232 tok/s
+  c2: agg  117.1 tok/s | per-stream  58.9 | w2w med  5.43s p90  5.47s | TTFT  1.33s
+  c4: agg  201.2 tok/s | per-stream  50.9 | w2w med  6.28s p90  6.41s | TTFT  2.63s
+  c5: agg  248.7 tok/s | per-stream  49.8 | w2w med  6.43s p90  6.88s | TTFT  3.17s
+  c6: agg  293.1 tok/s | per-stream  48.9 | w2w med  6.55s p90  6.62s | TTFT  3.68s
+JSON -> results/sweep_vllm_tony-speed-pc.json
+== vllm_tony-speed-pc done 22:25:40
+LANE_DONE

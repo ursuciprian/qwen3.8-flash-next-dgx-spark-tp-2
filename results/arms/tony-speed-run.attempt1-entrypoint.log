@@ -1,0 +1,123 @@
+
+[1m==> Checking prerequisites[0m
+  ok: docker, sparkrun sparkrun, version 0.3.6
+
+[1m==> Checking cluster 'dgx-cluster-cx7'[0m
+  ok: 2 hosts, both on CX-7 (192.168.100.53 192.168.100.62 )
+
+[1m==> Checking both nodes[0m
+  ok: 192.168.100.53  iface=enp1s0f1np1  mem=121G free=117G disk=1809G
+  ok: 192.168.100.62  iface=enp1s0f1np1  mem=121G free=117G disk=1455G
+  ok: CX-7 path 192.168.100.62 -> 192.168.100.53
+
+[1m==> Checking the memory guard on both nodes[0m
+  MISSING: memory guard is not active on dgx-01
+  MISSING: memory guard is not active on 192.168.100.53
+  Install it on every node before launching (scripts/node-guard/README.md):
+    cd scripts/node-guard
+    sudo cp spark-memguard.sh /usr/local/bin/
+    sudo cp spark-memguard.service /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now spark-memguard
+  Override with MEMGUARD_ALLOW_UNGUARDED=1 only if you are watching the box.
+
+[1m==> Materialising recipe for /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2[0m
+  ok: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/.run/fn-vllm-tony-speed.yaml
+
+[1m==> Syncing repo to worker at the same path[0m
+  ok: 192.168.100.53:/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
+
+[1m==> Dropping page cache on both nodes[0m
+
+[1m==> Launching vllm[0m
+  log: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/vllm-serve.log
+
+[1m==> Waiting for the server (loads take ~10-15 minutes)[0m
+  21:00:36  117G available
+  21:01:06  117G available
+  21:01:36  117G available
+  21:02:06  117G available
+  21:02:36  117G available
+  21:03:06  117G available
+  21:03:36  117G available
+  21:04:06  117G available
+  21:04:36  117G available
+  21:05:06  117G available
+  21:05:36  117G available
+  21:06:06  117G available
+  21:06:36  117G available
+  21:07:07  117G available
+  21:07:37  117G available
+  21:08:07  117G available
+  21:08:37  117G available
+  21:09:07  117G available
+  21:09:37  117G available
+  21:10:07  117G available
+  21:10:37  117G available
+  21:11:07  117G available
+  21:11:37  117G available
+  21:12:07  117G available
+  21:12:37  117G available
+  21:13:07  117G available
+  21:13:37  117G available
+  21:14:07  117G available
+  21:14:37  117G available
+  21:15:07  117G available
+  21:15:37  117G available
+  21:16:07  117G available
+  21:16:37  117G available
+  21:17:07  117G available
+  21:17:37  117G available
+  21:18:07  117G available
+  21:18:37  117G available
+  21:19:07  117G available
+  21:19:37  117G available
+  21:20:07  117G available
+  21:20:37  117G available
+  21:21:07  117G available
+  21:21:37  117G available
+  21:22:07  117G available
+  21:22:37  117G available
+  21:23:07  117G available
+  21:23:37  117G available
+  21:24:07  117G available
+  21:24:37  117G available
+  21:25:07  117G available
+  21:25:37  117G available
+  21:26:07  117G available
+  21:26:37  117G available
+  21:27:07  117G available
+  21:27:37  117G available
+  21:28:07  117G available
+  21:28:37  117G available
+  21:29:07  117G available
+  21:29:37  117G available
+  21:30:07  117G available
+  21:30:37  117G available
+  21:31:07  117G available
+  21:31:37  117G available
+  21:32:07  117G available
+  21:32:38  117G available
+  21:33:08  117G available
+  21:33:38  117G available
+  21:34:08  117G available
+  21:34:38  117G available
+  21:35:08  117G available
+  21:35:38  117G available
+  21:36:08  117G available
+  21:36:38  117G available
+  21:37:08  117G available
+  21:37:38  117G available
+  21:38:08  117G available
+  21:38:38  117G available
+  21:39:08  117G available
+  21:39:38  117G available
+  21:40:08  117G available
+  21:40:38  117G available
+  21:41:08  117G available
+  21:41:38  117G available
+  21:42:08  117G available
+  21:42:38  117G available
+  21:43:08  117G available
+  21:43:38  117G available
+  21:44:08  117G available
+  21:44:38  117G available

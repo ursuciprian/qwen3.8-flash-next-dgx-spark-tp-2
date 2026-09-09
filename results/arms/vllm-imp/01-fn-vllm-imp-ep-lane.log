@@ -1,0 +1,35 @@
+== vllm_imp-ep start 03:33:46  base=http://192.168.100.62:8000 model=qwen3.8-flash-next
+== vllm_imp-ep C1 03:33:46
+    narrative  auto=0.8  ttft=0.17s  decode=35.6  tokens=332
+    summary    auto=0.75  ttft=0.15s  decode=38.7  tokens=31
+    format     auto=1.0  ttft=0.16s  decode=39.6  tokens=21
+== vllm_imp-ep C2 03:36:44
+    narrative  auto=0.593  ttft=0.2s  decode=31.4  tokens=369
+    summary    auto=0.75  ttft=0.18s  decode=36.2  tokens=30
+    format     auto=1.0  ttft=0.18s  decode=34.4  tokens=21
+== vllm_imp-ep C4 03:39:05
+    narrative  auto=0.593  ttft=0.24s  decode=33.3  tokens=343
+    summary    auto=0.75  ttft=0.24s  decode=30.2  tokens=31
+    format     auto=1.0  ttft=0.24s  decode=28.9  tokens=21
+== vllm_imp-ep C6 03:40:54
+    narrative  auto=0.8  ttft=0.31s  decode=26.2  tokens=301
+    summary    auto=0.75  ttft=0.29s  decode=28.2  tokens=28
+    format     auto=1.0  ttft=0.29s  decode=19.2  tokens=20
+== vllm_imp-ep cold prefill ladder 03:42:23
+-- prefill 8000
+run 1: prompt_tokens=7087 ttft=2.4s total=2.6s prefill~2907 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 32000
+run 1: prompt_tokens=28228 ttft=9.4s total=9.5s prefill~3013 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 64000
+run 1: prompt_tokens=56389 ttft=17.8s total=18.0s prefill~3160 tok/s finish=stop answer='PELICAN-7' OK
+-- prefill 100000
+run 1: prompt_tokens=88087 ttft=25.6s total=25.7s prefill~3436 tok/s finish=stop answer='PELICAN-7' OK
+== vllm_imp-ep counting ceiling (peak row only, never a headline) 03:43:19
+  c1: agg   63.9 tok/s | per-stream  63.9 | w2w med  5.01s p90  5.02s | TTFT  0.80s | prefill 2122 tok/s
+  c2: agg  113.2 tok/s | per-stream  56.9 | w2w med  5.62s p90  6.21s | TTFT  1.34s
+  c4: agg  205.8 tok/s | per-stream  51.5 | w2w med  6.22s p90  6.37s | TTFT  2.45s
+  c5: agg  240.1 tok/s | per-stream  48.1 | w2w med  6.66s p90  6.67s | TTFT  3.00s
+  c6: agg  298.3 tok/s | per-stream  50.0 | w2w med  6.40s p90  6.52s | TTFT  3.56s
+JSON -> results/sweep_vllm_imp-ep.json
+== vllm_imp-ep done 03:45:18
+LANE_DONE

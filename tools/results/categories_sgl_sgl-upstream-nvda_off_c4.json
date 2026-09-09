@@ -1,0 +1,802 @@
+{
+ "lane": "sgl_sgl-upstream-nvda",
+ "model": "qwen3.8-flash-next",
+ "thinking": "off",
+ "concurrency": 4,
+ "n": 40,
+ "summary": {
+  "coding": {
+   "n": 5,
+   "auto_score": 1.0,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 46.7,
+   "tokens_med": 150
+  },
+  "reasoning": {
+   "n": 5,
+   "auto_score": 1.0,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 51.2,
+   "tokens_med": 432
+  },
+  "json": {
+   "n": 5,
+   "auto_score": 1.0,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 43.1,
+   "tokens_med": 32
+  },
+  "html": {
+   "n": 5,
+   "auto_score": 1.0,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 50.8,
+   "tokens_med": 163
+  },
+  "prose": {
+   "n": 5,
+   "auto_score": 0.75,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 33.7,
+   "tokens_med": 200
+  },
+  "narrative": {
+   "n": 5,
+   "auto_score": 0.633,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 34.1,
+   "tokens_med": 335
+  },
+  "summary": {
+   "n": 5,
+   "auto_score": 0.75,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 29.1,
+   "tokens_med": 31
+  },
+  "format": {
+   "n": 5,
+   "auto_score": 1.0,
+   "ttft_med_s": 0.25,
+   "decode_med_tok_s": 26.3,
+   "tokens_med": 20
+  }
+ },
+ "batches": [
+  {
+   "ids": [
+    "code1",
+    "reason1",
+    "json1",
+    "html1"
+   ],
+   "wall_s": 15.2,
+   "agg_tok_s": 95.2,
+   "ttft_med_s": 0.42
+  },
+  {
+   "ids": [
+    "prose1",
+    "story1",
+    "sum1",
+    "fmt1"
+   ],
+   "wall_s": 9.84,
+   "agg_tok_s": 60.4,
+   "ttft_med_s": 0.45
+  },
+  {
+   "ids": [
+    "code2",
+    "reason2",
+    "json2",
+    "html2"
+   ],
+   "wall_s": 8.47,
+   "agg_tok_s": 110.8,
+   "ttft_med_s": 0.25
+  },
+  {
+   "ids": [
+    "prose2",
+    "story2",
+    "sum2",
+    "fmt2"
+   ],
+   "wall_s": 8.69,
+   "agg_tok_s": 64.0,
+   "ttft_med_s": 0.24
+  },
+  {
+   "ids": [
+    "code3",
+    "reason3",
+    "json3",
+    "html3"
+   ],
+   "wall_s": 7.94,
+   "agg_tok_s": 79.4,
+   "ttft_med_s": 0.25
+  },
+  {
+   "ids": [
+    "prose3",
+    "story3",
+    "sum3",
+    "fmt3"
+   ],
+   "wall_s": 12.55,
+   "agg_tok_s": 51.8,
+   "ttft_med_s": 0.25
+  },
+  {
+   "ids": [
+    "code4",
+    "reason4",
+    "json4",
+    "html4"
+   ],
+   "wall_s": 7.86,
+   "agg_tok_s": 82.9,
+   "ttft_med_s": 0.22
+  },
+  {
+   "ids": [
+    "prose4",
+    "story4",
+    "sum4",
+    "fmt4"
+   ],
+   "wall_s": 7.89,
+   "agg_tok_s": 64.0,
+   "ttft_med_s": 0.24
+  },
+  {
+   "ids": [
+    "code5",
+    "reason5",
+    "json5",
+    "html5"
+   ],
+   "wall_s": 16.21,
+   "agg_tok_s": 112.5,
+   "ttft_med_s": 0.22
+  },
+  {
+   "ids": [
+    "prose5",
+    "story5",
+    "sum5",
+    "fmt5"
+   ],
+   "wall_s": 12.12,
+   "agg_tok_s": 53.6,
+   "ttft_med_s": 0.25
+  }
+ ],
+ "overall": {
+  "auto_score": 0.892,
+  "ttft_med_s": 0.25,
+  "decode_med_tok_s": 42.2,
+  "agg_tok_s_med": 71.7
+ },
+ "items": [
+  {
+   "ttft_s": 0.42,
+   "wall_s": 3.82,
+   "completion_tokens": 150,
+   "prompt_tokens": 47,
+   "decode_tok_s": 43.8,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```python\ndef merge_intervals(intervals):\n    if not intervals:\n        return []\n    \n    # Sort intervals by start time\n    intervals.sort(key=lambda x: x[0])\n    \n    merged = [intervals[0]]\n    \n    for current in intervals[1:]:\n        last = merged[-1]\n        # If current interval overlaps with the last merged interval\n        if current[0] <= last[1]:\n            # Merge them by updating the end time\n            last[1] = max(last[1], current[1])\n        else:\n            # No overlap, add current interval to merged list\n            merged.append(current)\n    \n    return merged\n```",
+   "id": "code1",
+   "category": "coding",
+   "prompt": "Write a Python function merge_intervals(intervals) that merges overlapping [start, end] intervals and returns the merged list sorted by start. Return only one ```python code block.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.42,
+   "wall_s": 8.39,
+   "completion_tokens": 397,
+   "prompt_tokens": 60,
+   "decode_tok_s": 49.7,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Let $A$ be Ana's current age and $B$ be Ben's current age.\n\nFrom the first statement, \"Ana is twice as old as Ben,\" we can write the equation:\n$$ A = 2B $$\n\nFrom the second statement, \"In 6 years Ana will be 1.5 times Ben's age,\" we can write the equation:\n$$ A + 6 = 1.5(B + 6) $$\n\nNow, we substitute the value of $A$ from the first equation into the second equation:\n$$ 2B + 6 = 1.5(B + 6) $$\n\nExpand the right side of the equation:\n$$ 2B + 6 = 1.5B + 9 $$\n\nSubtract $1.5B$ from both sides to group the terms with $B$:\n$$ 2B - 1.5B + 6 = 9 $$\n$$ 0.5B + 6 = 9 $$\n\nSubtract 6 from both sides:\n$$ 0.5B = 3 $$\n\nDivide by 0.5 to solve for $B$:\n$$ B = \\frac{3}{0.5} $$\n$$ B = 6 $$\n\nSo, Ben is currently 6 years old.\n\nLet's verify the answer:\n- If Ben is 6, Ana is $2 \\times 6 = 12$.\n- In 6 years, Ben will be $6 + 6 = 12$.\n- In 6 years, Ana will be $12 + 6 = 18$.\n- Is 18 equal to 1.5 times 12?\n  $$ 1.5 \\times 12 = 18 $$\n- Yes, the condition holds true.\n\nANSWER: 6",
+   "id": "reason1",
+   "category": "reasoning",
+   "prompt": "Ana is twice as old as Ben. In 6 years Ana will be 1.5 times Ben's age. How old is Ben now?\n\nGive your final answer on the last line exactly as: ANSWER: <answer>",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.42,
+   "wall_s": 1.92,
+   "completion_tokens": 66,
+   "prompt_tokens": 99,
+   "decode_tok_s": 43.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "{\n  \"invoice_id\": 4471,\n  \"customer\": \"Marta Ruiz\",\n  \"issued\": \"2026-03-14\",\n  \"amount\": 1250.50,\n  \"due_days\": 30\n}",
+   "id": "json1",
+   "category": "json",
+   "prompt": "Extract into a JSON object with keys invoice_id (integer), customer (string), issued (ISO date string), amount (number), due_days (integer):\n\n\"Invoice 4471 was issued to Marta Ruiz on 2026-03-14 for $1,250.50, due in 30 days.\"\n\nOutput only the JSON, no prose, no code fences.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.41,
+   "wall_s": 15.2,
+   "completion_tokens": 834,
+   "prompt_tokens": 71,
+   "decode_tok_s": 56.3,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Spark Bench</title>\n    <style>\n        * {\n            margin: 0;\n            padding: 0;\n            box-sizing: border-box;\n        }\n\n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            background: #0f0f1a;\n            color: #e0e0e0;\n            min-height: 100vh;\n        }\n\n        header {\n            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);\n            padding: 1.5rem 2rem;\n            border-bottom: 2px solid #e94560;\n            display: flex;\n            align-items: center;\n            justify-content: space-between;\n            flex-wrap: wrap;\n            gap: 1rem;\n        }\n\n        header h1 {\n            font-size: 1.8rem;\n            font-weight: 700;\n            color: #e94560;\n            letter-spacing: 1px;\n        }\n\n        nav {\n            display: flex;\n            gap: 0.5rem;\n        }\n\n        nav a {\n            color: #a0a0b8;\n            text-decoration: none;\n            padding: 0.5rem 1.2rem;\n            border-radius: 6px;\n            font-size: 0.95rem;\n            transition: all 0.25s ease;\n            border: 1px solid transparent;\n        }\n\n        nav a:hover {\n            color: #ffffff;\n            background: rgba(233, 69, 96, 0.15);\n            border-color: rgba(233, 69, 96, 0.3);\n        }\n\n        main {\n            max-width: 900px;\n            margin: 2rem auto;\n            padding: 0 1.5rem;\n        }\n\n        #summary {\n            background: linear-gradient(145deg, #1a1a2e, #16213e);\n            border: 1px solid rgba(233, 69, 96, 0.2);\n            border-radius: 12px;\n            padding: 2rem;\n            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);\n        }\n\n        #summary p {\n            font-size: 1.05rem;\n            line-height: 1.7;\n            color: #c8c8d8;\n        }\n    </style>\n</head>\n<body>\n    <header>\n        <h1>Spark Bench</h1>\n        <nav>\n            <a href=\"#home\">Home</a>\n            <a href=\"#results\">Results</a>\n            <a href=\"#method\">Method</a>\n        </nav>\n    </header>\n    <main>\n        <section id=\"summary\">\n            <p>Spark Bench is a comprehensive benchmarking suite designed to evaluate the performance of Apache Spark workloads across diverse data processing scenarios, providing reproducible metrics and comparative insights for distributed computing environments.</p>\n        </section>\n    </main>\n</body>\n</html>\n```",
+   "id": "html1",
+   "category": "html",
+   "prompt": "Write a complete HTML5 page: a <header> containing an <h1> that reads Spark Bench and a <nav> with three links (Home, Results, Method), then a <main> containing a <section id=\"summary\"> with one paragraph.\n\nOutput only the HTML.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.45,
+   "wall_s": 6.81,
+   "completion_tokens": 215,
+   "prompt_tokens": 38,
+   "decode_tok_s": 33.7,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Imagine you are trying to solve a massive, complex math problem that is too big for one person to handle quickly. Tensor parallelism is like splitting that single problem into smaller pieces and assigning each piece to a different friend. In the world of artificial intelligence, these \"friends\" are powerful computer chips called GPUs.\n\nWhen a neural network processes data, it performs huge matrix multiplications. Instead of forcing one GPU to do all the heavy lifting, tensor parallelism slices these large matrices into smaller chunks. Each GPU calculates its specific chunk simultaneously. Once they finish, they quickly share their partial results with each other to combine them into the final answer.\n\nThis method allows you to train massive AI models that wouldn\u2019t fit on a single chip\u2019s memory. It\u2019s not just about speed; it\u2019s about feasibility. By distributing the workload, you can handle models with billions of parameters. However, the friends must communicate constantly, so the connection between them needs to be incredibly fast to avoid bottlenecks. Essentially, it turns one giant task into many coordinated, smaller tasks.",
+   "id": "prose1",
+   "category": "prose",
+   "prompt": "Explain what tensor parallelism is to a smart high-school student, in 120 to 180 words.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.45,
+   "wall_s": 9.84,
+   "completion_tokens": 335,
+   "prompt_tokens": 53,
+   "decode_tok_s": 35.6,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "The rain hammered against the roof of the abandoned lighthouse, a relentless rhythm that matched the pounding in my chest. I held the flickering **lantern** high, its weak beam cutting through the thick, salt-heavy fog. My fingers trembled as I reached for the dusty **ledger** resting on the rotting desk. This was it. The final entry. The proof that would clear my name and expose the corruption that had ruined my life.\n\n\"Is it done?\" a voice whispered from the shadows.\n\nI spun around, heart racing. \"I found it,\" I breathed, clutching the book to my chest. \"The truth is here. They can\u2019t hide anymore.\"\n\nA low rumble of **thunder** shook the floorboards, vibrating up through my soles. The figure stepped forward, emerging from the darkness. It wasn\u2019t the detective I expected, nor the corrupt official I feared. It was me. Or rather, a version of me that looked older, wearier, and infinitely sadder.\n\n\"You never read the last page, did you?\" the other me asked, his voice devoid of emotion.\n\nConfused, I looked down at the open ledger. The ink wasn\u2019t black; it was red. And the handwriting wasn\u2019t mine. It was a confession. *I killed him.* The name listed wasn\u2019t the victim\u2019s. It was mine.\n\nThe lantern sputtered and died, plunging us into absolute darkness. As the thunder crashed again, I realized with a chilling clarity that I hadn\u2019t come here to find the truth. I had come here to remember what I had done.",
+   "id": "story1",
+   "category": "narrative",
+   "prompt": "Write a 150 to 250 word short story in first person that includes the words lantern, ledger and thunder, contains at least two lines of dialogue, and ends with a twist.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.45,
+   "wall_s": 1.04,
+   "completion_tokens": 24,
+   "prompt_tokens": 35,
+   "decode_tok_s": 38.5,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "I cannot summarize the notes because the document content is missing. Please provide the text you would like me to summarize.",
+   "id": "sum1",
+   "category": "summary",
+   "prompt": "Summarize the following notes in exactly 3 bullet points, each one sentence.\n\n---\n(document missing)",
+   "score": 0.0,
+   "fails": [
+    "bullets=3"
+   ]
+  },
+  {
+   "ttft_s": 0.45,
+   "wall_s": 0.88,
+   "completion_tokens": 21,
+   "prompt_tokens": 34,
+   "decode_tok_s": 46.3,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "53\n59\n61\n67\n71\n73\n79",
+   "id": "fmt1",
+   "category": "format",
+   "prompt": "List exactly 7 prime numbers greater than 50, one per line, ascending. Output nothing else.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 6.41,
+   "completion_tokens": 312,
+   "prompt_tokens": 82,
+   "decode_tok_s": 50.5,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```python\ndef parse_duration(s: str) -> int:\n    \"\"\"\n    Convert a duration string like '1h30m15s', '45s', '2h', '3m', '1h1s'\n    into total seconds as an integer.\n    \n    Units appear in h, m, s order. Any unit may be omitted.\n    \"\"\"\n    total_seconds = 0\n    i = 0\n    n = len(s)\n    \n    while i < n:\n        # Extract the number\n        j = i\n        while j < n and s[j].isdigit():\n            j += 1\n        if j == i:\n            # No digits found, skip or raise error\n            raise ValueError(f\"Invalid duration string: {s}\")\n        num = int(s[i:j])\n        i = j\n        \n        # Check for unit\n        if i < n:\n            unit = s[i]\n            i += 1\n            if unit == 'h':\n                total_seconds += num * 3600\n            elif unit == 'm':\n                total_seconds += num * 60\n            elif unit == 's':\n                total_seconds += num\n            else:\n                raise ValueError(f\"Unknown unit '{unit}' in duration string: {s}\")\n        else:\n            # No unit specified, assume seconds\n            total_seconds += num\n    \n    return total_seconds\n```",
+   "id": "code2",
+   "category": "coding",
+   "prompt": "Write a Python function parse_duration(s) that converts strings like '1h30m15s', '45s', '2h', '3m', '1h1s' into total seconds (int). Units may be omitted but always appear in h, m, s order. Return only one ```python code block.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 8.47,
+   "completion_tokens": 432,
+   "prompt_tokens": 56,
+   "decode_tok_s": 52.4,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "To find the probability of getting exactly 2 heads when flipping a fair coin 4 times, we can follow these steps:\n\n1.  **Determine the total number of possible outcomes:**\n    Since each coin flip has 2 possible outcomes (Heads or Tails) and there are 4 flips, the total number of outcomes is:\n    $$2^4 = 16$$\n\n2.  **Determine the number of favorable outcomes:**\n    We need to find the number of ways to get exactly 2 heads in 4 flips. This is a combination problem where we choose 2 positions for the heads out of the 4 available positions. The formula for combinations is $\\binom{n}{k} = \\frac{n!}{k!(n-k)!}$.\n    Here, $n=4$ and $k=2$:\n    $$\\binom{4}{2} = \\frac{4!}{2!(4-2)!} = \\frac{4 \\times 3 \\times 2 \\times 1}{(2 \\times 1)(2 \\times 1)} = \\frac{24}{4} = 6$$\n    \n    The 6 favorable outcomes are:\n    - HHTT\n    - HTHT\n    - HTTH\n    - THHT\n    - THTH\n    - TTHH\n\n3.  **Calculate the probability:**\n    The probability $P$ is the ratio of favorable outcomes to total outcomes:\n    $$P = \\frac{\\text{Number of favorable outcomes}}{\\text{Total number of outcomes}} = \\frac{6}{16}$$\n\n4.  **Simplify the fraction:**\n    Both 6 and 16 are divisible by 2:\n    $$\\frac{6}{16} = \\frac{3}{8}$$\n\nThe fraction $\\frac{3}{8}$ is in lowest terms because 3 and 8 share no common factors other than 1.\n\nANSWER: 3/8",
+   "id": "reason2",
+   "category": "reasoning",
+   "prompt": "A fair coin is flipped 4 times. What is the probability of exactly 2 heads? Give a fraction in lowest terms.\n\nGive your final answer on the last line exactly as: ANSWER: <answer>",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 1.09,
+   "completion_tokens": 32,
+   "prompt_tokens": 63,
+   "decode_tok_s": 36.9,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "[{\"name\":\"apple\",\"qty\":3,\"price\":0.5},{\"name\":\"pear\",\"qty\":2,\"price\":0.75}]",
+   "id": "json2",
+   "category": "json",
+   "prompt": "Convert this CSV to a JSON array of objects with numeric qty and price:\n\nname,qty,price\napple,3,0.5\npear,2,0.75\n\nOutput only the JSON, no prose, no code fences.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 3.57,
+   "completion_tokens": 163,
+   "prompt_tokens": 81,
+   "decode_tok_s": 48.8,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```html\n<table>\n  <thead>\n    <tr>\n      <th>Lane</th>\n      <th>Decode tok/s</th>\n      <th>TTFT s</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <td>NVFP4</td>\n      <td>64.0</td>\n      <td>1.54</td>\n    </tr>\n    <tr>\n      <td>EXL3</td>\n      <td>61.5</td>\n      <td>0.52</td>\n    </tr>\n  </tbody>\n</table>\n```",
+   "id": "html2",
+   "category": "html",
+   "prompt": "Write an HTML <table> with a <thead> row of Lane, Decode tok/s, TTFT s and a <tbody> with two rows: NVFP4, 64.0, 1.54 and EXL3, 61.5, 0.52.\n\nOutput only the HTML.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 5.26,
+   "completion_tokens": 151,
+   "prompt_tokens": 54,
+   "decode_tok_s": 29.9,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Experience seamless AI development with our compact workstation, engineered for professionals who demand power without bulk. Featuring 128 GB of unified memory, this system eliminates data bottlenecks, allowing you to train complex models and run large language models locally with unprecedented speed and efficiency. The unified architecture ensures that both CPU and GPU access the same high-speed memory pool, significantly reducing latency and enhancing multitasking capabilities. Its sleek, space-saving design fits effortlessly into any modern office or home studio, while whisper-quiet cooling keeps your workspace serene during intensive workloads. Whether you are a data scientist, developer, or creative professional, this workstation delivers the robust performance needed for demanding AI tasks, all within a refined, portable package that respects your desk space and budget.",
+   "id": "prose2",
+   "category": "prose",
+   "prompt": "Write a product description of 80 to 120 words for a compact AI workstation with 128 GB of unified memory. Do not use the words revolutionary, game-changing, or unleash.",
+   "score": 0.75,
+   "fails": [
+    "words 123 in 80-120"
+   ]
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 8.68,
+   "completion_tokens": 280,
+   "prompt_tokens": 45,
+   "decode_tok_s": 33.0,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "A clever fox, known for his silver tongue, wandered into a dense forest seeking easy prey. He spotted a young rabbit grazing peacefully near a burrow. \"My dear friend,\" the fox purred, his eyes gleaming with false warmth, \"why hide in the dark when the sun shines so brightly? I know a meadow filled with the sweetest clover, just beyond the hill. Come, let us feast together.\"\n\nThe rabbit, though wary, was tempted by the promise of abundant food. \"But my mother warned me never to trust strangers,\" the rabbit hesitated, ears twitching nervously.\n\n\"Your mother is old and fearful,\" the fox scoffed, stepping closer. \"I am your ally, not your enemy. Trust me, and you shall live like a king.\"\n\nBlinded by greed and flattery, the rabbit followed the fox. They walked deeper into the woods until the path vanished into thick, thorny brambles. The fox\u2019s smile vanished, replaced by a sharp, predatory grin. \"You were right to be afraid,\" he laughed, lunging forward. \"But it is too late for wisdom now.\"\n\nThe rabbit barely escaped, tumbling down a steep slope, bruised but alive. He learned that sweet words often hide sharp teeth. Moral: Flattery is a dangerous trap for those who lack discernment.",
+   "id": "story2",
+   "category": "narrative",
+   "prompt": "Write a 120 to 200 word fable with a talking fox. State the moral in the final sentence, starting with the word Moral:",
+   "score": 0.6666666666666666,
+   "fails": [
+    "words 205 in 120-200"
+   ]
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 2.03,
+   "completion_tokens": 53,
+   "prompt_tokens": 35,
+   "decode_tok_s": 29.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "The provided text indicates that the document is missing. Consequently, there is no content available to summarize. Please provide the actual report text so that I can generate a concise summary adhering to the specified constraints of one paragraph and a maximum of 80 words.",
+   "id": "sum2",
+   "category": "summary",
+   "prompt": "Summarize the following report in one paragraph of at most 80 words.\n\n---\n(document missing)",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 1.79,
+   "completion_tokens": 72,
+   "prompt_tokens": 81,
+   "decode_tok_s": 45.8,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "| Lane | Context | KV pool |\n| :--- | :--- | :--- |\n| NVFP4 | 262,144 | 295,230 |\n| EXL3 | 1,048,576 | 1,396,551 |",
+   "id": "fmt2",
+   "category": "format",
+   "prompt": "Output a markdown table with the columns Lane | Context | KV pool and two rows: NVFP4 with 262,144 and 295,230; EXL3 with 1,048,576 and 1,396,551. Output nothing else.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 1.99,
+   "completion_tokens": 80,
+   "prompt_tokens": 48,
+   "decode_tok_s": 45.5,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```python\ndef top_k_frequent(words, k):\n    from collections import Counter\n    \n    # Count frequencies\n    freq = Counter(words)\n    \n    # Sort by frequency descending, then alphabetically ascending\n    sorted_words = sorted(freq.keys(), key=lambda w: (-freq[w], w))\n    \n    # Return top k\n    return sorted_words[:k]\n```",
+   "id": "code3",
+   "category": "coding",
+   "prompt": "Write a Python function top_k_frequent(words, k) returning the k most frequent words, most frequent first; ties broken alphabetically. Return only one ```python code block.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 7.93,
+   "completion_tokens": 388,
+   "prompt_tokens": 57,
+   "decode_tok_s": 50.4,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "To determine who finishes third, let's analyze the relative positions of the five runners: Al, Bo, Cal, Dee, and Eve.\n\n1.  **\"Bo finishes last.\"**\n    This places Bo in the 5th position.\n    Current order: [?, ?, ?, ?, Bo]\n\n2.  **\"Al finishes before Cal.\"**\n    This means Al's position number is smaller than Cal's position number ($Al < Cal$).\n\n3.  **\"Dee finishes before Eve but after Cal.\"**\n    This gives us the chain: $Cal < Dee < Eve$.\n    Combining this with the previous point ($Al < Cal$), we get the full chain:\n    $Al < Cal < Dee < Eve$\n\n4.  **Combine all information:**\n    We have the sequence $Al < Cal < Dee < Eve$.\n    We also know Bo is last (5th).\n    Since there are exactly 5 runners, and the chain $Al < Cal < Dee < Eve$ involves 4 distinct runners who must finish before Bo (because Bo is last), these four runners must occupy the first four positions in that specific order.\n\n    Let's map them to positions 1 through 4:\n    - 1st: Al\n    - 2nd: Cal\n    - 3rd: Dee\n    - 4th: Eve\n    - 5th: Bo\n\n    Let's verify the constraints:\n    - Dee finishes before Eve? Yes (3rd < 4th).\n    - Dee finishes after Cal? Yes (3rd > 2nd).\n    - Bo finishes last? Yes (5th).\n    - Al finishes before Cal? Yes (1st < 2nd).\n\n    The runner in the 3rd position is Dee.\n\nANSWER: Dee",
+   "id": "reason3",
+   "category": "reasoning",
+   "prompt": "Five runners finish a race. Dee finishes before Eve but after Cal. Bo finishes last. Al finishes before Cal. Who finishes third?\n\nGive your final answer on the last line exactly as: ANSWER: <answer>",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 0.67,
+   "completion_tokens": 21,
+   "prompt_tokens": 58,
+   "decode_tok_s": 46.9,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "{\"user\": \"sam\", \"tags\": [\"a\", \"b\"], \"active\": true}",
+   "id": "json3",
+   "category": "json",
+   "prompt": "Fix this invalid JSON and output only the corrected JSON:\n\n{'user': 'sam', 'tags': ['a', 'b',], 'active': True}\n\nOutput only the JSON, no prose, no code fences.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 3.0,
+   "completion_tokens": 141,
+   "prompt_tokens": 67,
+   "decode_tok_s": 50.8,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```html\n<form>\n  <label for=\"email\">Email:</label>\n  <input type=\"email\" id=\"email\" name=\"email\" required>\n\n  <label for=\"lane\">Lane:</label>\n  <select id=\"lane\" name=\"lane\">\n    <option value=\"NVFP4\">NVFP4</option>\n    <option value=\"EXL3\">EXL3</option>\n  </select>\n\n  <label for=\"notes\">Notes:</label>\n  <textarea id=\"notes\" name=\"notes\"></textarea>\n\n  <button type=\"submit\">Submit</button>\n</form>\n```",
+   "id": "html3",
+   "category": "html",
+   "prompt": "Write an HTML <form> with: a required email input with id=\"email\", a <select id=\"lane\"> with the options NVFP4 and EXL3, a <textarea id=\"notes\">, and a submit <button>.\n\nOutput only the HTML.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 4.95,
+   "completion_tokens": 176,
+   "prompt_tokens": 36,
+   "decode_tok_s": 37.2,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Subject: Re: Meeting Request\n\nDear [Name],\n\nThank you for reaching out and proposing a meeting to discuss [Topic]. I appreciate the opportunity to connect.\n\nUnfortunately, I am unable to attend the originally proposed time due to prior commitments. However, I am very keen to discuss this matter and would like to propose two alternative slots next week that might work better for your schedule:\n\n1. Tuesday, [Date], between 10:00 AM and 11:00 AM\n2. Thursday, [Date], between 2:00 PM and 3:00 PM\n\nPlease let me know if either of these times suits you, or if you would prefer to suggest another option. I look forward to finding a time that works for us both.\n\nBest regards,\n\n[Your Name]\n[Your Job Title]",
+   "id": "prose3",
+   "category": "prose",
+   "prompt": "Write a professional email under 150 words politely declining a meeting request and proposing two specific alternative times next week.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 12.54,
+   "completion_tokens": 433,
+   "prompt_tokens": 53,
+   "decode_tok_s": 35.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "The fluorescent hum of the server room was the only sound besides their ragged breathing.\n\n\"Look at the p99 latency, Dave. It\u2019s spiking to four hundred milliseconds.\"\n\n\"It\u2019s a cold start artifact. The cache wasn\u2019t warm.\"\n\n\"The cache was warm. I pre-warmed it for ten minutes.\"\n\n\"You didn\u2019t account for the garbage collection pause.\"\n\n\"I disabled the GC for the test run.\"\n\nDave rubbed his temples, staring at the glowing monitor. \"You can\u2019t just disable the GC in a production simulation, Sarah. That\u2019s cheating.\"\n\n\"It\u2019s isolating the variable. We need to know if the new indexing strategy actually works.\"\n\n\"It doesn\u2019t work if the system crashes under load.\"\n\n\"It didn\u2019t crash. It just paused.\"\n\n\"A four-second pause is a crash to the user.\"\n\nSarah spun her chair around, eyes wide with exhaustion and defiance. \"The throughput is up twenty percent. Twenty percent, Dave. Do you know what that means for our infrastructure costs?\"\n\n\"It means we\u2019re trading stability for speed. We\u2019ll have a million angry users refreshing their screens.\"\n\n\"We\u2019ll have a million users who get their data faster.\"\n\n\"Who get an error message because the timeout threshold is three seconds.\"\n\nSarah pointed a trembling finger at the screen. \"I can tune the timeout. I can optimize the memory allocation. But I can\u2019t fix the fundamental bottleneck without this change.\"\n\nDave sighed, the fight draining out of him as quickly as it had arrived. \"Show me the memory profile again.\"\n\nShe clicked the tab, her hands shaking slightly. \"Here. See the spike? It\u2019s not the index. It\u2019s the serialization layer.\"\n\nDave leaned in, squinting at the jagged red line. \"That\u2019s... actually interesting.\"\n\n\"Right? It\u2019s not the database. It\u2019s the JSON parser.\"\n\n\"Okay. Maybe you\u2019re onto something.\"\n\n\"Maybe? I\u2019m onto something.\"\n\n\"Fine. You\u2019re onto something. But we\u2019re not deploying this until we fix the serialization.\"\n\n\"Deal.\"",
+   "id": "story3",
+   "category": "narrative",
+   "prompt": "Write a 200 to 300 word scene: two engineers arguing at 2 a.m. about a benchmark result. Mostly dialogue; no narration longer than one sentence at a time.",
+   "score": 0.5,
+   "fails": [
+    "words 305 in 200-300"
+   ]
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 1.37,
+   "completion_tokens": 31,
+   "prompt_tokens": 32,
+   "decode_tok_s": 26.6,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "The provided text is missing, so it contains no information regarding quality. Consequently, it is impossible to summarize any statements about quality from the absent content.",
+   "id": "sum3",
+   "category": "summary",
+   "prompt": "In exactly two sentences, summarize what the following text says about quality.\n\n---\n(document missing)",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 0.59,
+   "completion_tokens": 10,
+   "prompt_tokens": 45,
+   "decode_tok_s": 26.3,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "dog lazy the over jumps fox brown quick the",
+   "id": "fmt3",
+   "category": "format",
+   "prompt": "Reply with the sentence 'The quick brown fox jumps over the lazy dog' with the words in reverse order, all lowercase, no punctuation. Output only the result.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 2.01,
+   "completion_tokens": 88,
+   "prompt_tokens": 123,
+   "decode_tok_s": 48.6,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```python\ndef binary_search(a, target):\n    lo, hi = 0, len(a)\n    while lo < hi:\n        mid = (lo + hi) // 2\n        if a[mid] == target:\n            return mid\n        if a[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid\n    return -1\n```",
+   "id": "code4",
+   "category": "coding",
+   "prompt": "This binary search has a bug that can make it loop forever. Return the corrected function only, as one ```python code block, same name and signature.\n\ndef binary_search(a, target):\n    lo, hi = 0, len(a)\n    while lo < hi:\n        mid = (lo + hi) // 2\n        if a[mid] == target:\n            return mid\n        if a[mid] < target:\n            lo = mid\n        else:\n            hi = mid\n    return -1",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 7.86,
+   "completion_tokens": 432,
+   "prompt_tokens": 83,
+   "decode_tok_s": 56.4,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "To solve this problem, we can avoid the complex calculation of summing the infinite series of the bird's back-and-forth trips by focusing on the total time the bird is in the air.\n\n**Step 1: Calculate the time until the trains meet.**\n\nThe two trains are traveling toward each other. Therefore, their relative speed is the sum of their individual speeds.\n*   Speed of Train 1 ($v_1$) = $70$ km/h\n*   Speed of Train 2 ($v_2$) = $80$ km/h\n*   Relative Speed ($v_{rel}$) = $v_1 + v_2 = 70 + 80 = 150$ km/h\n\nThe initial distance between the trains ($d$) is $300$ km.\n\nThe time ($t$) it takes for the trains to meet is given by:\n$$ t = \\frac{d}{v_{rel}} $$\n$$ t = \\frac{300 \\text{ km}}{150 \\text{ km/h}} $$\n$$ t = 2 \\text{ hours} $$\n\n**Step 2: Calculate the distance the bird flies.**\n\nThe bird is flying continuously from the moment the trains start until the moment they meet. Therefore, the bird is in the air for exactly the same amount of time as it takes for the trains to meet, which is $2$ hours.\n\n*   Speed of the bird ($v_b$) = $120$ km/h\n*   Time in air ($t$) = $2$ hours\n\nThe total distance ($d_b$) the bird flies is:\n$$ d_b = v_b \\times t $$\n$$ d_b = 120 \\text{ km/h} \\times 2 \\text{ h} $$\n$$ d_b = 240 \\text{ km} $$\n\n**Conclusion:**\n\nThe bird flies a total distance of 240 km.\n\nANSWER: 240",
+   "id": "reason4",
+   "category": "reasoning",
+   "prompt": "Two trains 300 km apart travel toward each other at 70 km/h and 80 km/h. A bird flying at 120 km/h goes back and forth between them until they meet. How many km does the bird fly?\n\nGive your final answer on the last line exactly as: ANSWER: <answer>",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 0.82,
+   "completion_tokens": 26,
+   "prompt_tokens": 86,
+   "decode_tok_s": 41.2,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "{\"Oslo\": 4, \"Cairo\": 31, \"Lima\": 19.5}",
+   "id": "json4",
+   "category": "json",
+   "prompt": "Return a JSON object mapping each city to the arithmetic mean of its temperatures:\n\n{\"Oslo\": [2, 4, 6], \"Cairo\": [30, 32], \"Lima\": [18, 19, 20, 21]}\n\nOutput only the JSON, no prose, no code fences.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 2.43,
+   "completion_tokens": 106,
+   "prompt_tokens": 68,
+   "decode_tok_s": 47.4,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```html\n<a href=\"#main\" class=\"skip\">Skip to content</a>\n<nav aria-label=\"Main\">\n  <ul>\n    <li><a href=\"#home\">Home</a></li>\n    <li><a href=\"#about\">About</a></li>\n    <li><a href=\"#services\">Services</a></li>\n    <li><a href=\"#contact\">Contact</a></li>\n  </ul>\n</nav>\n```",
+   "id": "html4",
+   "category": "html",
+   "prompt": "Write an accessible site navigation: a skip link <a href=\"#main\" class=\"skip\">Skip to content</a>, then <nav aria-label=\"Main\"> containing a <ul> of four <li> items each with an <a>.\n\nOutput only the HTML.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 7.89,
+   "completion_tokens": 235,
+   "prompt_tokens": 41,
+   "decode_tok_s": 30.6,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Benchmarking language models with synthetic prompts is a flawed methodology that fundamentally undermines the validity of AI evaluation. While synthetic data offers scalability and cost-efficiency, it fails to capture the nuanced, chaotic, and context-dependent nature of real human interaction. Real-world queries are often ambiguous, culturally specific, or laden with implicit assumptions that synthetic generators, trained on existing model outputs, cannot authentically replicate. Consequently, models optimized for synthetic benchmarks risk overfitting to artificial patterns rather than developing genuine reasoning or comprehension capabilities.\n\nFurthermore, synthetic prompts often lack the adversarial complexity and edge cases found in organic user behavior. This creates a dangerous illusion of robustness, where models appear highly capable in controlled, sterile environments but fail unpredictably when deployed in dynamic, real-world scenarios. Relying on such metrics encourages developers to chase leaderboard scores rather than solving actual user problems. True progress requires evaluation against diverse, human-curated datasets that reflect the full spectrum of linguistic diversity and practical utility. By prioritizing synthetic benchmarks, the industry risks creating brittle systems that excel at mimicking expected answers but lack the adaptability and reliability necessary for meaningful integration into society. Authentic evaluation demands authentic data.",
+   "id": "prose4",
+   "category": "prose",
+   "prompt": "In 150 to 200 words, argue for or against benchmarking language models with synthetic prompts. Take one side clearly.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 7.7,
+   "completion_tokens": 215,
+   "prompt_tokens": 45,
+   "decode_tok_s": 28.7,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "The hum dies. Silence crashes into the room, heavy and suffocating. You stand frozen in the aisle, surrounded by the blackened faces of servers that once screamed with data. The emergency lights flicker, casting long, jagged shadows across the cold floor. Your breath hitches, a ragged sound in the void. You reach out, fingers hovering over the dormant rack, feeling the residual warmth fading from the metal. It\u2019s a ghost of activity, a dying pulse.\n\nOutside, the storm rages, but here, time has stopped. You are the only heartbeat left. The darkness presses against your eyes, thick and absolute. You wait for the generator\u2019s cough, for the lights to return, for the world to resume its frantic pace. But the silence stretches, thin and brittle. You realize you are not just waiting for power; you are waiting for meaning. In this void, you are nothing but a witness to the end of the digital age, standing alone in the dark, holding your breath until the world decides to speak again.",
+   "id": "story4",
+   "category": "narrative",
+   "prompt": "Write a 100 to 150 word micro-story told entirely in second person, present tense, set in a data center during a power outage.",
+   "score": 0.5,
+   "fails": [
+    "words 170 in 100-150"
+   ]
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 1.65,
+   "completion_tokens": 36,
+   "prompt_tokens": 35,
+   "decode_tok_s": 24.9,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "What: The document content is missing, so no summary can be provided.\nHow: Please provide the actual README text or file content for analysis.\nCredits: N/A",
+   "id": "sum4",
+   "category": "summary",
+   "prompt": "Summarize the following README in 3 bullets labeled What, How, Credits.\n\n---\n(document missing)",
+   "score": 0.75,
+   "fails": [
+    "bullets=3"
+   ]
+  },
+  {
+   "ttft_s": 0.24,
+   "wall_s": 1.1,
+   "completion_tokens": 19,
+   "prompt_tokens": 36,
+   "decode_tok_s": 21.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "To free RAM for model weights, preventing OOM errors and avoiding costly swap thrashing.",
+   "id": "fmt4",
+   "category": "format",
+   "prompt": "In at most 20 words: why should a unified-memory machine drop its page cache before loading a large model?",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 3.45,
+   "completion_tokens": 152,
+   "prompt_tokens": 38,
+   "decode_tok_s": 46.7,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```python\ndef roman_to_int(s: str) -> int:\n    roman_values = {\n        'I': 1,\n        'V': 5,\n        'X': 10,\n        'L': 50,\n        'C': 100,\n        'D': 500,\n        'M': 1000\n    }\n    \n    total = 0\n    prev_value = 0\n    \n    for char in reversed(s):\n        value = roman_values[char]\n        if value < prev_value:\n            total -= value\n        else:\n            total += value\n        prev_value = value\n    \n    return total\n```",
+   "id": "code5",
+   "category": "coding",
+   "prompt": "Write a Python function roman_to_int(s) converting a Roman numeral string to an integer. Return only one ```python code block.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 15.6,
+   "completion_tokens": 789,
+   "prompt_tokens": 47,
+   "decode_tok_s": 51.2,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "To find the remainder when $7^{100}$ is divided by 5, we can use modular arithmetic. We are looking for the value of $7^{100} \\pmod 5$.\n\n**Step 1: Simplify the base modulo 5**\nFirst, we determine the remainder of the base, 7, when divided by 5.\n$$ 7 \\div 5 = 1 \\text{ with a remainder of } 2 $$\nSo,\n$$ 7 \\equiv 2 \\pmod 5 $$\n\nTherefore,\n$$ 7^{100} \\equiv 2^{100} \\pmod 5 $$\n\n**Step 2: Look for a pattern in the powers of 2 modulo 5**\nLet's compute the first few powers of 2 modulo 5:\n- $2^1 = 2 \\equiv 2 \\pmod 5$\n- $2^2 = 4 \\equiv 4 \\pmod 5$\n- $2^3 = 8 \\equiv 3 \\pmod 5$ (since $8 - 5 = 3$)\n- $2^4 = 16 \\equiv 1 \\pmod 5$ (since $16 - 15 = 1$)\n\nWe see that $2^4 \\equiv 1 \\pmod 5$. This means the powers of 2 repeat in a cycle of 4 modulo 5. Specifically, for any integer $k$, $2^{4k} \\equiv (2^4)^k \\equiv 1^k \\equiv 1 \\pmod 5$.\n\n**Step 3: Apply the pattern to the exponent 100**\nThe exponent is 100. We check if 100 is divisible by the cycle length, which is 4.\n$$ 100 \\div 4 = 25 $$\nSince 100 is exactly divisible by 4, we can write:\n$$ 2^{100} = 2^{4 \\times 25} = (2^4)^{25} $$\n\nSubstituting the modular equivalence we found earlier ($2^4 \\equiv 1 \\pmod 5$):\n$$ (2^4)^{25} \\equiv 1^{25} \\pmod 5 $$\n$$ 1^{25} = 1 $$\n\nSo,\n$$ 2^{100} \\equiv 1 \\pmod 5 $$\n\n**Alternative Method: Fermat's Little Theorem**\nFermat's Little Theorem states that if $p$ is a prime number, then for any integer $a$ not divisible by $p$:\n$$ a^{p-1} \\equiv 1 \\pmod p $$\nHere, $p = 5$ and $a = 7$. Since 7 is not divisible by 5, the theorem applies.\n$$ 7^{5-1} \\equiv 1 \\pmod 5 $$\n$$ 7^4 \\equiv 1 \\pmod 5 $$\n\nWe can express the exponent 100 as a multiple of 4:\n$$ 100 = 4 \\times 25 $$\n$$ 7^{100} = (7^4)^{25} $$\n$$ 7^{100} \\equiv 1^{25} \\pmod 5 $$\n$$ 7^{100} \\equiv 1 \\pmod 5 $$\n\nBoth methods yield the same result. The remainder is 1.\n\nANSWER: 1",
+   "id": "reason5",
+   "category": "reasoning",
+   "prompt": "What is the remainder when 7^100 is divided by 5?\n\nGive your final answer on the last line exactly as: ANSWER: <answer>",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 1.07,
+   "completion_tokens": 38,
+   "prompt_tokens": 76,
+   "decode_tok_s": 43.6,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "{\"id\": 7, \"name\": \"Widget\", \"price\": 19.99, \"in_stock\": true, \"tags\": [\"tools\", \"home\"]}",
+   "id": "json5",
+   "category": "json",
+   "prompt": "Produce a JSON object with exactly these keys and values: id = integer 7, name = string \"Widget\", price = number 19.99, in_stock = boolean true, tags = array of strings [\"tools\", \"home\"].\n\nOutput only the JSON, no prose, no code fences.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.22,
+   "wall_s": 16.2,
+   "completion_tokens": 844,
+   "prompt_tokens": 66,
+   "decode_tok_s": 52.7,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Card Component</title>\n  <style>\n    * {\n      margin: 0;\n      padding: 0;\n      box-sizing: border-box;\n    }\n\n    body {\n      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;\n      background-color: #f0f2f5;\n      display: flex;\n      justify-content: center;\n      align-items: center;\n      min-height: 100vh;\n      padding: 20px;\n    }\n\n    .card {\n      background: #ffffff;\n      border-radius: 12px;\n      overflow: hidden;\n      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 10px 24px rgba(0, 0, 0, 0.05);\n      max-width: 360px;\n      width: 100%;\n      transition: transform 0.2s ease, box-shadow 0.2s ease;\n    }\n\n    .card:hover {\n      transform: translateY(-4px);\n      box-shadow: 0 8px 12px rgba(0, 0, 0, 0.1), 0 16px 32px rgba(0, 0, 0, 0.08);\n    }\n\n    .card img {\n      width: 100%;\n      height: 200px;\n      object-fit: cover;\n      display: block;\n    }\n\n    .card h2 {\n      font-size: 1.25rem;\n      font-weight: 600;\n      color: #1a1a2e;\n      padding: 20px 20px 8px;\n      line-height: 1.4;\n    }\n\n    .card p {\n      font-size: 0.95rem;\n      color: #555;\n      line-height: 1.6;\n      padding: 0 20px 20px;\n    }\n\n    .card .btn {\n      display: inline-block;\n      margin: 0 20px 20px;\n      padding: 10px 24px;\n      background-color: #4361ee;\n      color: #ffffff;\n      text-decoration: none;\n      font-size: 0.9rem;\n      font-weight: 500;\n      border-radius: 6px;\n      transition: background-color 0.2s ease;\n    }\n\n    .card .btn:hover {\n      background-color: #3a56d4;\n    }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <img src=\"https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&h=200&fit=crop\" alt=\"A scenic mountain landscape with a lake reflecting the sky\">\n    <h2>Explore the Wilderness</h2>\n    <p>Discover breathtaking trails and serene landscapes that will reconnect you with nature and inspire your next adventure.</p>\n    <a class=\"btn\" href=\"#\">Learn More</a>\n  </div>\n</body>\n</html>\n```",
+   "id": "html5",
+   "category": "html",
+   "prompt": "Write an HTML card component with an inline <style> block: a <div class=\"card\"> containing an <img> with an alt attribute, an <h2>, a <p>, and an <a class=\"btn\">.\n\nOutput only the HTML.",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 5.94,
+   "completion_tokens": 200,
+   "prompt_tokens": 50,
+   "decode_tok_s": 35.0,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "When interacting with a chat assistant, the delay before the first word appears, known as time to first token, is far more critical for user experience than the speed at which subsequent words are generated. This initial pause creates a perception of responsiveness and intelligence. If the system takes too long to start speaking, users feel ignored or assume the system is broken, leading to frustration and abandonment. In contrast, once the response begins, users are generally willing to wait for the rest of the answer, as long as it flows smoothly.\n\nThink of it like a waiter at a restaurant. If the waiter takes ten minutes just to come to your table and acknowledge you, you will likely leave, regardless of how fast they serve the food once they finally arrive. However, if they greet you immediately and then take a few extra minutes to bring the meal, you remain patient and satisfied. The initial connection sets the tone for the entire interaction, making that first moment of acknowledgment the most valuable part of the service.",
+   "id": "prose5",
+   "category": "prose",
+   "prompt": "In 100 to 150 words, explain in plain language why time to first token matters more than tokens per second for a chat assistant. Use exactly one concrete analogy.",
+   "score": 0.0,
+   "fails": [
+    "words 177 in 100-150"
+   ]
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 12.12,
+   "completion_tokens": 406,
+   "prompt_tokens": 44,
+   "decode_tok_s": 34.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Bolt was a shiny, silver robot with bright blue eyes and a very fast processor. He loved to zoom around the garden, chasing butterflies and helping his friend, Lily, water her flowers. But Bolt had one big problem: he hated waiting. If Lily said, \"Wait a second,\" Bolt would already be three steps ahead, buzzing with impatience. He thought waiting was just a waste of time, like a computer stuck on loading. One sunny afternoon, Lily asked Bolt to help her plant a tiny sunflower seed. \"We have to wait for it to grow,\" she said gently. Bolt\u2019s gears whirred loudly. \"But I can calculate the growth in seconds!\" he insisted, tapping his metal foot impatiently.\n\nLily smiled and handed Bolt a small watering can. \"Let\u2019s try something new,\" she suggested. \"Instead of rushing, let\u2019s watch the clouds together.\" Bolt was confused but decided to try. He stood still, watching the fluffy white shapes drift across the blue sky. At first, his internal clock ticked loudly, urging him to move. But slowly, the noise in his head quieted down. He noticed how the wind rustled the leaves and how the sun felt warm on his metal shell. For the first time, Bolt realized that doing nothing could actually feel quite nice. He wasn\u2019t missing out on anything; he was just being present.\n\nA few days later, a tiny green sprout popped up from the soil. Bolt gasped, his eyes widening in wonder. \"It happened!\" he cheered, but this time, he didn\u2019t rush to pick it. He carefully watered it, remembering the calm feeling of watching the clouds. He learned that some things, like flowers and friendships, need time to grow. Waiting wasn\u2019t boring anymore; it was part of the magic. From that day on, Bolt still moved fast, but he learned to pause and appreciate the quiet moments, knowing that patience made the best surprises even sweeter.",
+   "id": "story5",
+   "category": "narrative",
+   "prompt": "Write a 150 to 250 word story for children aged 6 to 8 about a robot learning to wait. Exactly three paragraphs.",
+   "score": 0.5,
+   "fails": [
+    "words 317 in 150-250"
+   ]
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 1.01,
+   "completion_tokens": 24,
+   "prompt_tokens": 39,
+   "decode_tok_s": 30.1,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "I can't turn a missing document into a tweet. Please provide the text you'd like me to condense!",
+   "id": "sum5",
+   "category": "summary",
+   "prompt": "Turn the following into a single tweet of at most 280 characters. Output only the tweet.\n\n---\n(document missing)",
+   "score": 1.0,
+   "fails": []
+  },
+  {
+   "ttft_s": 0.25,
+   "wall_s": 1.25,
+   "completion_tokens": 20,
+   "prompt_tokens": 39,
+   "decode_tok_s": 18.8,
+   "reasoning_chars": 0,
+   "finish": "stop",
+   "output": "Whirring blades spin fast\nCooling down the hot silicon\nSilence when it sleeps",
+   "id": "fmt5",
+   "category": "format",
+   "prompt": "Write a haiku about a GPU fan: three lines, 5-7-5 syllables. Output only the three lines.",
+   "score": 1.0,
+   "fails": []
+  }
+ ],
+ "ts": "2026-09-09 01:55"
+}
