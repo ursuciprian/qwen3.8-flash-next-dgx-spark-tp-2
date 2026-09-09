@@ -5,18 +5,16 @@
 #   scripts/run.sh <option> [--check] [--bench] [--skip-download]
 #
 #   option              recipe                                                   engine
-#   sglang              recipes/latest/flashnext-bigkv-g8-c4096.yaml             SGLang, interactive c1-c2
-#   sglang-nospec       recipes/latest/flashnext-bigkv-nospec.yaml               SGLang, c5+ / prefill-heavy
-#   vllm                recipes/latest/flashnext-vllm-cached.yaml                vLLM, cached long context
-#   sglang-sparkarena   recipes/sparkarena/qwen38-flash-next-nvfp4-fastqsa4096bigkv-g8-sglang.yaml
-#   vllm-sparkarena     recipes/sparkarena/qwen3.8-flash-next-nvfp4-tp2.yaml
+#   sglang         recipes/flashnext-bigkv-g8-c4096.yaml   SGLang, chat and 1-2 agents
+#   sglang-nospec  recipes/flashnext-bigkv-nospec.yaml     SGLang, 5+ streams or batch prefill
+#   vllm           recipes/flashnext-vllm-cached.yaml      vLLM, long context reused across turns
 #
 #   --check          validate cluster and nodes, launch nothing
 #   --bench          after the server is up, run the llama-benchy grid (DEPTHS, CONCURRENCY env)
 #   --skip-download  checkpoint already on both nodes
 #
-# Bind-mount paths inside the recipes are rewritten to wherever this checkout lives,
-# on both nodes, before launch (scripts/recipe_metadata.py --render).
+# The recipes carry no bind mounts; the vLLM one pulls its engine overlays in as a sparkrun
+# mod. Adjust the fabric names first with scripts/detect-fabric.sh.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,12 +34,10 @@ for arg in "$@"; do
 done
 
 case "$OPTION" in
-  sglang)            ENGINE=sglang; RECIPE="$REPO/recipes/latest/flashnext-bigkv-g8-c4096.yaml" ;;
-  sglang-nospec)     ENGINE=sglang; RECIPE="$REPO/recipes/latest/flashnext-bigkv-nospec.yaml" ;;
-  vllm)              ENGINE=vllm;   RECIPE="$REPO/recipes/latest/flashnext-vllm-cached.yaml" ;;
-  sglang-sparkarena) ENGINE=sglang; RECIPE="$REPO/recipes/sparkarena/qwen38-flash-next-nvfp4-fastqsa4096bigkv-g8-sglang.yaml" ;;
-  vllm-sparkarena)   ENGINE=vllm;   RECIPE="$REPO/recipes/sparkarena/qwen3.8-flash-next-nvfp4-tp2.yaml" ;;
-  *) sed -n '2,20p' "$0"; exit 2 ;;
+  sglang)            ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-bigkv-g8-c4096.yaml" ;;
+  sglang-nospec)     ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-bigkv-nospec.yaml" ;;
+  vllm)              ENGINE=vllm;   RECIPE="$REPO/recipes/flashnext-vllm-cached.yaml" ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac
 
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }

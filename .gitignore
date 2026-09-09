@@ -2,4 +2,11 @@
 __pycache__/
 *.pyc
 .run/
-results/*-serve.log
+*.bak
+
+# raw run artifacts never belong here; this repo publishes recipes and the
+# measurements that back them, not engine or harness stdout
+results/arms/
+results/**/*.log
+results/**/*.prom
+tools/

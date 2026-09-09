@@ -1,115 +1,79 @@
 # Measurements
 
-All runs: two DGX Spark (GB10), tensor parallel 2 over ConnectX-7, temperature 0.
-Grids are llama-benchy `--pp 2048 --tg 128 --enable-prefix-caching`. `pp2048` is a
-fresh 2k-token prompt after a cached context of the given depth; `tg128` is
-decode, aggregate tok/s across the concurrent streams. The default corpus is
-prose, so decode figures are prose figures; predictable text (code, JSON,
-counting) decodes 1.5-2x faster on the same server because the drafter accepts
-more tokens.
+Two DGX Spark (GB10), tensor parallel 2 over ConnectX-7, temperature 0.
 
-Two fresh boots of the same SGLang recipe differ by 10-17% median on decode;
-two boots of the vLLM recipe by under 2% on prefill. Differences smaller than
-that between rows are noise.
+Grids are `llama-benchy --pp 2048 --tg 128 --enable-prefix-caching` at depths 0
+to 32k and concurrency 1, 2, 5. `pp2048@depth` is a fresh 2k-token prompt after
+a cached context of that depth, so it measures a cached turn, not cold prefill.
+`tg128` is decode, aggregate across the concurrent streams. The default corpus
+is prose; predictable text decodes far faster on the same server.
 
-## Recipes published on Spark Arena
+Two fresh boots of the same SGLang recipe differ by 20% on prefill and 13% on
+decode. Differences smaller than that are not results.
 
-### `qwen38-flash-next-nvfp4-fastqsa4096bigkv-g8-sglang` (SGLang)
+## `flashnext-bigkv-g8-c4096` (SGLang)
 
-Measured 2026-08-30, depths 0-65k, `sglang-fastqsa-bigkv-g8-grid-0-65k.csv`.
+`sglang-bigkv-g8-c4096-sep03-grid-0-32k.csv`, c1 / c2 / c5.
 
-| depth | pp2048 c1 / c2 / c5 | tg128 c1 / c2 / c5 |
+| depth | pp2048 | tg128 |
 |---|---|---|
-| 0 | 2521 / 2647 / 3023 | 40 / 62 / 95 |
-| 4096 | 989 / 1447 / 2029 | 38 / 53 / 89 |
-| 16384 | 946 / 1382 / 1939 | 37 / 60 / 81 |
-| 32768 | 942 / 1332 / 1850 | 30 / 55 / 81 |
-| 65536 | 853 / 1213 / 1700 | 31 / 57 / 65 |
+| 0 | 2353 / 2633 / 3004 | 41 / 62 / 94 |
+| 4096 | 915 / 1388 / 1963 | 36 / 62 / 83 |
+| 16384 | 915 / 1331 / 1902 | 38 / 54 / 84 |
+| 32768 | 918 / 1345 / 1874 | 37 / 58 / 79 |
 
-The only configuration in that grid that kept five streams alive at 65k. KV pool
-900k tokens, 110k context per request.
+40-prompt category mix, single stream: 58-61 tok/s median, coding 63, JSON 66,
+reasoning 62, prose 39. Speculative acceptance 2.2-2.4 of a maximum 4.0 on
+prose, 4.0 on counting.
 
-### `qwen3.8-flash-next-nvfp4-tp2` (vLLM)
+## `flashnext-bigkv-nospec` (SGLang, no drafter)
 
-Same profile measured with 4 draft tokens, depths 0-65k,
-`vllm-tp2-mtp4-grid-0-65k.csv`; the published file ships with 3, which trades
-a little predictable-text speed for a little prose speed (single stream, 512
-tokens: counting 56.8 vs 66.7, code 46.7 vs 45.0, prose 39.9 vs 37.8).
+`sglang-bigkv-nospec-grid-0-32k.csv`, c1 / c2 / c5.
 
-| depth | pp2048 c1 / c2 / c5 | tg128 c1 / c2 / c5 |
-|---|---|---|
-| 0 | 1613 / 2115 / 2683 | 34 / 49 / 74 |
-| 4096 | 875 / 899 / 1062 | 31 / 43 / 71 |
-| 16384 | 634 / 656 / 664 | 34 / 53 / 43 |
-| 32768 | 596 / 605 / 628 | 33 / 40 / 39 |
-| 65535 | 526 / - / - | 31 / 38 / 36 |
-
-Single-stream decode nearly flat to 64k. Prefill at depth halves with every
-depth doubling because, on this build, prefix caching was not reusing anything
-across turns; the current vLLM recipe fixes that (below). 262k context, 1.1M
-KV tokens.
-
-## Current recipes
-
-### `flashnext-bigkv-g8-c4096` (SGLang, 2026-09-03 image)
-
-`sglang-bigkv-g8-c4096-sep03-grid-0-32k.csv`, one of four boots.
-
-| depth | pp2048 c1 / c2 / c5 | tg128 c1 / c2 / c5 |
-|---|---|---|
-| 0 | 2378 / 2580 / 2913 | 38 / 63 / 78 |
-| 4096 | 905 / 1431 / 1946 | 31 / 56 / 79 |
-| 16384 | 845 / 1392 / 1871 | 38 / 47 / 70 |
-| 32768 | 892 / 1306 / 1737 | 36 / 59 / 64 |
-
-Community 40-prompt category harness, single stream: 62.5 tok/s median
-(coding 65.4, reasoning 63.0, JSON 67.6, prose 38.7). Versus the published
-recipe: fresh shallow prefill about 10% lower at c1, decode unchanged, in
-exchange for the image whose sparse-attention kernel is correct on SM121 at
-long context.
-
-### `flashnext-bigkv-nospec` (SGLang, no drafter)
-
-`sglang-bigkv-nospec-grid-0-32k.csv`.
-
-| depth | pp2048 c1 / c2 / c5 | tg128 c1 / c2 / c5 |
+| depth | pp2048 | tg128 |
 |---|---|---|
 | 0 | 2496 / 2952 / 3115 | 26 / 53 / 85 |
 | 4096 | 1046 / 1526 / 2135 | 26 / 53 / 75 |
 | 16384 | 1001 / 1479 / 2075 | 26 / 45 / 85 |
 | 32768 | 961 / 1284 / 1979 | 26 / 47 / 77 |
 
-Prefill +20% everywhere and c5 decode +6 to +43% at depth; single-stream
-decode drops from ~36 to 26. Use at five or more concurrent streams.
+Prefill about 20% higher everywhere and decode at five streams 6-43% higher at
+depth, in exchange for single-stream decode falling from 37-41 to 26. The
+drafter accepts roughly 2 of 4 tokens on prose; past five streams the
+verification costs more than it returns.
 
-### `flashnext-vllm-cached` (vLLM, drafter on, prefix caching that reuses)
+## `flashnext-vllm-cached` (vLLM)
 
-`vllm-cached-grid-0-32k.csv`.
+`vllm-cached-grid-0-32k.csv`, c1 / c2 / c5.
 
-| depth | pp2048 c1 / c2 / c5 | tg128 c1 / c2 / c5 |
+| depth | pp2048 | tg128 |
 |---|---|---|
-| 0 | 2736 / 2644 / 2647 | 43 / 47 / 67 |
-| 4096 | 1889 / 1868 / 1897 | 29 / 46 / 53 |
-| 16384 | 2176 / 2154 / 2180 | 31 / 45 / 61 |
-| 32768 | 1862 / 1840 / 1896 | 33 / 44 / 52 |
+| 0 | 2890 / 2773 / 2773 | 40 / 54 / 71 |
+| 4096 | 2012 / 1962 / 1998 | 30 / 44 / 56 |
+| 16384 | 2282 / 2229 / 2290 | 34 / 47 / 63 |
+| 32768 | 1924 / 1935 / 1994 | 39 / 46 / 62 |
 
-Cached prefill at depth is 2x the SGLang recipe and 3-12x the published vLLM
-recipe; c5 decode at 32k is 52 where the published recipe fell to 39 and, on
-the newer build without the fix, to 8.6. Category harness single stream:
-55.8 coding, 62.2 JSON, 37.5 prose, 50.6 median. Cold prefill 2770-3281 tok/s
-from 7k to 88k tokens. Reuse verified on every boot with a three-request probe
-(same 20k prompt: 0 / 19,200 / 19,200 tokens hit). 262k context, 2.0M KV
-tokens. Same recipe without the drafter (`vllm-cached-nospec-grid-0-32k.csv`):
-identical cached prefill, single-stream decode 26, KV pool 2.7M.
+Cached turns prefill at roughly twice the SGLang recipe, and decode at depth
+holds up at five streams. Category mix single stream: 52 tok/s median, coding
+58. Cold prefill 2770-3280 tok/s from 7k to 88k tokens with a needle check
+correct at every size.
 
-## Reading the two engines
+Reuse is verified on every boot with a three-request probe: the same 20k prompt
+sent fresh, identical, then with a changed last line reuses 0, then 19,200,
+then 19,200 tokens, the second request falling from 10 s to 1.7 s. Without the
+`disable_eagle_block_drop` flag the same probe reads 0, 0, 16,000 and the depth
+cells collapse to 161 tok/s at 32k. Same recipe without the drafter
+(`vllm-cached-nospec-grid-0-32k.csv`): identical cached prefill, single-stream
+decode 26, KV pool 2.7M tokens.
 
-| workload | pick |
+## Choosing between the engines
+
+| workload | recipe |
 |---|---|
 | chat, one or two agents, cached history | SGLang `flashnext-bigkv-g8-c4096` |
 | five or more streams, batch prefill | SGLang `flashnext-bigkv-nospec` |
-| long documents revisited across turns, many agents, capacity | vLLM `flashnext-vllm-cached` |
+| long documents reused across turns, many agents, capacity | vLLM `flashnext-vllm-cached` |
 
-SGLang decodes faster on every one-shot workload (coding 65 vs 56 tok/s at
-c1). vLLM wins wherever a large context is reused: every cached turn prefills
-2x faster and concurrent decode at depth does not collapse.
+SGLang decodes faster on one-shot work: 63 tok/s on coding prompts against 58.
+vLLM wins wherever a large context is reused, because every cached turn
+prefills about twice as fast and concurrent decode at depth does not collapse.
