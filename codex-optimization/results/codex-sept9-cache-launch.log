@@ -1,0 +1,95 @@
+sparkrun v0.3.6
+
+Runtime:   vllm-distributed
+Image:     flashnext-codex:20260909-cache
+Model:     nvidia/Qwen3.8-Flash-Next-NVFP4
+Mode:      cluster (2 nodes)
+Platform:  DGX Spark (NVIDIA GB10, NCCL)
+Scheduler: occupancy-sparse
+
+VRAM Estimation:
+  Model dtype:      nvfp4
+  Model params:     66,340,124,689
+  KV cache dtype:   fp8_e4m3
+  Architecture:     48 layers, 2 KV heads, 256 head_dim
+  Model weights:    30.89 GB
+  KV cache:         12.00 GB (max_model_len=262,144)
+  Tensor parallel:  2
+  Per-GPU total:    21.45 GB
+  DGX Spark fit:    YES
+
+  GPU Memory Budget:
+    gpu_memory_utilization: 70%
+    Usable GPU memory:     84.7 GB (121 GB x 70%)
+    Available for KV:      69.3 GB
+    Max context tokens:    3,025,752
+    Context multiplier:    11.5x (vs max_model_len=262,144)
+
+  Per-host fit:
+    192.168.100.62: ranks=1, per-rank=21.4 GB, accelerator=121.0 GB @85% -> usable=102.8 GB, headroom=81.4 GB [OK]
+    192.168.100.53: ranks=1, per-rank=21.4 GB, accelerator=121.0 GB @85% -> usable=102.8 GB, headroom=81.4 GB [OK]
+
+Hosts:     cluster 'dgx-cluster-cx7'
+  Head:    192.168.100.62
+  Workers: 192.168.100.53
+
+[1/6] Preparing
+  done (0.3s)
+[2/6] Building
+Builder 'ursuciprian' not found, skipping
+  done (0.0s)
+[3/6] Distributing resources
+  Distributing image flashnext-codex:20260909-cache to 2 host(s)
+  Container image stale on 1 of 2 host(s), syncing
+  Distributing model nvidia/Qwen3.8-Flash-Next-NVFP4 to 2 host(s)
+Fetching 25 files:   0%|          | 0/25 [00:00<?, ?it/s]Fetching 25 files: 100%|██████████| 25/25 [00:00<00:00, 6187.38it/s]
+  Model synced to 2 host(s)
+  done (156.4s)
+[4/6] Syncing tuning configs
+  done (0.0s)
+[5/6] Launching vllm runtime
+  Step 1/7: Cleaning up existing containers
+  Step 2/7: Detecting InfiniBand
+  Step 3/7: Detecting head node IP
+  Step 4/7: Launching containers
+  Step 5/7: Running pre-serve hooks
+  Step 6/7: Starting head node serve
+  Step 7/7: Starting worker nodes
+  done (61.6s)
+Cluster:   sparkrun_96d0ff70f6fc7953_70afa7ea7889
+
+Serve command:
+  vllm serve nvidia/Qwen3.8-Flash-Next-NVFP4 \
+    --revision fc694b54fb0174e0913e6adf86691ef85a4ead47 \
+    --served-model-name qwen3.8-flash-next \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --trust-remote-code \
+    --quantization modelopt \
+    --tensor-parallel-size 2 \
+    --max-model-len 262144 \
+    --max-num-seqs 6 \
+    --gpu-memory-utilization 0.7 \
+    --max-num-batched-tokens 4096 \
+    --no-enable-flashinfer-autotune \
+    --enable-prefix-caching \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_xml \
+    --default-chat-template-kwargs '{"enable_thinking": false}' \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
+    --compilation-config '{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}' \
+    --kv-cache-dtype fp8_e4m3 \
+    --enable-expert-parallel \
+    --all2all-backend allgather_reducescatter \
+    --prefix-match-unit 64 \
+    --enable-mamba-fine-grained-prefix-cache
+
+Runtime versions:
+  cuda:      13.0
+  nccl:      (2, 29, 7)
+  python:    3.12.3
+  torch:     2.13.0+cu130
+  vllm:      0.28.1rc1.dev388+g8a728663c
+
+[6/6] Post-launch hooks — skipped

@@ -1,40 +1,33 @@
-# Image pinned by digest (vLLM nightly 8a728663).
-description: Qwen3.8-Flash-Next nvidia/NVFP4 on vLLM TP2 - MTP3 with prefix caching that reuses (block drop disabled), 2.0M-token KV pool, 262k context
-name: qwen38-flash-next-nvidia-nvfp4-vllm-cached
+description: EXPERIMENTAL approximate draft-only FP8 shortlist with BF16 rescoring;
+  no serving validation
+name: codex-flashnext-fp8-refine8
 model: nvidia/Qwen3.8-Flash-Next-NVFP4
-container: vllm/vllm-openai@sha256:f5df5cc3302b5f404848c4eca88d7bf7ed5226e151c056da22816d7734644d67
+container: flashnext-codex:20260909-fp8-refine8
 runtime: vllm-distributed
-
 min_nodes: 2
 max_nodes: 2
-
 metadata:
-  description: NVIDIA checkpoint on vLLM nightly 8a728663, prefix caching with real reuse, six overlays mounted
+  description: EXPERIMENTAL approximate draft-only FP8 shortlist with BF16 rescoring;
+    no serving validation
   model_dtype: nvfp4
   quantization: nvfp4
-
 defaults:
   port: 8000
   host: 0.0.0.0
   tensor_parallel: 2
-  gpu_memory_utilization: 0.70
+  gpu_memory_utilization: 0.7
   served_model_name: qwen3.8-flash-next
   revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
   max_model_len: 262144
   max_num_seqs: 6
   max_num_batched_tokens: 4096
   num_speculative_tokens: 3
-
-mods:
-  - vllm-flashnext-nightly-8a728663
-
 executor_config:
-  entrypoint: ""
+  entrypoint: ''
   cap_add:
-    - SYS_PTRACE
-    - IPC_LOCK
+  - SYS_PTRACE
+  - IPC_LOCK
   shm_size: 32gb
-
 env:
   HF_HUB_OFFLINE: '1'
   TRANSFORMERS_OFFLINE: '1'
@@ -65,7 +58,6 @@ env:
   GLOO_SOCKET_IFNAME: enp1s0f1np1
   TP_SOCKET_IFNAME: enp1s0f1np1
   MN_IF_NAME: enp1s0f1np1
-
 command: |
   vllm serve {model} \
     --revision {revision} \
@@ -85,9 +77,10 @@ command: |
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_xml \
     --default-chat-template-kwargs '{{"enable_thinking": false}}' \
-    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"disable_eagle_block_drop":true}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"disable_eagle_block_drop":true,"use_local_argmax_reduction":true}}' \
     --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
-    --kv-cache-dtype fp8_e4m3
-
+    --kv-cache-dtype fp8_e4m3 \
+    --enable-expert-parallel \
+    --all2all-backend allgather_reducescatter
 recipe_version: '1'
-builder: docker-pull
+builder: ursuciprian
