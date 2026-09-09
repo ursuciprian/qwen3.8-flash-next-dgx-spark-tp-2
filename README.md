@@ -47,9 +47,19 @@ patches as mods too (`sglang-sm121-qsa-guard`, `vllm-ple-fp8`) instead of the
 absolute bind-mount lines of the uploaded files; flags and everything else are
 unchanged.
 
-Adjust the NCCL interface and HCA names in `env:` to your nodes before the
-first launch (`sparkrun run ... -o` overrides do not reach `env:`; edit the
-YAML or copy it).
+**Before the first launch on different hardware**, fix the fabric names. The
+recipes carry this cluster's (`enp1s0f1np1`, `rocep1s0f1,roceP2p1s0f1`); many
+DGX Spark pairs are wired on `f0`. sparkrun's `-o` overrides do not reach
+`env:`, so the YAML has to be edited:
+
+```sh
+WORKER_IP=<worker ip on the fast link> scripts/detect-fabric.sh          # print
+WORKER_IP=<worker ip on the fast link> scripts/detect-fabric.sh --write  # patch
+```
+
+Also check the `taskset -c 5-9,15-19` CPU list in the SGLang recipes; it pins
+the server to this machine's fast cores. Images are pinned by digest, so a
+moved tag cannot silently change the build under you.
 
 ## Quick start
 
