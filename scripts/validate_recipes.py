@@ -117,6 +117,11 @@ def check(path: Path) -> None:
 
     # --- mods must exist and be runnable
     for m in mods:
+        if str(m).startswith("@"):
+            # registry-scoped reference (@registry/mod): resolvable only on a host that has that
+            # registry added, so it cannot be checked from here
+            warn(path, f"mod `{m}` is registry-scoped; the user must `sparkrun registry add` first")
+            continue
         rel = str(m).removeprefix("mods/")
         cands = [path.parent / "mods" / rel, REPO / "mods" / rel, path.parent / rel]
         hit = next((c for c in cands if (c / "run.sh").is_file()), None)

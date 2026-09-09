@@ -111,7 +111,7 @@ Upstream has since fixed the underlying defect: vllm-project/vllm#53504 is the
 report, #53945 merged on 2026-09-08. On a build containing it the flag should
 be unnecessary; this repository will drop it once that is measured here.
 
-## Known issue with the two Spark Arena entries
+## Known issue with the published Spark Arena entries
 
 If you came from Spark Arena, read this before running the published SGLang
 recipe. It pulls `lmsysorg/sglang:qwen38flashnext` and bind-mounts a patched
