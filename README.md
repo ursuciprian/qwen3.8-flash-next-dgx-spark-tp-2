@@ -10,6 +10,11 @@ Two sets of recipes:
 
 - **`recipes/sparkarena/`**: the two recipes published on Spark Arena, same
   flags as uploaded, patches applied as mods.
+- **`recipes/sparkarena-fixed/`**: replacements for those two. The published
+  SGLang recipe pins a tag that has since moved, so its bind-mounted SM121
+  patch now overwrites the newer image's correct kernel and can corrupt long
+  context. Read `recipes/sparkarena-fixed/README.md` before running the
+  published copy.
 - **`recipes/latest/`**: the three recipes I run today. Faster, on newer images,
   and with a correctness fix the published SGLang recipe does not have.
 

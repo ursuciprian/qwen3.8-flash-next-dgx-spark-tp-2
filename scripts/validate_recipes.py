@@ -103,9 +103,12 @@ def check(path: Path) -> None:
 
     # --- the SM121 correctness trap: the guard extension must not be mounted on a build that
     # already carries upstream's kernel
-    if any(SGLANG_QSA_TARGET in d for d in dests) and SEP03_DIGEST in container:
-        err(path, "mounts the old QSA guard over the 2026-09-03 build, which reinstates the kernel "
-                  "that corrupts long context on SM121 (sglang #36806)")
+    guard_via_mod = any("qsa-guard" in str(m) for m in mods)
+    sep03_or_newer = SEP03_DIGEST in container or container.endswith(":qwen38flashnext") or "sep03" in container
+    if (any(SGLANG_QSA_TARGET in d for d in dests) or guard_via_mod) and sep03_or_newer:
+        err(path, "applies the old QSA guard over the 2026-09-03 or newer build, reinstating the kernel "
+                  "that corrupts long context on SM121 (sglang #36806). Note the mutable tag "
+                  "lmsysorg/sglang:qwen38flashnext moved to that build on 2026-09-03.")
 
     # --- mods must exist and be runnable
     for m in mods:
