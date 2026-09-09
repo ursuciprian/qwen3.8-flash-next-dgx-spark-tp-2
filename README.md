@@ -165,6 +165,7 @@ group annotation is vllm-project/vllm #55390.
 | `.sparkrun/registry.yaml` | Registry manifest: `qwen38-flashnext` (recipes/latest) and the hidden `qwen38-flashnext-sparkarena` |
 | `scripts/run.sh` | One launcher, one option per recipe |
 | `scripts/recipe_metadata.py` | Reads recipes, rewrites mount paths to this checkout |
+| `scripts/validate_recipes.py` | Checks recipes against the failures this project hit (moving tags, missing overlays, unsupported flags, fabric, secrets) |
 | `results/` | Grids as CSV and `RESULTS.md` with the tables |
 
 ## Credits
