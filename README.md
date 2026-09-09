@@ -111,7 +111,7 @@ Upstream has since fixed the underlying defect: vllm-project/vllm#53504 is the
 report, #53945 merged on 2026-09-08. On a build containing it the flag should
 be unnecessary; this repository will drop it once that is measured here.
 
-## Known issue with the two Spark Arena entries
+## Known issue with the published Spark Arena entries
 
 If you came from Spark Arena, read this before running the published SGLang
 recipe. It pulls `lmsysorg/sglang:qwen38flashnext` and bind-mounts a patched
@@ -124,7 +124,9 @@ upstream's own SM121 kernel (#36845). Mounting the old file over it restores
 the earlier path, which upstream found silently corrupts context above roughly
 95k tokens on SM121: token-ID-0 output while HTTP still returns 200
 (sgl-project/sglang#36806). Use `flashnext-bigkv-g8-c4096` here instead; it is
-the same tuning on the correct build, pinned by digest.
+the same tuning on the correct build, pinned by digest. Corrected replacements
+for all five published entries, with the reasoning, are in
+[spark-arena-fixes/](spark-arena-fixes/).
 
 The published vLLM entry is sound. Note only that its prefix caching does not
 reuse a first pass on that build, for the reason above, and that its patch path
@@ -147,6 +149,7 @@ is absolute.
 | `scripts/` | `run.sh`, `detect-fabric.sh`, `validate_recipes.py`, `recipe_metadata.py` |
 | `results/` | `RESULTS.md` and the grids behind it |
 | `.sparkrun/registry.yaml` | Registry manifest |
+| `spark-arena-fixes/` | Corrected YAML for each published Spark Arena entry, with what was wrong |
 
 ## Credits
 
