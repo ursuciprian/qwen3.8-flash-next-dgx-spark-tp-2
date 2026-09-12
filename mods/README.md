@@ -23,6 +23,34 @@ Mechanism, measurements and the stock-semantics alternative
 (`--prefix-cache-retention-interval 3200`, which reuses one block less per
 turn) are in the README.
 
+## `sglang-sm121-qsa-fp8kv`
+
+Referenced by `recipes/flashnext-fp8kv-1m8.yaml`. One in-place edit to
+`sglang/srt/layers/attention/qwen_sparse_attn_backend.py`: the two packed
+gather scratch buffers are allocated in the query dtype instead of the KV
+cache dtype. The only QSA decode kernel qualified for SM121 accepts BF16 only
+and raises `unsupported SM121 QSA call: expected BF16 D=256, 12:1 GQA, ...`
+when fp8 keys reach it, so with `--kv-cache-dtype fp8_e4m3` the scheduler died
+on the first decode. With the scratch in the query dtype the extraction kernel
+converts the selected keys on store, at most 2055 rows per sequence, and the
+cache itself stays fp8. Idempotent and fail-closed: both call sites must match
+exactly once or nothing is written. Correct while the KV scales are 1.0 (the
+default without a calibration file). Upstream fixed the same class of problem
+for the chunk-prefill kernel in sgl-project/sglang#38855; the paged decode
+path was not covered.
+
+## `vllm-qsa-fp8kv-pr55557`
+
+Not referenced by a shipped recipe yet. It applies vllm-project/vllm#55557
+(open) to a current vLLM nightly so `--kv-cache-dtype fp8_e4m3` works on the
+Qwen4Exp QSA path without the six whole-file overlays above, which do not
+survive on a newer engine (`split_with_sizes expects split_sizes to sum
+exactly to 2560 ... got [512, 128]`). Measured 2026-09-11 on nightly
+`e7edf17c`: 2,069,156 KV tokens against the pinned build's 2,048,795, decode
+at parity, one tool-eval run at 90/100 with a single failure against the
+pinned build's 100. It stays out of the shipped recipe until that repeats
+clean. Dry-runs the diff and fails closed; skips once the gate is gone.
+
 ## Licensing
 
 Every overlay is a modified copy of a file from vLLM, which is Apache-2.0, and

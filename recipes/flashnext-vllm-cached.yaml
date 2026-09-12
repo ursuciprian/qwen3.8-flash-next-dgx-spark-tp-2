@@ -87,7 +87,9 @@ command: |
     --default-chat-template-kwargs '{{"enable_thinking": false}}' \
     --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"disable_eagle_block_drop":true}}' \
     --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
+    --enable-expert-parallel \
+    --all2all-backend allgather_reducescatter \
     --kv-cache-dtype fp8_e4m3
 
-recipe_version: '1'
+recipe_version: '2'
 builder: docker-pull

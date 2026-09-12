@@ -66,11 +66,69 @@ cells collapse to 161 tok/s at 32k. Same recipe without the drafter
 (`vllm-cached-nospec-grid-0-32k.csv`): identical cached prefill, single-stream
 decode 26, KV pool 2.7M tokens.
 
+## Reference harnesses, 2026-09-11
+
+Fresh boot per arm, page cache dropped on both nodes. Three lanes per boot:
+llama-benchy 0.4.0 in MiaAI-Lab's standard spec (pp 128/4096, tg 256/1024,
+depth 0/32768, concurrency 1/4), tonyd2wild's 40-prompt category harness
+(concurrency 1 to 6, cold prefill ladder to 88k with a needle), and
+`tool-eval-bench --short` (15 core scenarios, thinking off).
+
+| streams | SGLang shipped, bf16 KV | vLLM cached + EP | SGLang fp8 KV, 900k | SGLang fp8 KV, 1.8M |
+|---|---|---|---|---|
+| 1 | 67.0 | 65.2 | 64.7 | 64.2 |
+| 2 | 121.9 | 118.7 | 126.6 | - |
+| 4 | 229.2 | 206.6 | 218.1 | - |
+| 6 | **314.3** | 296.0 | 308.6 | - |
+| TTFT at 6 streams | **0.40 s** | 3.50 s | 0.41 s | - |
+| cold prefill at 88k | 4077 | 3436 | 4197 | 4097 |
+| tool-eval, 15 core | 97 | **100** | 97 | 97 |
+
+Four bf16 boots of the shipped recipe gave 67.0, 66.5, 66.3 and 63.7 tok/s at
+one stream on this harness, so the envelope is about 5%. Both fp8 arms sit
+inside it.
+
+Against the published references on the same hardware class, Tony's own
+harness against his TP2 profile: 53.7 vs **67.0** at one stream, 97.9 vs
+**314.3** at six, 2093 vs **3119** tok/s cold prefill at 28k. MiaAI-Lab's
+standard spec against their published T1: 24.1 vs **36.7** tg256 at one stream
+on vLLM + EP (their cluster caps the GPU clock at 2200 MHz, which accounts for
+part of the gap).
+
+### fp8 KV cache (`flashnext-fp8kv-1m8`)
+
+`--kv-cache-dtype fp8_e4m3` cannot serve this model on GB10 unpatched: the SM121
+QSA decode kernel is BF16-only and the scheduler dies on the first decode with
+`unsupported SM121 QSA call: expected BF16 D=256 ...`. The mod
+`sglang-sm121-qsa-fp8kv` allocates the gather scratch in the query dtype so the
+selected keys convert on store. Result: KV pool 899,968 to 1,800,000 tokens,
+context 110k to 262k, decode within control drift. Quality is checked only by
+the 15-scenario tool-eval (97, same as bf16, same single partial) and the
+needle to 88k. bf16 stays the default until a 76-scenario run and a full-window
+needle ladder are measured on both.
+
+### Expert parallelism in `flashnext-vllm-cached`
+
+`--enable-expert-parallel --all2all-backend allgather_reducescatter` measured
++3-6% prefill and +4-19% decode at depth on 2026-09-09 and no regression on any
+lane on 2026-09-11, with the best tool-eval score of the day. Promoted into the
+recipe.
+
+### Corruption gate (sglang#37111)
+
+Upstream reports QSA + NEXTN + decode CUDA graphs silently corrupting output on
+GB10 TP2. `scripts/gate_37111.py` runs both reported cases against a live
+server: a 1024-token essay and a 25k prompt with four ordered markers. On the
+shipped recipe: coherent prose with `finish_reason: length`, 4/4 markers in
+order. The report pins a day-zero image; the shipped digest carries upstream's
+own SM121 kernel.
+
 ## Choosing between the engines
 
 | workload | recipe |
 |---|---|
 | chat, one or two agents, cached history | SGLang `flashnext-bigkv-g8-c4096` |
+| the same, needing more than 110k context or a bigger pool, quality gate accepted | SGLang `flashnext-fp8kv-1m8` |
 | five or more streams, batch prefill | SGLang `flashnext-bigkv-nospec` |
 | long documents reused across turns, many agents, capacity | vLLM `flashnext-vllm-cached` |
 
