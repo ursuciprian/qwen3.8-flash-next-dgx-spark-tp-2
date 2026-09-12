@@ -102,10 +102,36 @@ QSA decode kernel is BF16-only and the scheduler dies on the first decode with
 `unsupported SM121 QSA call: expected BF16 D=256 ...`. The mod
 `sglang-sm121-qsa-fp8kv` allocates the gather scratch in the query dtype so the
 selected keys convert on store. Result: KV pool 899,968 to 1,800,000 tokens,
-context 110k to 262k, decode within control drift. Quality is checked only by
-the 15-scenario tool-eval (97, same as bf16, same single partial) and the
-needle to 88k. bf16 stays the default until a 76-scenario run and a full-window
-needle ladder are measured on both.
+context 110k to 262k, decode within control drift. Quality gate below.
+
+### fp8 KV quality gate, 2026-09-12
+
+Same lanes on fresh boots of both SGLang recipes. spark-bench (Weschera) 76
+scenarios, 2 repeats, thinking off, temperature 0, throughput sweep skipped.
+Needle ladder: `scripts/needle_ladder.py`, three facts planted at 10/50/90% of
+a prose haystack, one request per fact, exact-match.
+
+| | bf16 `flashnext-bigkv-g8-c4096` | fp8 `flashnext-fp8kv-1m8` |
+|---|---|---|
+| TrueScore | 80.8 | **81.3** |
+| Pass@1 / Pass@K | 90.8% / 82.9% | 88.2% / **85.5%** |
+| reliability gap | 7.9% | **2.6%** |
+| error rate | 0.0% | 0.0% |
+| long_context domain (2) | 55.9 | 55.9 |
+| needle 8k / 32k / 64k / 100k | 12/12 | 12/12 |
+| needle 150k / 200k / 250k | out of context | **9/9** |
+| cold prefill at 250k | - | 86.5 s |
+
+Nine of 76 scenarios differ by more than 0.1: fp8 ahead on five (RO-01, CODE-03,
+AG-10, VIS-04, VIS-05), behind on four (AG-03, AG-04, CP-02, CODE-14). Every one
+of those is a scenario that flips between repeats on the same build; the
+scenario standard deviation is 0.025 on fp8 and 0.054 on bf16. Nothing in the
+long-context domain moved, and retrieval is exact through the full 262k window.
+Full reports: `results/fp8-gate/`.
+
+**Verdict:** no measurable quality cost. `flashnext-fp8kv-1m8` is the SGLang
+default; `flashnext-bigkv-g8-c4096` stays for anyone who wants the 2026-09-03
+digest without a mod.
 
 ### Expert parallelism in `flashnext-vllm-cached`
 
@@ -127,8 +153,8 @@ own SM121 kernel.
 
 | workload | recipe |
 |---|---|
-| chat, one or two agents, cached history | SGLang `flashnext-bigkv-g8-c4096` |
-| the same, needing more than 110k context or a bigger pool, quality gate accepted | SGLang `flashnext-fp8kv-1m8` |
+| chat, one or two agents, cached history | SGLang `flashnext-fp8kv-1m8` |
+| the same on the 2026-09-03 digest, no mod, 110k context | SGLang `flashnext-bigkv-g8-c4096` |
 | five or more streams, batch prefill | SGLang `flashnext-bigkv-nospec` |
 | long documents reused across turns, many agents, capacity | vLLM `flashnext-vllm-cached` |
 
