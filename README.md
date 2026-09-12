@@ -1,8 +1,8 @@
 # Qwen3.8-Flash-Next NVFP4 on two DGX Sparks
 
-Three serving recipes for `Qwen3.8-Flash-Next-NVFP4` (180B MoE) at tensor
+Four serving recipes for `Qwen3.8-Flash-Next-NVFP4` (180B MoE) at tensor
 parallel 2 across two NVIDIA DGX Spark (GB10, SM121) over ConnectX-7, for
-[sparkrun](https://sparkrun.dev). Two on SGLang, one on vLLM. Neither engine
+[sparkrun](https://sparkrun.dev). Three on SGLang, one on vLLM. Neither engine
 supports this hardware out of the box; these boot, and every number below comes
 from a fresh boot measured with the same grid.
 
@@ -10,9 +10,9 @@ from a fresh boot measured with the same grid.
 
 | You are serving | Recipe | Engine | What you get |
 |---|---|---|---|
-| Chat, one or two agents, cached history | `flashnext-bigkv-g8-c4096` | SGLang | Best single-stream decode: 37-41 tok/s on prose, 58-61 tok/s median across a 40-prompt category mix, 63 on coding. 110k context, 0.9M-token KV pool. |
+| Chat, one or two agents, cached history | `flashnext-fp8kv-1m8` | SGLang | Best single-stream decode, 262k context, 1.8M-token KV pool in fp8. Quality gate against bf16 passed: TrueScore 81.3 vs 80.8, needle exact to 250k. Needs the 2026-09-11 nightly and one mod, both in this repo. |
+| Same, on the 2026-09-03 digest without a mod | `flashnext-bigkv-g8-c4096` | SGLang | Identical flags with bf16 KV: 110k context, 0.9M-token pool. 37-41 tok/s on prose, 58-61 median across a 40-prompt mix, 63 on coding. |
 | Five or more concurrent streams, batch prefill | `flashnext-bigkv-nospec` | SGLang | Same recipe without the drafter: prefill +20%, decode 75-85 tok/s at five streams. Single stream drops to 26, so do not use it below five. |
-| Chat as above, but you need 262k context or a 1.8M-token pool on SGLang | `flashnext-fp8kv-1m8` | SGLang | The shipped recipe with fp8 KV on the 2026-09-11 nightly plus one mod. Decode within drift of bf16, tool-eval identical. Opt-in: long-context quality against bf16 is not yet measured. |
 | Long documents reused across turns, many agents, capacity | `flashnext-vllm-cached` | vLLM | Prefix caching that actually reuses a prompt's first pass: a fresh 2k turn after a cached 16k context prefills at 2176 tok/s against SGLang's 946. 262k context, 2.0M-token KV pool. |
 
 Full grids in [results/RESULTS.md](results/RESULTS.md).
@@ -25,7 +25,7 @@ Measure your own workload before trusting one figure.
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run @qwen38-flashnext/flashnext-bigkv-g8-c4096 --cluster <your-cluster> --tp 2
+sparkrun run @qwen38-flashnext/flashnext-fp8kv-1m8      --cluster <your-cluster> --tp 2
 sparkrun run @qwen38-flashnext/flashnext-vllm-cached    --cluster <your-cluster> --tp 2 --trust
 ```
 
@@ -41,7 +41,8 @@ checkpoint over the fast link and drops the page cache on both nodes:
 git clone https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
 cd qwen3.8-flash-next-dgx-spark-tp-2
 scripts/run.sh sglang --check     # validate, launch nothing
-scripts/run.sh sglang             # flashnext-bigkv-g8-c4096
+scripts/run.sh sglang             # flashnext-fp8kv-1m8
+scripts/run.sh sglang-bf16        # flashnext-bigkv-g8-c4096
 scripts/run.sh sglang-nospec
 scripts/run.sh vllm               # flashnext-vllm-cached
 DEPTHS="0 16384" CONCURRENCY="1 2 5" scripts/run.sh vllm --bench
@@ -145,8 +146,8 @@ is absolute.
 |---|---|
 | `recipes/` | The four recipes |
 | `mods/` | Engine patches: the vLLM overlays, the SM121 fp8 KV fix for SGLang, the vLLM#55557 backport. README explains each and why |
-| `scripts/` | `run.sh`, `detect-fabric.sh`, `validate_recipes.py`, `recipe_metadata.py`, `gate_37111.py` (corruption gate against a live server) |
-| `results/` | `RESULTS.md` and the grids behind it |
+| `scripts/` | `run.sh`, `detect-fabric.sh`, `validate_recipes.py`, `recipe_metadata.py`, `gate_37111.py` (corruption gate), `needle_ladder.py` (long-context retrieval ladder) |
+| `results/` | `RESULTS.md`, the grids behind it, and the fp8 quality gate reports |
 | `.sparkrun/registry.yaml` | Registry manifest |
 
 ## Credits

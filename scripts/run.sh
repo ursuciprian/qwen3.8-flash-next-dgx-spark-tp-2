@@ -5,7 +5,8 @@
 #   scripts/run.sh <option> [--check] [--bench] [--skip-download]
 #
 #   option              recipe                                                   engine
-#   sglang         recipes/flashnext-bigkv-g8-c4096.yaml   SGLang, chat and 1-2 agents
+#   sglang         recipes/flashnext-fp8kv-1m8.yaml        SGLang, chat and 1-2 agents, fp8 KV, 262k context
+#   sglang-bf16    recipes/flashnext-bigkv-g8-c4096.yaml   SGLang, same on the 2026-09-03 digest, bf16 KV, 110k
 #   sglang-nospec  recipes/flashnext-bigkv-nospec.yaml     SGLang, 5+ streams or batch prefill
 #   vllm           recipes/flashnext-vllm-cached.yaml      vLLM, long context reused across turns
 #
@@ -34,7 +35,8 @@ for arg in "$@"; do
 done
 
 case "$OPTION" in
-  sglang)            ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-bigkv-g8-c4096.yaml" ;;
+  sglang)            ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-fp8kv-1m8.yaml" ;;
+  sglang-bf16)       ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-bigkv-g8-c4096.yaml" ;;
   sglang-nospec)     ENGINE=sglang; RECIPE="$REPO/recipes/flashnext-bigkv-nospec.yaml" ;;
   vllm)              ENGINE=vllm;   RECIPE="$REPO/recipes/flashnext-vllm-cached.yaml" ;;
   *) sed -n '2,16p' "$0"; exit 2 ;;

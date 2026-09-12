@@ -10,12 +10,12 @@
 # allocates the gather scratch in the query dtype so the extraction converts on store; the cache
 # itself stays fp8. See mods/README.md.
 #
-# Opt-in, not the default: quality is checked only by a 15-scenario tool-eval (97, same as bf16)
-# and needle retrieval to 88k. fp8 storage carries about 6% relative error per element and the
-# documented failure mode is long-context recall. bf16 stays the default until a 76-scenario
-# TrueScore run and a full-window needle ladder are measured on both. Valid only with KV scales
-# at 1.0 (the default without a calibration file).
-description: Qwen3.8-Flash-Next NVFP4 TP=2 on SGLang with an fp8 KV cache - 1.8M-token pool, 262k context, decode at parity with bf16; opt-in until the long-context quality gate is measured
+# Quality gate, 2026-09-12, fresh boots of both SGLang recipes: spark-bench 76 scenarios x2
+# TrueScore 81.3 (fp8) vs 80.8 (bf16), reliability gap 2.6% vs 7.9%, needle retrieval 3/3 at
+# every rung from 8k to 250k (bf16 stops at 100k, its context limit). No measurable quality cost,
+# so this is the default SGLang recipe. Valid only with KV scales at 1.0 (the default without a
+# calibration file). Full reports in results/fp8-gate/.
+description: Qwen3.8-Flash-Next NVFP4 TP=2 on SGLang with an fp8 KV cache - 1.8M-token pool, 262k context, decode and quality at parity with bf16 (76-scenario gate + needle to 250k), default SGLang recipe
 name: flashnext-fp8kv-1m8
 model: RadixArk/Qwen3.8-Flash-Next-NVFP4
 runtime: sglang
@@ -31,8 +31,8 @@ metadata:
   recipe_revision: 2026-09-11-fp8kv
   description: The shipped SGLang recipe with the KV cache in fp8_e4m3 on the
     2026-09-11 nightly (carries sgl-project/sglang#38855) plus the
-    sglang-sm121-qsa-fp8kv mod. Pool 1.8M tokens, context 262k. Opt-in until
-    the long-context quality gate is measured against bf16.
+    sglang-sm121-qsa-fp8kv mod. Pool 1.8M tokens, context 262k. Default SGLang recipe after
+    the 2026-09-12 quality gate against bf16.
   model_dtype: nvfp4
   quantization: nvfp4
 
