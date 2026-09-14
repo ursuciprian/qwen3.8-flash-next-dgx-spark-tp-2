@@ -51,6 +51,18 @@ at parity, one tool-eval run at 90/100 with a single failure against the
 pinned build's 100. It stays out of the shipped recipe until that repeats
 clean. Dry-runs the diff and fails closed; skips once the gate is gone.
 
+## `sglang-radix-chunked-insert-fix`
+
+Referenced by all three SGLang recipes. `MambaRadixCache.cache_unfinished_req`
+inserts each prefill chunk's KV pages into the radix tree mid-prefill; a retract
+or abort then frees those pages while the tree still points at them, and the
+next request sharing the prefix decodes token id 0 forever, the `!!!!` loop
+that shows up after one or two hours of agent sessions at 33k-145k context
+(sgl-project/sglang#38319, found by andreasknopke). The mod ports the closed
+upstream PR #38355 onto the pinned nightly: the chunked insert is skipped and
+deferred to request completion. `SGLANG_DISABLE_CHUNKED_RADIX_INSERT=0`
+restores stock behaviour. Idempotent, fail-closed on the four anchors.
+
 ## Licensing
 
 Every overlay is a modified copy of a file from vLLM, which is Apache-2.0, and

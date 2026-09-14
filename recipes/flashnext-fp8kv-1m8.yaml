@@ -8,7 +8,8 @@
 # And the mod sglang-sm121-qsa-fp8kv, because the only QSA decode kernel qualified for SM121 is
 # BF16-only and refuses fp8 keys with "unsupported SM121 QSA call: expected BF16 D=256 ...". The mod
 # allocates the gather scratch in the query dtype so the extraction converts on store; the cache
-# itself stays fp8. See mods/README.md.
+# itself stays fp8. sglang-radix-chunked-insert-fix closes the chunked-prefill radix-insert race
+# (sgl-project/sglang#38319, the "!!!!" loop after 1-2 h of long sessions). See mods/README.md.
 #
 # Quality gate, 2026-09-12, fresh boots of both SGLang recipes: spark-bench 76 scenarios x2
 # TrueScore 81.3 (fp8) vs 80.8 (bf16), reliability gap 2.6% vs 7.9%, needle retrieval 3/3 at
@@ -21,6 +22,7 @@ model: RadixArk/Qwen3.8-Flash-Next-NVFP4
 runtime: sglang
 mods:
   - sglang-sm121-qsa-fp8kv
+  - sglang-radix-chunked-insert-fix
 
 container: lmsysorg/sglang@sha256:51a0563d41fd57bf2e3a531e7ae83ac52a0a5068de4660987be770aae5730c47
 
