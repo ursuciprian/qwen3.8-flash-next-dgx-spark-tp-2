@@ -47,6 +47,12 @@ class B12xGDNKernel(LinearAttnKernelBase):
         self._norm_weight: Optional[torch.Tensor] = None
         self._param_cache: Dict[int, torch.Tensor] = {}
         self._per_bs: Dict[int, dict] = {}
+        self._vplan = None
+        self._vcaps = None
+        self._vscratch = None
+        self._per_vbs: Dict[Tuple[int, int], dict] = {}
+        self._steps = None
+        self.verify_calls = 0
         self.gate_activation = os.environ.get("SGLANG_GDN_B12X_GATE", "sigmoid")
         self.max_bs = int(os.environ.get("SGLANG_GDN_B12X_MAX_BS", "0")) or None
         self.eps = float(os.environ.get("SGLANG_GDN_B12X_EPS", "1e-6"))
@@ -60,8 +66,155 @@ class B12xGDNKernel(LinearAttnKernelBase):
     def extend(self, *args, **kwargs):
         return self._triton.extend(*args, **kwargs)
 
-    def target_verify(self, *args, **kwargs):
-        return self._triton.target_verify(*args, **kwargs)
+    # ---- NEXTN / MTP target verify: the hot path under speculative decoding ----
+    def target_verify(
+        self,
+        A_log: torch.Tensor,
+        dt_bias: torch.Tensor,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        a: torch.Tensor,
+        b: torch.Tensor,
+        *,
+        ssm_states: torch.Tensor,
+        cache_indices: torch.Tensor,
+        query_start_loc: torch.Tensor,
+        intermediate_states_buffer: torch.Tensor = None,
+        intermediate_state_indices: torch.Tensor = None,
+        cache_steps: int = None,
+        retrieve_parent_token: torch.Tensor = None,
+        **kwargs,
+    ) -> torch.Tensor:
+        """Verify a linear chain of ``T = cache_steps`` draft tokens per request.
+
+        Semantics mirrored from the Triton kernel with ``disable_state_update=True``:
+        the committed state ``ssm_states[cache_indices[r]]`` is read, never written; the
+        state after token ``t`` lands in ``intermediate_states_buffer[idx[r], t]``.
+        b12x reads its initial state from ``state_indices[r, accepted-1]`` and writes the
+        post-token-``t`` checkpoint to ``state_indices[r, t]``, so the intermediate buffer
+        itself (viewed as a slot pool) is the recurrent state: the committed state is
+        copied into slot ``(idx[r], 0)`` first, consumed as the initial state, then
+        overwritten by the token-0 checkpoint. Output is ``rmsnorm(core)`` (see module doc).
+        """
+        if (
+            retrieve_parent_token is not None
+            or intermediate_states_buffer is None
+            or intermediate_state_indices is None
+            or not cache_steps
+            or cache_steps > 8
+            or ssm_states.dtype not in (torch.bfloat16, torch.float32)
+            or kwargs.get("cache_ring")
+        ):
+            self.fallbacks += 1
+            return self._triton.target_verify(
+                A_log, dt_bias, q, k, v, a, b, ssm_states=ssm_states, cache_indices=cache_indices,
+                query_start_loc=query_start_loc, intermediate_states_buffer=intermediate_states_buffer,
+                intermediate_state_indices=intermediate_state_indices, cache_steps=cache_steps,
+                retrieve_parent_token=retrieve_parent_token, **kwargs,
+            )
+        T = int(cache_steps)
+        N = int(q.shape[1]); B = N // T
+        HK, HV, V = int(k.shape[2]), int(v.shape[2]), int(v.shape[3])
+        dev = q.device
+        # packed [N, W] = [q | k | v]; one concat copy (the backend already split them)
+        mixed = torch.cat((q.reshape(N, -1), k.reshape(N, -1), v.reshape(N, -1)), dim=-1)
+        inter = intermediate_states_buffer  # [R_cap+1, steps_cap, HV, V, K]
+        steps_cap = int(inter.shape[1])
+        pool = inter.view(-1, HV, V, int(inter.shape[-1]))  # slots = (R_cap+1) * steps_cap
+        self._ensure_verify_plan(mixed, pool, HK, HV, V, T, B)
+        if B > self._vcaps.max_seqs:
+            self.fallbacks += 1
+            return self._triton.target_verify(
+                A_log, dt_bias, q, k, v, a, b, ssm_states=ssm_states, cache_indices=cache_indices,
+                query_start_loc=query_start_loc, intermediate_states_buffer=intermediate_states_buffer,
+                intermediate_state_indices=intermediate_state_indices, cache_steps=cache_steps,
+                retrieve_parent_token=retrieve_parent_token, **kwargs,
+            )
+        bufs = self._vbufs(B, T, HV, V, dev)
+        idx = intermediate_state_indices[:B].to(torch.int64)
+        base = idx * steps_cap
+        bufs["state_idx"].copy_((base.unsqueeze(1) + self._steps[:T].unsqueeze(0)).to(torch.int32))
+        # committed state -> slot (idx, 0); read as initial, then overwritten by the token-0 checkpoint
+        pool.index_copy_(0, base, ssm_states.index_select(0, cache_indices[:B].to(torch.int64)))
+        binding = self._gdn.bind(
+            self._vplan,
+            scratch=self._vscratch,
+            mixed_qkv=mixed,
+            a=a.reshape(N, HV).contiguous(),
+            b=b.reshape(N, HV).contiguous(),
+            z=bufs["z"],
+            A_log=A_log.contiguous(),
+            dt_bias=dt_bias.contiguous(),
+            norm_weight=self._norm_weight,
+            recurrent_state=pool,
+            query_start_loc=bufs["qsl"],
+            num_accepted_tokens=bufs["accepted"],
+            state_indices=bufs["state_idx"],
+            num_seqs=bufs["num_seqs"],
+            num_tokens=bufs["num_tokens"],
+            output=bufs["out"],
+        )
+        out = self._gdn.run(binding, eps=self.eps, scale=float(int(q.shape[3]) ** -0.5))
+        self.verify_calls += 1
+        return out.view(1, N, HV, V)
+
+    def _ensure_verify_plan(self, mixed, pool, HK, HV, V, T, B):
+        if self._vplan is not None:
+            return
+        gdn = self._gdn
+        max_bs = self._resolve_max_bs(B)
+        self._vcaps = gdn.Caps(
+            device=mixed.device, max_tokens=max_bs * T, max_seqs=max_bs, max_state_slots=int(pool.shape[0]),
+            key_heads=HK, value_heads=HV, key_head_dim=_HEAD_DIM, value_head_dim=V, state_index_columns=T,
+            model_dtype=mixed.dtype, state_dtype=pool.dtype, gate_activation=self.gate_activation, qk_l2norm=True,
+        )
+        self._vplan = gdn.plan(self._vcaps)
+        (spec,) = self._vplan.scratch_specs()
+        self._vscratch = torch.empty(spec.shape, dtype=spec.dtype, device=mixed.device)
+        if self._norm_weight is None:
+            self._norm_weight = torch.ones(V, dtype=torch.bfloat16, device=mixed.device)
+        self._steps = torch.arange(8, dtype=torch.int64, device=mixed.device)
+        logger.info("b12x GDN verify: T=%d max_bs=%d slots=%d state=%s", T, max_bs, pool.shape[0], pool.dtype)
+        if not torch.cuda.is_current_stream_capturing():
+            try:
+                from sglang.srt.runtime_context import get_exec
+                sizes = set(int(x) for x in (get_exec().graph.cuda_graph_config.decode.bs or []))
+            except Exception:
+                sizes = set()
+            sizes = sorted(x for x in (sizes | {B}) if x <= max_bs)
+            dummy = torch.zeros_like(pool)
+            for n in sizes:
+                bufs = self._vbufs(n, T, HV, V, mixed.device)
+                bufs["state_idx"].copy_((torch.arange(n, device=mixed.device).unsqueeze(1) * T + self._steps[:T].unsqueeze(0)).to(torch.int32) % pool.shape[0])
+                binding = gdn.bind(
+                    self._vplan, scratch=self._vscratch,
+                    mixed_qkv=torch.zeros(n * T, mixed.shape[-1], dtype=mixed.dtype, device=mixed.device),
+                    a=torch.zeros(n * T, HV, dtype=mixed.dtype, device=mixed.device), b=torch.zeros(n * T, HV, dtype=mixed.dtype, device=mixed.device),
+                    z=bufs["z"], A_log=torch.zeros(HV, dtype=torch.float32, device=mixed.device), dt_bias=torch.zeros(HV, dtype=mixed.dtype, device=mixed.device),
+                    norm_weight=self._norm_weight, recurrent_state=dummy, query_start_loc=bufs["qsl"], num_accepted_tokens=bufs["accepted"],
+                    state_indices=bufs["state_idx"], num_seqs=bufs["num_seqs"], num_tokens=bufs["num_tokens"], output=bufs["out"],
+                )
+                gdn.run(binding, eps=self.eps, scale=_HEAD_DIM ** -0.5)
+            torch.cuda.synchronize(); del dummy
+            logger.info("b12x GDN verify: prewarmed batch sizes %s", sizes)
+
+    def _vbufs(self, B, T, HV, V, dev):
+        key = (B, T)
+        b = self._per_vbs.get(key)
+        if b is None:
+            zc = _GATE_CONST.get(self.gate_activation, 20.0)
+            b = {
+                "qsl": (torch.arange(B + 1, device=dev) * T).to(torch.int32),
+                "accepted": torch.ones(B, dtype=torch.int32, device=dev),
+                "state_idx": torch.zeros((B, T), dtype=torch.int32, device=dev),
+                "num_seqs": torch.tensor([B], dtype=torch.int32, device=dev),
+                "num_tokens": torch.tensor([B * T], dtype=torch.int32, device=dev),
+                "z": torch.full((B * T, HV, V), zc, dtype=torch.bfloat16, device=dev),
+                "out": torch.empty((B * T, HV, V), dtype=torch.bfloat16, device=dev),
+            }
+            self._per_vbs[key] = b
+        return b
 
     # ---- helpers ----
     def _resolve_max_bs(self, bs: int) -> int:
