@@ -56,6 +56,7 @@ class B12xGDNKernel(LinearAttnKernelBase):
         self.gate_activation = os.environ.get("SGLANG_GDN_B12X_GATE", "sigmoid")
         self.max_bs = int(os.environ.get("SGLANG_GDN_B12X_MAX_BS", "0")) or None
         self.eps = float(os.environ.get("SGLANG_GDN_B12X_EPS", "1e-6"))
+        self.debug = os.environ.get("SGLANG_GDN_B12X_DEBUG") == "1"
         self.calls = 0
         self.fallbacks = 0
 
@@ -157,7 +158,33 @@ class B12xGDNKernel(LinearAttnKernelBase):
         )
         out = self._gdn.run(binding, eps=self.eps, scale=float(int(q.shape[3]) ** -0.5))
         self.verify_calls += 1
+        if self.debug and self.verify_calls <= 6 and not torch.cuda.is_current_stream_capturing():
+            self._debug_verify_ab(out, A_log, dt_bias, q, k, v, a, b, ssm_states, cache_indices, query_start_loc,
+                                  intermediate_states_buffer, intermediate_state_indices, T, B, N, HV, V, retrieve_parent_token, kwargs)
         return out.view(1, N, HV, V)
+
+    def _debug_verify_ab(self, out, A_log, dt_bias, q, k, v, a, b, ssm, cache_indices, qsl, inter, iidx, T, B, N, HV, V, rpt, kwargs):
+        """In-situ A/B against the Triton verify kernel on cloned buffers; logs to stderr and a file."""
+        import sys
+        try:
+            inter_t = torch.zeros_like(inter); s1 = ssm.clone()
+            o1 = self._triton.target_verify(A_log, dt_bias, q, k, v, a, b, ssm_states=s1, cache_indices=cache_indices, query_start_loc=qsl,
+                                            intermediate_states_buffer=inter_t, intermediate_state_indices=iidx, cache_steps=T, retrieve_parent_token=rpt, **kwargs)
+            xf = o1.reshape(N, HV, V).float(); ref = xf * torch.rsqrt(xf.pow(2).mean(-1, keepdim=True) + self.eps)
+            d_out = (ref - out.reshape(N, HV, V).float()).abs().max().item()
+            rows = iidx[:B].to(torch.int64)
+            d_int = (inter_t[rows, :T].float() - inter[rows, :T].float()).abs().max().item()
+            msg = (f"[gdn-b12x debug] verify call {self.verify_calls}: B={B} T={T} N={N} q{tuple(q.shape)} a{tuple(a.shape)} a_stride={a.stride()} "
+                   f"qsl={qsl[:B+1].tolist()} cache_idx={cache_indices[:B].tolist()} inter_idx={iidx[:B].tolist()} inter_shape={tuple(inter.shape)} "
+                   f"ssm_stride={ssm.stride()} ssm_shape={tuple(ssm.shape)} rpt={'None' if rpt is None else tuple(rpt.shape)} extra_kwargs={sorted(kwargs)} "
+                   f"max|rmsnorm(triton)-b12x|={d_out:.4f} max|inter diff|={d_int:.5f} out_finite={torch.isfinite(out).all().item()}")
+        except Exception as e:  # never break serving
+            msg = f"[gdn-b12x debug] verify A/B failed: {type(e).__name__}: {e}"
+        print(msg, file=sys.stderr, flush=True)
+        try:
+            with open("/tmp/gdn_b12x_debug.log", "a") as f: f.write(msg + "\n")
+        except Exception:
+            pass
 
     def _ensure_verify_plan(self, mixed, pool, HK, HV, V, T, B):
         if self._vplan is not None:
