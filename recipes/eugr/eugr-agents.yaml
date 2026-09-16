@@ -3,7 +3,7 @@
 
 recipe_version: "1"
 name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+description: "vLLM serving local-inference-lab/Qwen3.8-Flash-Next-NVFP4 on a dual DGX Spark cluster, tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85, decode-aware prefill scheduling (fixes the concurrent-decode collapse at high context depth, ~2x at 65k/c5)"
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 container: vllm-node-b12x
@@ -49,6 +49,9 @@ command: |
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \
