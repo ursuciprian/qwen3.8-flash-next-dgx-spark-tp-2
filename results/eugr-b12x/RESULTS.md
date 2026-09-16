@@ -48,6 +48,21 @@ The exploratory `llama-benchy` LPT4096 run used `pp=2048`, `tg=256`, depths 3276
 
 Cold context TTFT was mixed: at 65k/c2 LPT was 49,478.76 ms versus 42,235.31 ms baseline (about +17%); at 65k/c5 it was 91,438.77 ms versus 87,660.72 ms. These numbers do not establish a fix. Aggregate `ctx_tg` uses earliest-first-token to latest-last-token across overlapping/staggered requests, not a per-request denominator; peak columns are rates, not token-count assertions. This run did not use `--exact-tg`, so generated-length evidence is provisional. Sep 16 controlled confirmation is pending.
 
+## Sep 16: decode-aware prefill scheduling fixes the c5 depth collapse
+
+Root cause of the c2/c5 decode collapse at 32k-65k depth: this vLLM fork's scheduler defaults to `max_parallel_prefills=1` with round-robin service, so concurrent long prefills starve decode of already-running requests. `long_prefill_token_threshold` (tested Sep 15) does not touch this and made no reliable difference. The actual fix is `--max-parallel-prefills 4 --prefill-policy decode-aware --decode-refill-target auto`, which reserves a decode lane whenever runnable decode occupancy is below target.
+
+`ctx_tg` (decode immediately after a fresh long prefill), aggregate / per-request tok/s:
+
+| depth, concurrency | baseline | LPT4096 | decode-aware |
+|---|---|---|---|
+| 32k, c2 | 35.4 / 24.8 | 53.4 / 31.8 | 45.9 / 33.9 |
+| 32k, c5 | 20.4 / 10.3 | 16.1 / 9.1 | 23.7 / 18.9 |
+| 65k, c2 | 13.7 / 19.3 | 51.7 / 31.2 | 57.1 / 34.3 |
+| 65k, c5 | 7.1 / 5.9 | 10.9 / 6.3 | 17.8 / 11.4 |
+
+At 65k/c5, the worst cell, aggregate decode is ~2.5x baseline and per-request decode is ~2x. c1 decode is unaffected (43 tok/s at 32k, 43 tok/s at 65k, matching baseline within noise). This is now the default in `recipes/eugr/eugr-agents.yaml`. Raw data: `results/eugr-b12x/decode-aware-benchy.csv`.
+
 ## SGLang b12x GDN kernel port (mods/sglang-gdn-b12x-decode)
 
 b12x installs into the SGLang nightly image (`pip install git+https://github.com/local-inference-lab/b12x@40bcdf82a03b`, Apache-2.0). The mod adds `B12xGDNKernel` behind SGLang's linear-attention kernel contract: `packed_decode` (v1) and `target_verify` for the NEXTN chain (v2), routed by two anchors in `GDNKernelDispatcher` when `SGLANG_GDN_B12X=1`. Numeric checks on GB10 against the Triton kernels passed (decode: |rmsnorm(triton) - b12x| <= 1e-3, states <= 1e-3; verify over 4 chained tokens: output <= 0.03 bf16, intermediate checkpoints <= 0.004, committed states untouched). The v1 arm (decode kernel only) measured the same as Triton under NEXTN, as expected: the target runs `target_verify`. The v2 arm (decode + verify on b12x) is broken in the live server although both isolated checks and a CUDA-graph replay check pass: acceptance length collapses to 1.0-1.5, output is repeated garbage, tool-eval 0/100. The call-site mismatch is not identified yet; an instrumented boot (`SGLANG_GDN_B12X_DEBUG=1`, in-situ Triton A/B on the real tensors) is queued. The cutedsl re-run with the fixed probe measured the same as Triton (44.8 / 56.7 / 62.8 / 39.5, tool-eval 97), so with NEXTN the GDN decode kernel choice does not move SGLang; only a working verify port could.
