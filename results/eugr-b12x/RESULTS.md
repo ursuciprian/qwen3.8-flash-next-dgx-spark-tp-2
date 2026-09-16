@@ -33,6 +33,21 @@ Base changes for agent use: `max_num_seqs 8`, `max_num_batched_tokens 8192`, `gp
 
 RoCE 4MB looked like the only arm outside the noise band on structured (83-87 vs 62-77) but the A/B/A re-check with five-repeat probes did not confirm it: RoCE 4MB 76.1 (70-85), base 79.0 (68-86). The threshold stays at 2MB. Five-repeat base numbers: code 51.6, structured 79.0, counting 89.6, prose 44.0. Tool-eval hardmode on the base recipe (T=1.0, thinking medium, 32 turns): 91/100, 77 passed, 6 partial, 5 failed, median turn 2.7 s. Prefix caching works: over the ladder 946k prefix-cache queries and 834k hits (88%); an identical 4k-token prompt goes 1.55 s, 0.21 s, 0.21 s. The usage field `prompt_tokens_details` is not filled by this fork, so client-side cached-token accounting reads None; the multi-turn prefix gate (68 requests, 5 concurrent growing chats) had 0 failures.
 
+## Sep 15 LPT4096 benchmark evidence
+
+The exploratory `llama-benchy` LPT4096 run used `pp=2048`, `tg=256`, depths 32768 and 65536, and concurrency 1/2/5. Values below are aggregate `ctx_tg` throughput (total / mean per-request tok/s); LPT is `lpt4096-benchy.csv`, and baseline is `serve-agents-benchy-65k.csv`.
+
+| depth | c | LPT ctx_tg total / req | baseline ctx_tg total / req | LPT cached tg256 | baseline cached tg256 |
+|---|---:|---:|---:|---:|---:|
+| 32k | 1 | 36.71 / 36.71 | 39.68 / 39.68 | 40.63 | 42.18 |
+| 32k | 2 | 53.40 / 31.84 | 35.40 / 24.77 | 54.35 | 58.01 |
+| 32k | 5 | 16.12 / 9.13 | 20.38 / 10.31 | 60.70 | 56.47 |
+| 65k | 1 | 42.85 / 42.85 | 40.41 / 40.41 | 39.25 | 41.70 |
+| 65k | 2 | 51.71 / 31.17 | 13.73 / 19.29 | 46.60 | 44.35 |
+| 65k | 5 | 10.87 / 6.33 | 7.09 / 5.85 | 58.80 | 58.04 |
+
+Cold context TTFT was mixed: at 65k/c2 LPT was 49,478.76 ms versus 42,235.31 ms baseline (about +17%); at 65k/c5 it was 91,438.77 ms versus 87,660.72 ms. These numbers do not establish a fix. Aggregate `ctx_tg` uses earliest-first-token to latest-last-token across overlapping/staggered requests, not a per-request denominator; peak columns are rates, not token-count assertions. This run did not use `--exact-tg`, so generated-length evidence is provisional. Sep 16 controlled confirmation is pending.
+
 ## SGLang b12x GDN kernel port (mods/sglang-gdn-b12x-decode)
 
 b12x installs into the SGLang nightly image (`pip install git+https://github.com/local-inference-lab/b12x@40bcdf82a03b`, Apache-2.0). The mod adds `B12xGDNKernel` behind SGLang's linear-attention kernel contract: `packed_decode` (v1) and `target_verify` for the NEXTN chain (v2), routed by two anchors in `GDNKernelDispatcher` when `SGLANG_GDN_B12X=1`. Numeric checks on GB10 against the Triton kernels passed (decode: |rmsnorm(triton) - b12x| <= 1e-3, states <= 1e-3; verify over 4 chained tokens: output <= 0.03 bf16, intermediate checkpoints <= 0.004, committed states untouched). The v1 arm (decode kernel only) measured the same as Triton under NEXTN, as expected: the target runs `target_verify`. The v2 arm (decode + verify on b12x) is broken in the live server although both isolated checks and a CUDA-graph replay check pass: acceptance length collapses to 1.0-1.5, output is repeated garbage, tool-eval 0/100. The call-site mismatch is not identified yet; an instrumented boot (`SGLANG_GDN_B12X_DEBUG=1`, in-situ Triton A/B on the real tensors) is queued. The cutedsl re-run with the fixed probe measured the same as Triton (44.8 / 56.7 / 62.8 / 39.5, tool-eval 97), so with NEXTN the GDN decode kernel choice does not move SGLang; only a working verify port could.
