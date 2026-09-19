@@ -1,0 +1,231 @@
+diff --git a/b12x/moe/_shared/kernels/w4a16/kernel.py b/b12x/moe/_shared/kernels/w4a16/kernel.py
+index 108a32d..bb6fdde 100644
+--- a/b12x/moe/_shared/kernels/w4a16/kernel.py
++++ b/b12x/moe/_shared/kernels/w4a16/kernel.py
+@@ -784,6 +784,7 @@ class W4A16FusedMoeCompileResult:
+     cta_threads: int = -1
+     shared_memory_bytes: int = -1
+     broadcast_suh: bool = False
++    small_m_direct_launches: tuple[_W4A16SmallMDirectLaunch, ...] = ()
+ 
+ 
+ @dataclass(frozen=True)
+@@ -9499,18 +9500,7 @@ def compile_w4a16_fused_moe(
+         kernel.__cache_key__,
+     )
+     cached = _FUSED_CACHE.get(cache_key)
+-    if cached is not None:
+-        return attach_programs(
+-            replace(
+-                cached,
+-                size_m=size_m,
+-                num_experts=num_experts,
+-                max_m_blocks=max_m_blocks,
+-                blocks_per_sm=kernel.blocks_per_sm,
+-            ),
+-            cached,
+-        )
+-    if _require_cached:
++    if cached is None and _require_cached:
+         raise RuntimeError(
+             "W4A16 fused MoE launch is not resolved for CUDA graph capture "
+             f"(m={size_m}, moe_block_size={moe_block_size}, "
+@@ -9518,7 +9508,7 @@ def compile_w4a16_fused_moe(
+             "count before capturing"
+         )
+ 
+-    compiled_dependencies = []
++    small_m_direct_launches = []
+     if (not collect_activation_amax) and _small_m_direct_supported(
+         m=size_m,
+         hidden_size=hidden_size,
+@@ -9552,7 +9542,21 @@ def compile_w4a16_fused_moe(
+                 w13_layout=w13_layout,
+                 device=torch.device("cuda", device) if device is not None else None,
+             )
+-            compiled_dependencies.append(direct.compiled)
++            small_m_direct_launches.append(direct)
++
++    if cached is not None:
++        return attach_programs(
++            replace(
++                cached,
++                size_m=size_m,
++                num_experts=num_experts,
++                max_m_blocks=max_m_blocks,
++                blocks_per_sm=kernel.blocks_per_sm,
++                small_m_direct_launches=tuple(small_m_direct_launches),
++            ),
++            cached.compiled,
++            *(launch.compiled for launch in small_m_direct_launches),
++        )
+ 
+     compile_size_m = _fake_m_for_specialization(size_m)
+     compile_routed_rows = int(compile_size_m) * int(top_k)
+@@ -9763,8 +9767,9 @@ def compile_w4a16_fused_moe(
+         cta_threads=kernel.cta_threads,
+         shared_memory_bytes=kernel.shared_words * 4,
+         broadcast_suh=bool(broadcast_suh),
++        small_m_direct_launches=tuple(small_m_direct_launches),
+     )
+-    attach_programs(result, compiled, *compiled_dependencies)
++    attach_programs(result, compiled, *(launch.compiled for launch in small_m_direct_launches))
+     _FUSED_CACHE[cache_key] = result
+     return result
+ 
+@@ -10014,9 +10019,11 @@ def _w4a16_small_m_direct_launch_flat(
+     swiglu_beta: float,
+     w13_layout: str,
+     stream_int: int,
++    *,
++    launcher: _W4A16SmallMDirectLaunch | None = None,
+ ) -> None:
+     swiglu_limit = float(swiglu_limit_value) if has_swiglu_limit else None
+-    direct_launch = _compile_w4a16_small_m_direct(
++    direct_launch = launcher if launcher is not None else _compile_w4a16_small_m_direct(
+         m=m,
+         hidden_size=hidden_size,
+         intermediate_size=intermediate_size,
+@@ -12160,7 +12167,15 @@ def run_w4a16_moe(
+         barrier_epoch = prepared.workspace[-1:]
+         if _small_m_direct_host_barrier_reset_enabled():
+             prepared.workspace[-2:].zero_()
+-        torch.ops.b12x.w4a16_small_m_direct_launch(
++        direct_launch = None
++        if fused_launch is not None:
++            direct_launch = next((
++                launch for launch in fused_launch.small_m_direct_launches
++                if launch.topk_ids_dtype == topk_ids.dtype
++            ), None)
++            if direct_launch is None or direct_launch.m != m:
++                raise RuntimeError("native W4A16 direct launch was not prepared for this token count and route dtype")
++        launch_args = (
+             a_input,
+             prepared.w13.view(torch.uint8),
+             micro_w13_scale,
+@@ -12189,6 +12204,10 @@ def run_w4a16_moe(
+             w13_layout,
+             int(stream),
+         )
++        if direct_launch is None:
++            torch.ops.b12x.w4a16_small_m_direct_launch(*launch_args)
++        else:
++            _w4a16_small_m_direct_launch_flat(*launch_args, launcher=direct_launch)
+         return output
+ 
+     # TC-decode: small-M packed decode that folds the top-k sum into the FC2
+diff --git a/b12x/moe/fused_moe/_impl.py b/b12x/moe/fused_moe/_impl.py
+index bf9918e..102993b 100644
+--- a/b12x/moe/fused_moe/_impl.py
++++ b/b12x/moe/fused_moe/_impl.py
+@@ -2577,7 +2577,7 @@ def _w4a16_direct_routing_supported(query: MoeDecodeQuery) -> bool:
+     weight_layout = (
+         "modelopt"
+         if query.quant_mode == "nvfp4_auto"
+-        else _w4a16_weight_layout_for_source(
++        else query.w4a16_weight_layout or _w4a16_weight_layout_for_source(
+             query.source_format,
+             intermediate_size=query.intermediate_size,
+         )
+@@ -2586,16 +2586,26 @@ def _w4a16_direct_routing_supported(query: MoeDecodeQuery) -> bool:
+         return False
+     from b12x.moe._shared.kernels.w4a16.kernel import (
+         _MAX_DIRECT_TOPK_ROUTE_M,
+-        _TC_DECODE_MAX_M,
+         _small_m_direct_supported,
+     )
+ 
+     if weight_layout == "modelopt":
+-        # The W4A16 launch routes direct top-k only for packed serving
+-        # weights; ModelOpt weights take the small-M direct micro kernel by
+-        # shape, independent of the configured route mode, so a "direct"
+-        # route mode is never a launchable configuration for them.
+-        return False
++        return not query.collect_activation_amax and _small_m_direct_supported(
++            m=query.num_tokens,
++            hidden_size=query.hidden_size,
++            intermediate_size=query.intermediate_size,
++            num_experts=query.num_experts,
++            topk=query.top_k,
++            activation=query.activation,
++            apply_router_weight_on_input=query.apply_router_weight_on_input,
++            swiglu_limit=query.swiglu_limit,
++            swiglu_alpha=query.swiglu_alpha,
++            swiglu_beta=query.swiglu_beta,
++            element_dtype="bf16" if query.io_dtype == "bfloat16" else "fp16",
++            weight_layout=weight_layout,
++            w13_layout=query.w13_layout,
++            scale_format=query.w4a16_scale_format or _w4a16_scale_format_for_source(query.source_format),
++        )
+     # Planned launches carry the unmapped direct top-k kernel only up to
+     # _MAX_DIRECT_TOPK_ROUTE_M rows; the TC-decode variant that would serve
+     # larger small-M calls is not a planned launch, so a declaration above
+diff --git a/b12x/moe/fused_moe/_preparation.py b/b12x/moe/fused_moe/_preparation.py
+index 72013ba..54ca1bf 100644
+--- a/b12x/moe/fused_moe/_preparation.py
++++ b/b12x/moe/fused_moe/_preparation.py
+@@ -273,6 +273,18 @@ class _W4A16PrimaryLaunches:
+                 "W4A16 execution exceeds its prepared capacity: "
+                 f"requested={int(tokens)}, prepared={self.tokens}"
+             )
++        native_direct = (
++            int(tokens) == self.tokens
++            and self.route_mode != "packed"
++            and not has_route_map
++            and activation_amax is None
++            and any(
++                launch.topk_ids_dtype == route_ids_dtype
++                for launch in getattr(self.packed, "small_m_direct_launches", ())
++            )
++        )
++        if native_direct:
++            return self.packed, self.topk_sum, None
+         direct = (
+             int(tokens) == self.tokens
+             and self.route_mode != "packed"
+diff --git a/b12x/moe/fused_moe/_tuning.py b/b12x/moe/fused_moe/_tuning.py
+index e59a1f6..f3ae40c 100644
+--- a/b12x/moe/fused_moe/_tuning.py
++++ b/b12x/moe/fused_moe/_tuning.py
+@@ -250,6 +250,11 @@ def validate_moe_decode_config(
+             raise ValueError("W4A16 queries require the W4A16 backend")
+         if config.w4a16_route_mode not in {"direct", "packed"}:
+             raise ValueError("W4A16 route mode must be 'direct' or 'packed'")
++        if config.w4a16_route_mode == "direct":
++            from ._impl import _w4a16_direct_routing_supported
++
++            if not _w4a16_direct_routing_supported(query):
++                raise ValueError("W4A16 direct routing does not support this concrete query")
+     else:
+         if config.backend == "w4a16":
+             raise ValueError("the W4A16 backend requires quant_mode='w4a16'")
+@@ -308,7 +313,6 @@ def _materialize_tuning(query, device, choice):
+         _dynamic_direct_routing_selected,
+         _dynamic_kernel_intermediate_size,
+         _policy_micro_supported,
+-        _w4a16_direct_routing_supported,
+     )
+ 
+     config = MoeDecodeConfig.from_config(choice)
+@@ -351,8 +355,6 @@ def _materialize_tuning(query, device, choice):
+             )
+         except RuntimeError as exc:
+             raise ValueError(str(exc)) from exc
+-    if config.backend == "w4a16" and config.w4a16_route_mode == "direct" and not _w4a16_direct_routing_supported(query):
+-        raise ValueError("W4A16 direct routing does not support this concrete query")
+     return config
+ 
+ 
+@@ -457,9 +459,10 @@ TUNING = TuningContract(
+     validate_query=_validate_query,
+     validate_config=validate_moe_decode_config,
+     default_config=_default_config,
+-    candidate_contract_version=4,
++    candidate_contract_version=5,
+     knobs=(
+-        Knob(name="backend", values=("micro", "dynamic", "w4a16"), binding=ParameterBinding.COMPILE),
++        # Enumeration order prefers A16 at equal measured latency on every rank.
++        Knob(name="backend", values=("w4a16", "micro", "dynamic"), binding=ParameterBinding.COMPILE),
+         Knob(name="route_planner", values=("internal", "triton"), binding=ParameterBinding.COMPILE),
+         Knob(name="max_active_clusters", values=None, binding=ParameterBinding.RUNTIME, when=FrozenMapping({"route_planner": "triton"})),
+         Knob(name="dynamic_tile_m", values=(16, 32, 64, 128), binding=ParameterBinding.COMPILE, when=FrozenMapping({"backend": "dynamic"})),
