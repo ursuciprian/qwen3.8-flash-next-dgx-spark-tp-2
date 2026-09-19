@@ -1,0 +1,129 @@
+# Image pinned by digest 2026-09-09 (vLLM nightly 8a728663), so the build cannot change under the recipe.
+# vLLM recipe for cached long-context work with the drafter on.
+#
+# Promoted 2026-09-08 from recipes/arms/fn-vllm-imp-mtp-nodrop.yaml (tonyd2wild SPEED profile +
+# prefix caching ON + drafter-group overlay + "disable_eagle_block_drop": true). Prose corpus,
+# c1 / c5: decode 43 / 67 tok/s at depth 0 and 30-35 / 48-61 at 2k-32k depth; fresh 2k prefill
+# after a cached 16k context 2176 tok/s (SGLang recipe 946, vLLM without the drafter 1973).
+# Tony harness c1 61.9 tok/s. KV pool 2.03M tokens at 262k context.
+#
+# Why the flag: vLLM's Mamba "align" caching keeps only the GDN state at the prompt's last block
+# boundary, and the MTP block drop looks one block earlier, so with stock settings a prompt's
+# first pass is never reusable (fresh 2k prefill at 32k depth: 161 tok/s). Disabling the drop
+# makes the lookup land on the retained state (probe: 0 / 19,200 / 19,200 hits). The
+# alternative that keeps the drop, --prefix-cache-retention-interval 3200, reuses one block
+# less per turn and halves cached prefill (fn-vllm-imp-mtp-dense, 911 vs 1862 at 32k).
+#
+# Correctness: the drop exists so KV written under the next-token lookahead is not reused by a
+# request whose continuation differs. On 6 prompts of 6k-18k tokens, cached and fresh greedy
+# outputs diverged on this recipe AND on the drop-kept variant at the same rate, with the same
+# two near-tied continuations swapping sides, so the divergence is batch-shape numerics, not
+# the flag. The 68-request multi-turn gate passed. Not a token-for-token proof; see
+# results/ALL-RESULTS.md (2026-09-08 afternoon). Without the drafter use
+# recipes/arms/fn-vllm-imp-nospec.yaml: same cache reuse, 26 tok/s single-stream, 2.7M pool.
+#
+# Overlays: modelopt.py (FP8_PB_WO alias for the fc694b54 checkpoint) and kv_cache_utils.py
+# (identifies the drafter's KV group; upstream PR #55390). Bind-mount paths assume the repo at
+# /home/nvidia/GEN-AI/. Details: patches/fn-vllm-nvidia-fc694b54/README.md,
+# docs/UPSTREAM-ISSUE-vllm-mamba-align-mtp.md.
+description: ARM vLLM nightly e7edf17c with upstream PR 55557 applied, fp8 KV on the QSA path, no legacy overlays
+name: fn-vllm-n-e7edf17c-pr55557
+model: nvidia/Qwen3.8-Flash-Next-NVFP4
+mods:
+  - vllm-qsa-fp8kv-pr55557
+
+container: vllm/vllm-openai@sha256:c2b7c425d4a30d26bc2097ac6b28331fbe1b8aee11b8bfbb02bc3295de6f642d
+runtime: vllm-distributed
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  description: tonyd2wild TP2 SPEED profile, nvidia checkpoint, five sha-verified upstream overlays mounted
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.70
+  served_model_name: qwen3.8-flash-next
+  revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+  max_model_len: 262144
+  max_num_seqs: 6
+  max_num_batched_tokens: 4096
+  num_speculative_tokens: 3
+
+executor_config:
+  # The upstream nightly declares ENTRYPOINT ["vllm","serve"], which would parse
+  # sparkrun's launcher as its own flags. flashnext-vllm.yaml clears it the same way.
+  entrypoint: ""
+  cap_add:
+    - SYS_PTRACE
+    - IPC_LOCK
+  shm_size: 32gb
+  volumes:
+    # the five upstream overlays, byte-identical to their PROVENANCE.md sha256s
+
+env:
+  # theirs, verbatim
+  HF_HUB_OFFLINE: '1'
+  TRANSFORMERS_OFFLINE: '1'
+  VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  CUTE_DSL_ARCH: sm_121a
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_DISABLE_VERSION_CHECK: '1'
+  VLLM_USE_DEEP_GEMM: '0'
+  VLLM_USE_V2_MODEL_RUNNER: '1'
+  NCCL_NET: IB
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_ADDR_FAMILY: AF_INET
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  NCCL_IB_MERGE_NICS: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_IGNORE_CPU_AFFINITY: '1'
+  NCCL_DEBUG: WARN
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: '1'
+  VLLM_HTTP_TIMEOUT_KEEP_ALIVE: '600'
+  # OURS: fabric retarget. They pin ONE HCA (rocep1s0f0); we have two active and every
+  # recipe here uses both. Kept as ours for arm 1 so it boots; "one HCA" is a later arm.
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_ADDR_RANGE: 192.168.100.0/24
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  TP_SOCKET_IFNAME: enp1s0f1np1
+  MN_IF_NAME: enp1s0f1np1
+
+command: |
+  vllm serve {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --quantization modelopt \
+    --tensor-parallel-size {tensor_parallel} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --no-enable-flashinfer-autotune \
+    --enable-prefix-caching \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_xml \
+    --default-chat-template-kwargs '{{"enable_thinking": false}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"disable_eagle_block_drop":true}}' \
+    --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
+    --enable-expert-parallel \
+    --all2all-backend allgather_reducescatter \
+    --kv-cache-dtype fp8_e4m3
+
+recipe_version: '1'
+builder: docker-pull

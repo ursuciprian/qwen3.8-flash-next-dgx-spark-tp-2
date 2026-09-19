@@ -2,14 +2,19 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+name: eugr-agents-serve-local16-autotune
+description: "LOCAL BUILD ARM. Same serving config as eugr-agents-serve, but container: points at build.sh's own image (kernel/spec-decode instrumentation patches applied) instead of eugr's pulled/rebuilt b12x runner. Update container: below to whatever tag build.sh printed after each build."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
-container: vllm-node-b12x
+container: spark-vllm-b12x:local-20260918-a8333658
 
-build_args:
-  - --exp-b12x
+# Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
+# eugr builder either substitute its own pullable nightly or try to build via
+# build-and-copy.sh (sparkrun/builders/eugr.py: _wants_build()/_wants_b12x()) --
+# both wrong for a tag build.sh already built and loaded on every cluster host.
+# With build_args empty and a non-sentinel tag already present on all hosts,
+# sparkrun's pull-first-default branch just uses it verbatim.
+build_args: []
 
 cluster_only: true
 
@@ -22,12 +27,13 @@ defaults:
   pipeline_parallel: 1
   block_size: 16
   max_model_len: 262144
-  max_num_seqs: 8
+  max_num_seqs: 16
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.80
 
 env:
+  B12X_AUTOTUNE: "1"
   CUTE_DSL_ARCH: "sm_121a"
   SAFETENSORS_FAST_GPU: "1"
   VLLM_WORKER_MULTIPROC_METHOD: "spawn"
@@ -44,11 +50,15 @@ command: |
     --host {host} \
     --port {port} \
     --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \

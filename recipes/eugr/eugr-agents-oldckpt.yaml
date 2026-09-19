@@ -2,7 +2,7 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
+name: eugr-agents-oldckpt
 description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
@@ -41,6 +41,8 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision ada4da32a583a78aa47299f45a70603c950490b8 \
+    --served-model-name local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --host {host} \
     --port {port} \
     --trust-remote-code \

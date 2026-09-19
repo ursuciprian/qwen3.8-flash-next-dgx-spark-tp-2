@@ -1,0 +1,110 @@
+# vLLM improvement arm "pcfix-c3200": pcfix + prefill chunk 3200 = attention/mamba block size.
+# Live test on pcfix 2026-09-07 23:14: identical 20k prompt sent three times gave TTFT 44.6s,
+# 7.4s (0 hits), 1.55s (16000 hits). Blocks only became reusable on the SECOND pass. Mamba
+# "align" mode saves GDN state only at scheduler-step ends that fall on a block boundary
+# (3200); Tony's chunk 4096 never lands there on a first pass. Chunk = block size makes
+# every prefill step end on a boundary, so the first pass should already cache.
+description: Qwen3.8-Flash-Next nvidia/NVFP4 vLLM TP2 - pcfix + prefill chunk 3200 (= KV block) for first-pass mamba state caching
+name: qwen38-flash-next-nvidia-nvfp4-vllm-imp-pcfix-c3200
+model: nvidia/Qwen3.8-Flash-Next-NVFP4
+container: vllm/vllm-openai:nightly-8a728663c1c3eeace834a95f5654fa653cc1998c
+runtime: vllm-distributed
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  description: tonyd2wild TP2 SPEED profile, nvidia checkpoint, five sha-verified upstream overlays mounted
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.70
+  served_model_name: qwen3.8-flash-next
+  revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+  max_model_len: 262144
+  max_num_seqs: 6
+  max_num_batched_tokens: 3200
+  num_speculative_tokens: 3
+
+executor_config:
+  # The upstream nightly declares ENTRYPOINT ["vllm","serve"], which would parse
+  # sparkrun's launcher as its own flags. flashnext-vllm.yaml clears it the same way.
+  entrypoint: ""
+  cap_add:
+    - SYS_PTRACE
+    - IPC_LOCK
+  shm_size: 32gb
+  volumes:
+    # the five upstream overlays, byte-identical to their PROVENANCE.md sha256s
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/ops_ple.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/ple.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/ops_qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/qsa.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/qsa.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/platforms_interface.py:/usr/local/lib/python3.12/dist-packages/vllm/platforms/interface.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/fn-vllm-nvidia-fc694b54/modelopt.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/fn-vllm-nvidia-fc694b54/kv_cache_utils.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_utils.py:ro
+    # diagnostics only (Codex scheduler trace: logs block sizes and first 24 prefill splits, no behaviour change)
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/codex-optimization/cache-reuse/small-test/scheduler_trace.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py:ro
+
+env:
+  # theirs, verbatim
+  HF_HUB_OFFLINE: '1'
+  TRANSFORMERS_OFFLINE: '1'
+  VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  CUTE_DSL_ARCH: sm_121a
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_DISABLE_VERSION_CHECK: '1'
+  VLLM_USE_DEEP_GEMM: '0'
+  VLLM_USE_V2_MODEL_RUNNER: '1'
+  NCCL_NET: IB
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_ADDR_FAMILY: AF_INET
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  NCCL_IB_MERGE_NICS: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_IGNORE_CPU_AFFINITY: '1'
+  NCCL_DEBUG: WARN
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: '1'
+  VLLM_HTTP_TIMEOUT_KEEP_ALIVE: '600'
+  # OURS: fabric retarget. They pin ONE HCA (rocep1s0f0); we have two active and every
+  # recipe here uses both. Kept as ours for arm 1 so it boots; "one HCA" is a later arm.
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_ADDR_RANGE: 192.168.100.0/24
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  TP_SOCKET_IFNAME: enp1s0f1np1
+  MN_IF_NAME: enp1s0f1np1
+
+command: |
+  vllm serve {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --quantization modelopt \
+    --tensor-parallel-size {tensor_parallel} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --no-enable-flashinfer-autotune \
+    --enable-prefix-caching \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_xml \
+    --default-chat-template-kwargs '{{"enable_thinking": false}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens}}}' \
+    --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
+    --kv-cache-dtype fp8_e4m3
+
+recipe_version: '1'
+builder: docker-pull

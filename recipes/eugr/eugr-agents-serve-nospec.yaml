@@ -2,8 +2,8 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+name: eugr-agents-serve-nospec
+description: "NOSPEC PROBE ARM. Same as eugr-agents-serve but MTP speculative decoding removed entirely, to test whether the c=5/6/7 straggler is in the speculative path."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 container: vllm-node-b12x
@@ -25,7 +25,7 @@ defaults:
   max_num_seqs: 8
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.80
 
 env:
   CUTE_DSL_ARCH: "sm_121a"
@@ -44,11 +44,15 @@ command: |
     --host {host} \
     --port {port} \
     --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \
@@ -57,7 +61,6 @@ command: |
     --max-model-len {max_model_len} \
     --max-num-seqs {max_num_seqs} \
     --max-num-batched-tokens {max_num_batched_tokens} \
-    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens}}}' \
     --gdn-decode-kernel b12x \
     --linear-backend b12x \
     --moe-backend b12x \

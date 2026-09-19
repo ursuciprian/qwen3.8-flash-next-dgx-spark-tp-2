@@ -2,18 +2,24 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+name: eugr-agents-serve-local16-la-tc
+description: "la + vllm-tc45-reasoning-structag-fix mod: tool_choice=required/named structural-tag enforcement now passes reasoning=True (was hardcoded False), so the forced-tool-call grammar admits the <think> prefix this recipe's --reasoning-parser qwen3 always emits. Fixes tool-eval-bench TC-45 ('tool_choice=required Compliance'). See results/arms/tooleval-fix/notes.md."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
-container: vllm-node-b12x
+container: spark-vllm-b12x:local-20260918-a8333658
 
-build_args:
-  - --exp-b12x
+# Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
+# eugr builder either substitute its own pullable nightly or try to build via
+# build-and-copy.sh (sparkrun/builders/eugr.py: _wants_build()/_wants_b12x()) --
+# both wrong for a tag build.sh already built and loaded on every cluster host.
+# With build_args empty and a non-sentinel tag already present on all hosts,
+# sparkrun's pull-first-default branch just uses it verbatim.
+build_args: []
 
 cluster_only: true
 
-mods: []
+mods:
+  - vllm-tc45-reasoning-structag-fix
 
 defaults:
   port: 8000
@@ -22,12 +28,13 @@ defaults:
   pipeline_parallel: 1
   block_size: 16
   max_model_len: 262144
-  max_num_seqs: 8
+  max_num_seqs: 16
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.80
 
 env:
+  B12X_AUTOTUNE: "1"
   CUTE_DSL_ARCH: "sm_121a"
   SAFETENSORS_FAST_GPU: "1"
   VLLM_WORKER_MULTIPROC_METHOD: "spawn"
@@ -44,11 +51,15 @@ command: |
     --host {host} \
     --port {port} \
     --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \
@@ -57,7 +68,7 @@ command: |
     --max-model-len {max_model_len} \
     --max-num-seqs {max_num_seqs} \
     --max-num-batched-tokens {max_num_batched_tokens} \
-    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens}}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"use_local_argmax_reduction":true}}' \
     --gdn-decode-kernel b12x \
     --linear-backend b12x \
     --moe-backend b12x \

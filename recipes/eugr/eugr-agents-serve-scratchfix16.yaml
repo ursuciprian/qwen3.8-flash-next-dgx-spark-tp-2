@@ -2,8 +2,8 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+name: eugr-agents-serve-scratchfix16
+description: "Straggler probe: eugr-agents-serve with max_num_seqs 16 and the vllm-qwen-scratch-isolation mod (98cd717 rebased, disjoint GDN/QSA projection scratch), testing whether shared projection scratch explains the c5/c9/c12 MTP draft-acceptance straggler."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 container: vllm-node-b12x
@@ -13,7 +13,7 @@ build_args:
 
 cluster_only: true
 
-mods: []
+mods: [vllm-qwen-scratch-isolation]
 
 defaults:
   port: 8000
@@ -22,10 +22,10 @@ defaults:
   pipeline_parallel: 1
   block_size: 16
   max_model_len: 262144
-  max_num_seqs: 8
+  max_num_seqs: 16
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.80
 
 env:
   CUTE_DSL_ARCH: "sm_121a"
@@ -44,11 +44,15 @@ command: |
     --host {host} \
     --port {port} \
     --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \

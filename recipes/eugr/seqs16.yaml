@@ -2,8 +2,8 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents
-description: "eugr b12x route tuned for agents: 8 concurrent seqs, 8192-token prefill chunks, gpu util 0.85 for a bigger KV pool and prefix cache"
+name: seqs16
+description: "agents recipe + decode-aware prefill scheduling (max_parallel_prefills=4, prefill_policy=decode-aware): reserves a decode lane when runnable decode occupancy is below target, instead of letting queued long prefills starve decode at high concurrency"
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 container: vllm-node-b12x
@@ -22,7 +22,7 @@ defaults:
   pipeline_parallel: 1
   block_size: 16
   max_model_len: 262144
-  max_num_seqs: 8
+  max_num_seqs: 16
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
   gpu_memory_utilization: 0.85
@@ -49,6 +49,9 @@ command: |
     --mamba-cache-mode align \
     --enable-prefix-caching \
     --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
     --dtype bfloat16 \
     --kv-cache-dtype fp8 \
     --quantization modelopt_mixed \

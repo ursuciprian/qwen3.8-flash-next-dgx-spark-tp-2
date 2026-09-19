@@ -1,0 +1,45 @@
+moe.decode / fused_moe selection cache dump -- 2026-09-19
+Source: b12x preparation selection cache on dgx-01 (node_0), warm boot of
+eugr-agents-serve-local16-la-fwd57f3572-fix, file
+b12x/compile/preparation/8ccf4799746f12aa17e1516b1378f0474077caca591570caa40dd18dc68b7db2.json
+(schema_version 5, one JSON file per device/namespace identity, keyed by an
+opaque sha256 digest of {component, query_schema, config_schema,
+semantic_version, candidate_contract_version, encoded_query, invocation,
+pin, dependencies} -- session.py _choice_key(), session.py:770-786).
+
+Caveat: the cache key is a one-way hash and does NOT store the request name
+or decode capacity in the record; b12x only writes {assignment, config,
+coverage, programs}. Recovering the exact capacity (1/2/4/8) per key would
+require recomputing digest() inside the running process with the real
+contract/encoded_query for each capacity, which was out of scope for this
+pass. What IS directly answerable from the stored config/assignment fields:
+whether the native W4A16 direct route (added by mods/b12x-fwd-57f3572,
+backend="w4a16", w4a16_route_mode="direct") won ANY of its candidate races,
+or lost every one to the prior default route.
+
+total records: 282
+backend distribution across all 282 cached selection records:
+  (no backend field) 231
+  dynamic 33
+  cutedsl 13
+  w4a16 4
+  triton 1
+
+records where backend==w4a16 (native W4A16 direct route WON its candidate race):
+count: 4
+--- 8887c2821148bd3492a217d942a698968300cb113aac8c627318c5cc6086273c
+ assignment: {'backend': 'w4a16', 'dynamic_route_mode': None, 'dynamic_tile_m': None, 'max_active_clusters': None, 'nvfp4_materialize_intermediate': False, 'nvfp4_share_input': False, 'route_planner': 'internal', 'w4a16_route_mode': 'direct'}
+ coverage: {'cartesian_count': 243, 'effective_count': 2, 'legal_count': 2, 'measured_count': 2}
+ programs: [['cute', '11cff0b5d1b46cd90ba7c98e39b85e15512c35b2428f23c81eee417e32d3448d'], ['cute', '14c6b50f24d34ffc8d26a672650b07dd8b35e4445a93f0c25188470e81885d01'], ['cute', '2f3669461b249952bdb8d2028f252d4ecf62345251c7643f071a4809c27d25d0'], ['cute', '87db41e59e3445f4c821225e04197183d1530fa637706b47bda32b82645e5a31'], ['cute', '92974648aabb205fdedc0cfbb6be0273ca4a799d2beda3783e29f8a2660fa270'], ['cute', '95ab1fffd0e1e84d16bee7010107a060f31343905135277080e17b04282d092f'], ['triton', '0a6033c9de53b5605e0c781c63406b5a10293daab4d6f9dad4bc32ff8e8408e7'], ['triton', '47e28e24ec8168f1ffc276e1c9027f01da828d37dd335e31dff2bf102ef90de7'], ['triton', '5da8175c67547a16cd2d16007a340fd27d4c846e41e77de7ad911e938f178ea5'], ['triton', 'a7a90ec4066cc0ee6f6a3e8c89eb730f594d5b3ab347c3b0054b53723163280d'], ['triton', 'a8fb4f339000f4036bdcbc13c0198947fb0a2885df92008206589089a37a0274'], ['triton', 'a94f8caca6e59afd13284cea50f4af8c38e11c41f648a3e77c2106a87be39bda'], ['triton', 'b3124940ccdc1a495c883651bc17fe41d4b597e3f155e217482677c1bc9dd8bc'], ['triton', 'cc4c8fc2f314bfe67d0ed69e3be0952cc9a37e9e4bc86fa5c63eec01c6b0409d'], ['triton', 'fae1f4329928f1969af98040f9f342b44e895a473d865effdd4982c1644b9dec']]
+--- 8e99529dc2b2c04d38f6106916c252abd8599d04074e60993306f6401bcd64af
+ assignment: {'backend': 'w4a16', 'dynamic_route_mode': None, 'dynamic_tile_m': None, 'max_active_clusters': None, 'nvfp4_materialize_intermediate': False, 'nvfp4_share_input': False, 'route_planner': 'internal', 'w4a16_route_mode': 'direct'}
+ coverage: {'cartesian_count': 243, 'effective_count': 2, 'legal_count': 2, 'measured_count': 2}
+ programs: [['cute', '11cff0b5d1b46cd90ba7c98e39b85e15512c35b2428f23c81eee417e32d3448d'], ['cute', '14c6b50f24d34ffc8d26a672650b07dd8b35e4445a93f0c25188470e81885d01'], ['cute', '2f3669461b249952bdb8d2028f252d4ecf62345251c7643f071a4809c27d25d0'], ['cute', '87db41e59e3445f4c821225e04197183d1530fa637706b47bda32b82645e5a31'], ['cute', '95ab1fffd0e1e84d16bee7010107a060f31343905135277080e17b04282d092f'], ['triton', '0a6033c9de53b5605e0c781c63406b5a10293daab4d6f9dad4bc32ff8e8408e7'], ['triton', '1a24ebbac0bf8be7df70e57d92be530dd57446028dd30c84921c5638323bb893'], ['triton', '47ba58d6dcbcd96af1d3ed694b0f1b07062446185e31f7f9eccebff100372cad'], ['triton', '47e28e24ec8168f1ffc276e1c9027f01da828d37dd335e31dff2bf102ef90de7'], ['triton', '4e47bdf117d5eae19d3bb5db3341f1bcb8f7cde7976bd2a5871d109d7f9a579e'], ['triton', '5da8175c67547a16cd2d16007a340fd27d4c846e41e77de7ad911e938f178ea5'], ['triton', '9a9aadf45a34bd594adab484fad818aecd7f06d47a2c76f4e3a42b90cf4a72f9'], ['triton', 'b3124940ccdc1a495c883651bc17fe41d4b597e3f155e217482677c1bc9dd8bc'], ['triton', 'cc4c8fc2f314bfe67d0ed69e3be0952cc9a37e9e4bc86fa5c63eec01c6b0409d']]
+--- a24af5db56201157ad4974e55b41dcf9e65fa70a6ea561205adbf9049517e771
+ assignment: {'backend': 'w4a16', 'dynamic_route_mode': None, 'dynamic_tile_m': None, 'max_active_clusters': None, 'nvfp4_materialize_intermediate': False, 'nvfp4_share_input': False, 'route_planner': 'internal', 'w4a16_route_mode': 'direct'}
+ coverage: {'cartesian_count': 243, 'effective_count': 2, 'legal_count': 2, 'measured_count': 2}
+ programs: [['cute', '11cff0b5d1b46cd90ba7c98e39b85e15512c35b2428f23c81eee417e32d3448d'], ['cute', '14c6b50f24d34ffc8d26a672650b07dd8b35e4445a93f0c25188470e81885d01'], ['cute', '2f3669461b249952bdb8d2028f252d4ecf62345251c7643f071a4809c27d25d0'], ['cute', '87db41e59e3445f4c821225e04197183d1530fa637706b47bda32b82645e5a31'], ['cute', '92974648aabb205fdedc0cfbb6be0273ca4a799d2beda3783e29f8a2660fa270'], ['cute', '95ab1fffd0e1e84d16bee7010107a060f31343905135277080e17b04282d092f'], ['triton', '0a6033c9de53b5605e0c781c63406b5a10293daab4d6f9dad4bc32ff8e8408e7'], ['triton', '2ea4c2312a6652f4f2bfe0fa9eb8ea7224e6dbbe0f90707af18691803f748abd'], ['triton', '47e28e24ec8168f1ffc276e1c9027f01da828d37dd335e31dff2bf102ef90de7'], ['triton', '5da8175c67547a16cd2d16007a340fd27d4c846e41e77de7ad911e938f178ea5'], ['triton', '75be77387101ab420912fdc479d9c761e443e4a17f65d60e584bc2ab9178aafc'], ['triton', 'b3124940ccdc1a495c883651bc17fe41d4b597e3f155e217482677c1bc9dd8bc'], ['triton', 'b862be97a3a3037e6ad0fb90317befa6d5d8f4c295173a7b747f75028f84497f'], ['triton', 'cc214aa4d2b5b6b79215cb5dff3574eafd640ce13fa440913c7cc06d0885b931'], ['triton', 'cc4c8fc2f314bfe67d0ed69e3be0952cc9a37e9e4bc86fa5c63eec01c6b0409d']]
+--- babe75bb2cf5ba14472a15dac5587af674260a05045d61e1d5b34e5ceb8c3960
+ assignment: {'backend': 'w4a16', 'dynamic_route_mode': None, 'dynamic_tile_m': None, 'max_active_clusters': None, 'nvfp4_materialize_intermediate': False, 'nvfp4_share_input': False, 'route_planner': 'internal', 'w4a16_route_mode': 'direct'}
+ coverage: {'cartesian_count': 216, 'effective_count': 2, 'legal_count': 2, 'measured_count': 2}
+ programs: [['cute', '11cff0b5d1b46cd90ba7c98e39b85e15512c35b2428f23c81eee417e32d3448d'], ['cute', '2f334956f720575c61a37045345b89e57aabc2c2b46410d3d43ede364f51161e'], ['cute', '2f3669461b249952bdb8d2028f252d4ecf62345251c7643f071a4809c27d25d0'], ['cute', '6bbb559323bb80f0837fb95bb64eee56b5ad93c5d3cd93660fa56ceaa8ca7acb'], ['cute', '92974648aabb205fdedc0cfbb6be0273ca4a799d2beda3783e29f8a2660fa270'], ['cute', '95ab1fffd0e1e84d16bee7010107a060f31343905135277080e17b04282d092f'], ['triton', '0a6033c9de53b5605e0c781c63406b5a10293daab4d6f9dad4bc32ff8e8408e7'], ['triton', '112cd42180619da0701c168462aee4dc1df57078c258b153d0be06a7d78fec32'], ['triton', '47e28e24ec8168f1ffc276e1c9027f01da828d37dd335e31dff2bf102ef90de7'], ['triton', '5da8175c67547a16cd2d16007a340fd27d4c846e41e77de7ad911e938f178ea5'], ['triton', 'b3124940ccdc1a495c883651bc17fe41d4b597e3f155e217482677c1bc9dd8bc'], ['triton', 'c47450c6faa460c542eea06ae1079b885ee5507b8d0da1be5422775d73de76a3'], ['triton', 'cc4c8fc2f314bfe67d0ed69e3be0952cc9a37e9e4bc86fa5c63eec01c6b0409d'], ['triton', 'd28636c091b30817e43ac35cc3ca190ef0d54134394dcf991494e1314c71b032'], ['triton', 'd876f343b44102deb0dbcb296eec00fcd197a1cbb6e3416f0f32ca78f12f5e9b']]
