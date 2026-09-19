@@ -1,221 +1,254 @@
 # Qwen3.8-Flash-Next NVFP4 on two DGX Sparks
 
-Serving recipes for `Qwen3.8-Flash-Next-NVFP4` (180B MoE) at tensor parallel 2
-across two NVIDIA DGX Spark (GB10, SM121) over ConnectX-7, packaged for
-[sparkrun](https://sparkrun.dev). Three recipes on SGLang, one on vLLM. Neither
-engine serves this model on this hardware out of the box; these boot, and every
-number here comes from a fresh boot with the page cache dropped, measured with
-the same harnesses.
+Serving recipes for `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` at tensor
+parallel 2 across two NVIDIA DGX Spark (GB10, SM121) over ConnectX-7 RoCE,
+packaged for [sparkrun](https://sparkrun.dev). The served route is vLLM on a
+b12x-kernel fork, built as our own container image. All numbers below come
+from fresh boots, measured 2026-09-18/19, with the same harnesses.
 
 ## Quick start
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run @qwen38-flashnext/flashnext-fp8kv-1m8      --cluster <your-cluster> --tp 2 --trust
-sparkrun run @qwen38-flashnext/flashnext-vllm-cached    --cluster <your-cluster> --tp 2 --trust
+sparkrun run recipes/eugr/eugr-agents-serve-local16-la.yaml --cluster <your-cluster> --tp 2 --trust
 ```
 
-`--trust` accepts the mod hook that patches the engine inside the container
-(see [Why the mods](#why-the-mods)). Loads take 10-15 minutes warm, 20-30 cold.
-Stop with `sparkrun stop --all`. The server answers on port 8000 with the
-OpenAI API, model name `qwen3.8-flash-next`, thinking off by default.
+`--trust` accepts the mod hook that patches files inside the container before
+serve (see [Why the mods](#why-the-mods)). Cold boot 20-30 minutes (kernel
+autotune from an empty plan cache), warm boot with a populated
+`~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` a few minutes. The server
+answers on port 8000 with the OpenAI API, model name `qwen3.8-flash-next`.
 
-Or clone and use the launcher, which checks the cluster, mirrors the checkpoint
-over the fast link and drops the page cache on both nodes:
+## Which recipe
 
-```sh
-git clone https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-cd qwen3.8-flash-next-dgx-spark-tp-2
-scripts/run.sh sglang --check     # validate, launch nothing
-scripts/run.sh sglang             # flashnext-fp8kv-1m8, the default
-scripts/run.sh sglang-bf16        # flashnext-bigkv-g8-c4096
-scripts/run.sh sglang-nospec      # flashnext-bigkv-nospec
-scripts/run.sh vllm               # flashnext-vllm-cached
-DEPTHS="0 16384" CONCURRENCY="1 2 5" scripts/run.sh vllm --bench
-```
-
-Before the first launch on your own pair, read [Gotchas](#gotchas): the fabric
-interface names are pinned to this cluster.
-
-### Which recipe
-
-| You are serving | Recipe | Engine | What you get |
-|---|---|---|---|
-| Chat, one or two agents, cached history | `flashnext-fp8kv-1m8` | SGLang | Best single-stream decode, 262k context, 1.8M-token KV pool in fp8. Quality gate against bf16 passed (TrueScore 81.3 vs 80.8, needle exact to 250k). |
-| Same, without a mod | `flashnext-bigkv-g8-c4096` | SGLang | Identical flags with bf16 KV on the 2026-09-03 digest: 110k context, 0.9M-token pool. |
-| Five or more streams, batch prefill | `flashnext-bigkv-nospec` | SGLang | No drafter: prefill +20%, decode 75-85 tok/s at five streams. Single stream drops to 26, so not below five. |
-| Long documents reused across turns, many agents | `flashnext-vllm-cached` | vLLM | Prefix caching that reuses a prompt's first pass: a fresh 2k turn after a cached 16k context prefills at 2176 tok/s against SGLang's 946. 262k context, 2.0M-token pool. |
-
-## How this works
-
-A sparkrun recipe is one YAML: the container digest, the checkpoint revision,
-the environment, and the serve command. sparkrun starts the same container on
-both nodes, wires NCCL over the ConnectX-7 link, and runs the head's serve
-command with `--tp 2`. Everything the engine needs beyond its stock image comes
-from a **mod**: a directory under `mods/` that sparkrun copies into each
-container and runs before the serve command. Mods here are small, idempotent
-and fail closed; if a patch does not apply exactly, the boot stops rather than
-serving a half-patched engine.
-
-**SGLang recipes.** The RadixArk NVFP4 checkpoint with the NEXTN drafter (3
-steps, 4 draft tokens), BF16 Mamba state, chunked prefill 4096, decode CUDA
-graphs for batch sizes 1 to 10, 97 Mamba slots. The n-gram (PLE) table stays
-GPU-resident: on unified memory the "offload" is a pinned host copy from the
-same 128 GB pool, so it frees nothing and costs a gather per decode step.
-`flashnext-fp8kv-1m8` adds `--kv-cache-dtype fp8_e4m3` on the 2026-09-11
-nightly plus the `sglang-sm121-qsa-fp8kv` mod, which doubles the KV pool and
-lifts context from 110k to 262k at no measured quality cost.
-
-**vLLM recipe.** NVIDIA's checkpoint on nightly `8a728663`, pinned by digest.
-MTP with 3 draft tokens, fp8 KV, expert parallelism, six engine overlays, and
-`disable_eagle_block_drop` in the speculative config. That flag is what makes
-prefix caching reuse a first pass: vLLM's Mamba "align" caching keeps only the
-state at the prompt's last block boundary while the MTP block drop looks one
-block earlier, so without it every deep turn re-prefills the whole context (a
-fresh 2k prefill at 32k depth runs at 161 tok/s instead of 1862). Cached and
-fresh greedy outputs were checked on six long prompts and a 68-request
-multi-turn gate with the drop kept and disabled; both diverge at the same rate
-from batch-shape numerics, so the flag is not the cause. Upstream fixed the
-underlying defect in vllm-project/vllm#53945 (2026-09-08); the flag goes once a
-build carrying it is measured here.
-
-**Measurement.** Every recipe is measured with three independent harnesses:
-tonyd2wild's 40-prompt category harness (concurrency 1 to 6, cold prefill
-ladder to 88k with a needle), MiaAI-Lab's llama-benchy spec, and spark-bench's
-76 graded scenarios. Four boots of the same recipe spread about 5% at one
-stream, so nothing below that is reported as a result. Full tables in
-[results/RESULTS.md](results/RESULTS.md).
-
-## Why the mods
-
-Three mods, each explained in [mods/README.md](mods/README.md).
-
-- **`sglang-sm121-qsa-fp8kv`** (used by `flashnext-fp8kv-1m8`). The only sparse
-  attention decode kernel qualified for SM121 accepts BF16 keys only, so with an
-  fp8 KV cache the scheduler dies on the first decode with `unsupported SM121
-  QSA call: expected BF16 D=256 ...`. The mod allocates the packed gather
-  scratch in the query dtype at the two call sites, so the selected keys convert
-  on store and the cache itself stays fp8. Valid while the KV scales are 1.0,
-  which is the default without a calibration file.
-- **`vllm-flashnext-nightly-8a728663`** (used by `flashnext-vllm-cached`). Six
-  whole-file overlays: community SM121 fixes for the sparse-attention and PLE
-  ops and the platform gate (which also carry fp8 KV on this build), the
-  modelopt loader fixes NVIDIA's MTP head needs, and the KV-cache utility change
-  that lets vLLM identify the drafter's cache group.
-  Whole-file overlays are bound to one build and crash on a newer one, which is
-  why the image is pinned by digest.
-- **`vllm-qsa-fp8kv-pr55557`** (not in a shipped recipe yet). Upstream's own fp8
-  KV patch, vllm-project/vllm#55557, applied as a diff so current vLLM nightlies
-  accept fp8 without the overlays. Measured at 2.07M KV tokens and decode parity;
-  one tool-eval run scored 90 against the pinned build's 100, so it stays out of
-  the recipe until that repeats clean.
-
-## Gotchas
-
-- **Fabric names are pinned.** The recipes set `enp1s0f1np1` and
-  `rocep1s0f1,roceP2p1s0f1` in `env:`. Many pairs are wired on `f0`. sparkrun's
-  `-o` overrides do not reach `env:`, so patch the YAML:
-  ```sh
-  WORKER_IP=<worker ip on the fast link> scripts/detect-fabric.sh --write
-  ```
-  Left wrong, NCCL falls back to TCP over the management link and adds 18-65 ms
-  of jitter per decode step. Check the `taskset -c 5-9,15-19` list in the SGLang
-  recipes too; it pins the server to this machine's fast cores.
-- **Drop the page cache before loading.** On unified memory a warm page cache
-  starves the GPU allocator about 20 minutes into the load, and `free -g`
-  misreports it. `sync; echo 3 | sudo tee /proc/sys/vm/drop_caches` on both
-  nodes. `scripts/run.sh` does this for you.
-- **Cold boots are slow.** 20-30 minutes from a dropped page cache or a fresh
-  image, which also pays cold Triton and torch JIT. sparkrun's 120 s readiness
-  window is not the limit here; the recipes set the engine's own timeout.
-- **The SGLang server log is inside the container** at `/tmp/sparkrun_serve.log`.
-  `docker logs` shows only the CUDA banner.
-- **Worker rendezvous race.** Roughly one vLLM boot in five on this pair dies
-  with `FileNotFoundError` on a worker semaphore before the engine starts.
-  Relaunching succeeds; it is not recipe-dependent.
-- **Mods resolve beside the recipe directory.** If you copy a recipe out of
-  `recipes/`, keep `recipes/mods -> ../mods` next to it or sparkrun reports
-  `Could not resolve mod`.
-- **llama-benchy's `--extra-body` takes `key=value` pairs.** A JSON object is
-  accepted silently and sets nothing. SGLang needs `return_token_ids=false`
-  whenever the request streams.
-- **Decode speed follows the text, not the flags.** The same server decodes
-  prose at 38 tok/s and JSON at 62. Measure your own workload.
-- `scripts/validate_recipes.py recipes` checks a recipe against the failures
-  this project hit: moving image tags, missing mods, unsupported flags, unset
-  fabric, credentials in `env`.
-
-## Not working properly
-
-- **vLLM TTFT under load.** 3.50 s at six streams against SGLang's 0.40 s on
-  the same harness, same chunk size and seat count. `--long-prefill-token-threshold`
-  does not help (TTFT flat, decode down 15%). Being bisected; see RESULTS.md.
-- **vLLM cached turns at depth prefill at a third of cold speed** (480 tok/s vs
-  1480, flat from 4k to 32k). Both sparse-attention kernels are cleared as the
-  cause by microbenchmark; the remaining 2.9 s per chunk is being profiled.
-- **fp8 KV on the vLLM nightly is one patch away.** Stock nightlies refuse it
-  (`Qwen4Exp QSA requires a BF16 main KV cache`); the `pr55557` mod fixes that
-  but its quality repeat is pending.
-- **The two Spark Arena entries for this model.** The published SGLang entry
-  pulls a moving tag and mounts a day-0 backend file over a build that no longer
-  needs it, which restores a kernel path upstream found silently corrupts
-  context above roughly 95k tokens on SM121 (sgl-project/sglang#36806). Use the
-  recipes here; same tuning, correct build, pinned by digest. The published vLLM
-  entry is sound but its prefix caching does not reuse a first pass and its
-  patch path is absolute.
-- **Not affected:** sgl-project/sglang#37111 (silent corruption with QSA, NEXTN
-  and decode graphs on GB10 TP2) does not reproduce on the shipped digest.
-  `scripts/gate_37111.py` runs both reported cases against a live server.
-
-## Models tested
-
-One model, two checkpoints, two engines.
-
-| | SGLang `flashnext-fp8kv-1m8` | vLLM `flashnext-vllm-cached` |
+| Recipe | Image | Status |
 |---|---|---|
-| checkpoint | `RadixArk/Qwen3.8-Flash-Next-NVFP4` @ `7b719225` | `nvidia/Qwen3.8-Flash-Next-NVFP4` @ `fc694b54` |
-| build | `lmsysorg/sglang` 2026-09-11 nightly, digest pinned | `vllm/vllm-openai` nightly `8a728663`, digest pinned |
-| KV cache | fp8_e4m3, 1,800,000 tokens | fp8_e4m3, 2,048,795 tokens |
-| context | 262,144 | 262,144 |
-| decode, 1 stream (40-prompt median) | **67.0 tok/s** | 65.2 |
-| decode, 6 streams aggregate | **314 tok/s** | 296 |
-| TTFT at 6 streams | **0.40 s** | 3.50 s |
-| cold prefill, 7k / 88k tokens | 2250 / **4100 tok/s** | 2770 / 3440 |
-| cached 2k turn after 16k context | 915 tok/s | **2282 tok/s** |
-| decode at 32k depth, 5 streams | **79 tok/s** | 62 |
-| tool-eval, 15 core scenarios | 97 | **100** |
-| spark-bench TrueScore, 76 x2 | 81.3 | pending |
-| needle retrieval | 21/21 to 250k | 88k rung, every size |
-| load time, warm page cache | 12 min | 15 min |
+| `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** `use_local_argmax_reduction: true` in the MTP spec config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| `recipes/eugr/eugr-agents-serve-local16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
+| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Built from a public wheel release (see [Build provenance](#build-provenance)). **Not yet gated on the nodes** — pull and boot were interrupted by a shutdown before this recipe was measured. Do not treat it as the default until it has a screen against `la`. |
 
-SGLang wins one-shot work: faster decode at every concurrency, TTFT under load
-an order of magnitude lower, faster cold prefill. vLLM wins wherever a large
-context is reused across turns, because every cached turn prefills about twice
-as fast. Both recipes ran the same prompts on the same afternoon from fresh
-boots. The category and llama-benchy grids, and the fp8 quality gate, are in
-[results/RESULTS.md](results/RESULTS.md).
+Image identity for the default: eugr `spark-vllm-docker` Dockerfile `798528a2`
++ fork `local-inference-lab/vllm` `dev/jovian-judgement` `8e1f1e58` + b12x
+`a8333658`. Checkpoint `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD
+revision `7c4f1bc1`. fp8 KV, MTP width 4, prefix caching on, `max_num_seqs 16`.
 
-Against the published dual-Spark references on the same harnesses (their
-numbers, our runs of their harness on our recipes): tonyd2wild's TP2 profile
-53.7 tok/s at one stream and 97.9 at six against 67.0 and 314; MiaAI-Lab's
-llama-benchy T1 24.1 tok/s at one stream against 36.7 on our vLLM recipe
-(their cluster caps the GPU clock at 2200 MHz).
+## Headline numbers
 
-## Hardware
+`tools/tony-bench/bench_sweep.py`, 3 rounds x 300 tokens, counting workload,
+default (`la`) recipe. Boot-to-boot noise band: c1 85-99 tok/s, c8 412-442
+tok/s — nothing inside that band is a result; promotion decisions used 3-boot
+medians. Sources: `results/arms/la/sweep.json`, `results/arms/la-final/sweep.json`,
+`results/kernel-pass/prep-deadlock/sweep_la_boundedwait_restore_r2.json`.
 
-- 2x DGX Spark: GB10, SM121, 128 GB LPDDR5X unified, about 273 GB/s per node.
-- ConnectX-7 RoCE between the nodes, GID index 3.
-- About 135 GB of checkpoints on disk, 73 GB of weights per node at TP=2.
+| concurrency | agg tok/s | per-stream tok/s | TTFT (c1 only) |
+|---|---:|---:|---:|
+| c1 | 95.7-98.8 (boot band 85-99) | same | 0.74-0.79 s |
+| c4 | 285.2 | 72.3 | 2.2 s |
+| c8 | 412-442 | 52.5-56.0 | 4.3 s |
+| c16 | 629.9 | 40.3 | 8.3 s |
 
-## Layout
+Cold prefill 2236-2303 tok/s (c1). Decode-probe workload mix (single stream,
+peak of 3 repeats, `results/arms/la/decode_probe.txt`): code 59.6, structured
+90.5, counting 98.0, prose 47.9 tok/s.
+
+### Category harness (tonyd2wild, 40 prompts, concurrency 1)
+
+Old = eugr's original nightly image before this repo's own build; local16 =
+own image, plain recipe; la = own image with `use_local_argmax_reduction`.
+
+| | median | json | html | reasoning | coding | summary | format | prose | narrative |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| old eugr image | 65.8 | 90.1 | 86.1 | 74.9 | 69.4 | 47.5 | 46.4 | 43.8 | 40.4 |
+| local16 (own image) | 76.4 | 90.4 | 97.0 | 77.5 | 85.8 | 50.1 | 47.6 | 43.4 | 44.4 |
+| la (own image, argmax) | not re-run on this harness | 94.6 | 95.1 | 78.8 | 82.4 | 51.5 | 60.0 | 49.1 | 45.0 |
+
+`decode_probe.py` workload mix (mean of 3, `code/structured/counting/prose`):
+old 56/73/94/46, local16 58.1/71.7/87.2/45.9, la 53.5/72.3/89.6/45.5.
+
+Real-prompt concurrency lane, per-stream/aggregate tok/s, old image only
+(2026-09-17, not re-measured on the own image): x2 61.9/83.2, x4 47.8/81.0,
+x6 37.7/112.6, x8 33.7/124.8.
+
+## Quality gates (`la`)
+
+- **Fidelity probe** (`results/arms/la/fidelity.json`, `fidelity_probe.txt`):
+  100% exact retrieval at 8k/32k/64k/128k context, 0 typos, thinking on.
+- **tool-eval-bench 2.6.1 `--hardmode`** (88 scenarios): 88-91/100 across
+  boots; baseline image scored 90. Two scenarios fail consistently:
+  - **TC-45** (`tool_choice=required`): parser bug, see
+    [Known issues / fixes](#known-issues--fixes). Fixed by
+    `mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs
+    c1 throughput about -12% (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7).
+    Not enabled by default.
+  - **TC-68**: model wraps JSON in a code fence with commentary; the scenario
+    intentionally sends no `response_format`, so this is model compliance,
+    not a server bug — not fixable without defeating the test.
+- **Straggler probe**: batch 5-16 clean (was one request per round stalling
+  ~18 s at c5-7/9/12 on the prior fork revision; fixed by the own image).
+  Accepted/draft ratio ~3.9 of 4.
+- **MTP acceptance** on real prompts, per draft position: ~90/81/75/70%
+  (`results/arms/la/mtp_metrics.txt`: overall 76767/24344 draft-tokens*4
+  positions, per-position 21911/19751/18173/16932 accepted). On the counting
+  workload used for the throughput sweep, acceptance is far higher — 98.9%
+  overall, 99.9/99.1/98.6/97.9% by position
+  (`results/profiling/README.md`).
+
+## Profile (rank-local `torch.profiler`, `results/profiling/README.md`)
+
+Mod `mods/vllm-decode-profiler/`, recipe
+`eugr-agents-serve-local16-la-lprof.yaml`, summarized by
+`scripts/prof_summary.py`. ~4% profiler overhead.
+
+| | c1 (55 ms/step) | c8 (87 ms/step) |
+|---|---:|---:|
+| GEMM (incl. MoE NVFP4 `siluMoEDynamicKer` ~27-34%) | 83.6% | 65.6% |
+| GDN / SSM | 2.3% | 13.5% |
+| all-reduce (ROCE) | 4.0% | 6.0% |
+| attention | 1.6% | 2.7% |
+| sampler | 1.0% | 1.6% |
+| MTP head | 0.04% | 0.02% |
+| idle | 5.4% | 5.6% |
+
+Reading: decode is compute-bound in the NVFP4 MoE GEMM at both concurrencies,
+not communication (all-reduce ≤6%) and not the lm_head (MTP head 0.04% of
+step, which is why the reduced-draft-vocab arm below has no speed upside even
+where it works). GDN's growing time share at c8 tracks growing routed token
+volume, not an unbatched-launch problem — that lead was traced and closed
+(`results/kernel-pass/arms.md`, "Correction to survey.md").
+
+## Rejected arms
+
+Screened against the `la` baseline; gate bar was +3% at c1 or +5% at c8 with
+nothing else worse than -2%. All from `results/kernel-pass/*.json`,
+`results/arms/fwd57f3572-fix/sweep.json`, `results/arms/dv/`.
+
+| label | change | c1 tok/s | c8 tok/s | verdict |
+|---|---|---:|---:|---|
+| fusear | `fuse_allreduce_rms: true` | 86.7 | 428.2 | reject — c1 regression |
+| spec3 | `num_speculative_tokens: 3` (was 4) | 84.1 | 375.2 | reject — both regress |
+| noat | `B12X_AUTOTUNE: 0` (diagnostic) | 81.1 | 414.8 | reject — confirms autotune worth ~18% at c1 |
+| fwd57f3572 | forward-port b12x's native W4A16 MoE-autotune fix onto the old image | 88.1 | 419.8 | reject — route wins only 4/38 candidate races, repeatable regression |
+| occ MICRO=32 | `B12X_MICRO_MAX_ACTIVE_CLUSTERS=32` | 97.1 | 429.9 | reject — noise, kernel clamps to 48 SMs anyway |
+| occ DYNAMIC=32 | `B12X_DYNAMIC_MAX_ACTIVE_CLUSTERS=32` | 94.7 | 426.2 | reject — noise, same clamp |
+| gdnbf16 | `--mamba-ssm-cache-dtype bfloat16` | — | — | cannot boot: b12x requires `state_dtype == torch.float32` |
+| dv | reduced draft vocab (47,149-id table) for the MTP head | boots | — | 0% MTP acceptance (7 of 151k drafts); not a speed lever anyway, MTP head is 0.04% of step |
+| b12x HEAD `0f3a8cb` | rebuild at b12x master | — | — | deadlocks TP2 preparation, see below |
+| RadixArk checkpoint, BF16 KV, old PTQ rev | — | — | — | rejected 2026-09-16, superseded by QAD `7c4f1bc1` |
+
+Typo hypothesis ("quantized GDN / fp8 KV causes long-session typos") tested
+2026-09-16 on both checkpoints at 8k-128k: 0 typos on either. Dead for this
+stack.
+
+## Known issues / fixes
+
+- **Batch 5-7 straggler (fixed).** One request per decode round lost ~97% of
+  its MTP drafts and stalled ~18 s at c5-7 (also 9, 12) on the fork revision
+  eugr's image shipped. Traced to a shared-scratch collision in the QSA/GDN
+  projection path; fixed by the fork's scratch-isolation commits, baked into
+  our own image. `mods/vllm-qwen-scratch-isolation/` documents the fix.
+- **`B12X_AUTOTUNE=0` in eugr's Dockerfile.** Truncates kernel-selection
+  tuning; a fresh boot serves single-stream at 81 tok/s instead of 96-98.
+  The recipe overrides it to `1`. The plan cache then persists across boots
+  at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB).
+- **logind `RemoveIPC` kills shm.** vLLM died with `'ShmRingBuffer' object
+  has no attribute 'shared_memory'` when systemd-logind wiped shm on ssh
+  session end. Fix: `loginctl enable-linger nvidia` on both nodes.
+- **TP2 preparation hangs from an empty plan cache.** Any b12x commit past
+  `a8333658` that grows the MoE-retune candidate contract (222 → 349-837
+  candidates) enters a multi-batch candidate-racing path in
+  `b12x/preparation/session.py` that deadlocks a from-empty-cache TP=2
+  retune. The proximate trigger is the RoCE one-shot collective's default
+  spin limit (`B12X_ROCE_SPIN_LIMIT`, ~20 s) expiring before the two ranks'
+  MoE candidate racing converges, which poisons the runtime instead of just
+  waiting longer. Fix: `B12X_ROCE_SPIN_LIMIT: "300000000"` (~300 s) in the
+  recipe env plus `mods/b12x-startup-boundedwait/` (bounded `Store.wait` in
+  the fork's `B12xPreparationCoordinator._exchange()`, fails fast instead of
+  parking forever). Both are in the default recipe. Full trace:
+  `results/kernel-pass/prep-deadlock/mechanism.md`.
+- **TC-45 parser bug.** Qwen3's reasoning and tool parsers collapse onto one
+  shared `ParserEngine` (`vllm/parser/parser_manager.py`,
+  `vllm/parser/qwen3.py`) whose `adjust_request()` never builds a tool-choice
+  grammar, so `tool_choice=required` is silently unconstrained. Same gap for
+  every model on the shared engine (Kimi K2, GLM-4.7-MoE, DeepSeek variants,
+  Gemma4, Mistral, SeedOss, NemotronV3, Minimax M2). Fix exists
+  (`mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100) but is not
+  enabled — see Quality gates above.
+- **`scripts/gate_arm.sh`** needs `--hardmode` to run all 88 scenarios; the
+  first `la` gate accidentally ran the 69-scenario default set and gave a
+  score that wasn't comparable — fixed, always pass `--hardmode` for a real
+  promotion decision.
+
+## Build provenance
+
+Own image `spark-vllm-b12x:local-20260918-a8333658` was built locally from
+eugr's Dockerfile plus the fork pins above. To make the build reproducible
+off this hardware, wheels for vLLM, FlashInfer and b12x were built on the
+dgx-01 self-hosted GitHub Actions runner and published as an immutable
+release, then a public hosted (arm64) runner assembled and pushed the ghcr
+image from those wheels:
+
+- Build repo: https://github.com/ursuciprian/spark-vllm-b12x
+- Wheel release: `wheels-20260919-77bdd10-a833365` (vLLM `77bdd10`, b12x
+  `a833365`), each asset with a `.sha256` and `build-metadata.yaml`.
+- Image: `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365`,
+  digest `sha256:c0314d7c…`.
+- Forks: `ursuciprian/vllm@dgx-spark` (`8e1f1e58` + the TC-45 parser fix +
+  the bounded-wait startup fix + an optional reduced-vocab draft head, not
+  used by the default recipe), `ursuciprian/b12x@dgx-spark` (`a8333658`) with
+  `exp/fwd-57f3572` for the rejected forward-port arm.
+- The recipe that serves this image, `eugr-agents-serve-local16-la-ghcr.yaml`,
+  is on an open PR (#8) and has not been pulled or gated on the nodes yet —
+  do not switch the default to it until it has a `la`-comparable screen.
+
+## Repo map
 
 | Path | What |
 |---|---|
-| `recipes/` | The four recipes; `recipes/mods` links to `mods/` |
-| `mods/` | The three engine patches, with a README explaining each |
-| `scripts/` | `run.sh`, `detect-fabric.sh`, `validate_recipes.py`, `recipe_metadata.py`, `gate_37111.py`, `needle_ladder.py` |
-| `results/` | `RESULTS.md`, the grids behind it, the fp8 quality gate reports |
-| `.sparkrun/registry.yaml` | Registry manifest |
+| `recipes/eugr/` | The served recipe family. `eugr-agents-serve-local16-la.yaml` (default), `-local16.yaml` (fallback), `-la-ghcr.yaml` (ungated, PR #8). Everything else under here is an arm tried and either promoted (baked into the default) or rejected — see `results/kernel-pass/arms.md` for the record. |
+| `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route. |
+| `mods/` | Engine patches, one directory per mod, `mods/README.md` has details for the SGLang-era mods (stale for the newer vLLM/b12x ones — see below). |
+| `scripts/` | `gate_arm.sh` (full quality gate, needs `--hardmode`), `fidelity_probe.py`, `prof_summary.py`, `needle_ladder.py`, `decode_probe.py`, `validate_recipes.py`, `run.sh`, and the arm-bisection scripts (`vllm_ladder.sh`, `qwen_ladder*.sh`, …). |
+| `results/kernel-pass/`, `results/profiling/`, `results/arms/` | The 2026-09-18/19 arms, hang evidence, and per-kernel profile behind the tables above. |
+| `results/eugr-b12x/`, `results/fp8-gate/`, `results/sglang-*`, `results/vllm-cached-*` | Earlier (pre-09-18) SGLang/vLLM-nightly measurements, kept for history. |
+| `misc/` | Working notes not promoted into a result file. |
+
+### Mods, one line each
+
+Current as of 2026-09-19; `mods/README.md` only documents the SGLang-era mods
+(`sglang-*`, `vllm-flashnext-nightly-8a728663`, `vllm-qsa-fp8kv-pr55557`) and
+needs a follow-up pass to cover the rest:
+
+- `b12x-startup-boundedwait` — **in the default recipe.** Bounded-wait fix for
+  the TP2 preparation deadlock (see Known issues).
+- `b12x-startup-trace` — diagnostic instrumentation for the same handshake,
+  kept for future debugging, not in the served recipe.
+- `b12x-revert-06809d5` — reverse-applies a b12x commit to unblock the first
+  hang barrier; superseded (the forward-ported fix it enabled was itself
+  rejected), kept for reference.
+- `b12x-fwd-57f3572` — forward-ports b12x's native W4A16 MoE-autotune fix onto
+  the old image; the resulting arm was rejected (see table above).
+- `vllm-qwen-scratch-isolation` — documents the fork's QSA/GDN scratch-isolation
+  fix that removed the batch 5-7 straggler; baked into the image, not applied
+  as a live mod.
+- `vllm-tc45-reasoning-structag-fix` — fixes TC-45 (`tool_choice=required`);
+  not enabled by default, costs ~-12% c1 throughput (see Quality gates).
+- `vllm-decode-profiler` — rank-local `torch.profiler` wrapper used for the
+  per-kernel profile above; no cross-rank RPC, avoids the `--profiler-config`
+  endpoint deadlock.
+- `vllm-dv-devicefix` — device-placement fixes for the reduced-draft-vocab MTP
+  head experiment; boots clean but the arm is rejected (0% acceptance).
+- `vllm-spec-trace` — diagnostic per-step spec-decode tracer used to chase the
+  batch 5-7 straggler; not in the served recipe.
+- `sglang-gdn-b12x-decode` — SGLang-era: routes SGLang's GDN decode to the
+  b12x CuTeDSL kernel; not used by the vLLM route this repo now serves.
+- `sglang-sm121-qsa-fp8kv`, `vllm-flashnext-nightly-8a728663`,
+  `vllm-qsa-fp8kv-pr55557`, `sglang-radix-chunked-insert-fix` — SGLang/vLLM-
+  nightly era, documented in `mods/README.md`.
+
+## Hardware
+
+- 2x DGX Spark: GB10, SM121, 128 GB LPDDR5X unified memory.
+- ConnectX-7 RoCE between the nodes.
 
 ## Credits
 
