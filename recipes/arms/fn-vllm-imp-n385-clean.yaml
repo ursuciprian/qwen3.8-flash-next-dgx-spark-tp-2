@@ -1,0 +1,112 @@
+# NOTE 2026-09-09: KV dtype forced to auto (bf16). On nightly 385dce36 the upstream QSA path
+# refuses fp8: 'NotImplementedError: Qwen4Exp QSA requires a BF16 main KV cache'. The community
+# ops_qsa.py/qsa.py overlays that added fp8 KV support were built against 8a728663 and cannot be
+# mounted on this build (they crash in indexer_qsa.py). So this build costs roughly half the KV
+# pool until that patch is rebuilt against it. Kept here because the point of the arm is whether
+# upstream #53945 removes the need for disable_eagle_block_drop.
+# vLLM arm: nightly 385dce36 with only the kv_cache_utils.py overlay mounted.
+# The other five overlays are dropped: FP8_PB_WO is now upstream in this build's modelopt.py
+# (9 hits), and the SM121 op fixes shipped with the model going native. Keeping the 8a728663
+# copies of ops_qsa.py/qsa.py over this build crashes at load in indexer_qsa.py:279 with
+# 'split_with_sizes expects split_sizes to sum exactly to 2560 ... got [512, 128]'.
+# kv_cache_utils.py stays: PR #55390 is still open, this build has no qwen4_exp gate.
+# No disable_eagle_block_drop, so this also tests whether #53945 makes the workaround needless.
+description: Qwen3.8-Flash-Next nvidia/NVFP4 vLLM TP2 - MTP3 + prefix caching + drafter overlay + expert parallel, stock block drop
+name: fn-vllm-imp-n385-clean
+model: nvidia/Qwen3.8-Flash-Next-NVFP4
+container: vllm/vllm-openai:nightly-385dce36bcee42309924a5ece951a96db3dce7f2
+runtime: vllm-distributed
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  description: tonyd2wild TP2 SPEED profile, nvidia checkpoint, five sha-verified upstream overlays mounted
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.70
+  served_model_name: qwen3.8-flash-next
+  revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+  max_model_len: 262144
+  max_num_seqs: 6
+  max_num_batched_tokens: 4096
+  num_speculative_tokens: 3
+
+executor_config:
+  # The upstream nightly declares ENTRYPOINT ["vllm","serve"], which would parse
+  # sparkrun's launcher as its own flags. flashnext-vllm.yaml clears it the same way.
+  entrypoint: ""
+  cap_add:
+    - SYS_PTRACE
+    - IPC_LOCK
+  shm_size: 32gb
+  volumes:
+    # the five upstream overlays, byte-identical to their PROVENANCE.md sha256s
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/fn-vllm-nvidia-fc694b54/kv_cache_utils.py:/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_utils.py:ro
+
+env:
+  # theirs, verbatim
+  HF_HUB_OFFLINE: '1'
+  TRANSFORMERS_OFFLINE: '1'
+  VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  CUTE_DSL_ARCH: sm_121a
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_DISABLE_VERSION_CHECK: '1'
+  VLLM_USE_DEEP_GEMM: '0'
+  VLLM_USE_V2_MODEL_RUNNER: '1'
+  NCCL_NET: IB
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_ADDR_FAMILY: AF_INET
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  NCCL_IB_MERGE_NICS: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_IGNORE_CPU_AFFINITY: '1'
+  NCCL_DEBUG: WARN
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: '1'
+  VLLM_HTTP_TIMEOUT_KEEP_ALIVE: '600'
+  # OURS: fabric retarget. They pin ONE HCA (rocep1s0f0); we have two active and every
+  # recipe here uses both. Kept as ours for arm 1 so it boots; "one HCA" is a later arm.
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_ADDR_RANGE: 192.168.100.0/24
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  TP_SOCKET_IFNAME: enp1s0f1np1
+  MN_IF_NAME: enp1s0f1np1
+
+command: |
+  vllm serve {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --quantization modelopt \
+    --tensor-parallel-size {tensor_parallel} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --no-enable-flashinfer-autotune \
+    --enable-prefix-caching \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_xml \
+    --default-chat-template-kwargs '{{"enable_thinking": false}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens}}}' \
+    --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
+    --enable-expert-parallel \
+    --all2all-backend allgather_reducescatter \
+    --kv-cache-dtype auto
+
+recipe_version: '1'
+builder: docker-pull

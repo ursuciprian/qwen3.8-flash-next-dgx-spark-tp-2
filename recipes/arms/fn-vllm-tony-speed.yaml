@@ -1,0 +1,137 @@
+# Arm 1 of the vLLM lane: tonyd2wild TP2 SPEED profile, as published, on our fabric.
+#
+# Source: tonyd2wild/Qwen3.8-Flash-Next-NVFP4-DGX-Spark
+#   single-spark-vllm-tp1/launch/qwen38fn-nvidia-tp2.sh @ 2026-09-05 (Kai / Tech2Wild)
+# Their measured result on 2x GB10, 2026-09-05: 53.7 tok/s median single stream over
+# 40 mixed prompts, 97.9 aggregate at x6, cold prefill 1754/2784/2708 at 7K/28K/113K,
+# KV pool 1.97M tokens. Their raw log (bench_tp2_ram_nocompile_chunk4096_070.log)
+# shows c1 decode of 34-40 on mixed summary/format prompts - i.e. on par with our
+# SGLang recipe. The gap they open is cold prefill (~3x ours) and TTFT (180 ms).
+#
+# Everything below is their flag set verbatim except what MUST differ to boot here.
+#   OURS: modelopt.py overlay is patches/fn-vllm-nvidia-fc694b54/, not theirs. NVIDIA
+#         commit fc694b54 (2026-09-05 23:36) renamed the MTP experts algo in config.json
+#         FP8_BLOCK_SCALES -> FP8_PB_WO; every community overlay predates it and fails
+#         to load on this snapshot. Ours is theirs + that one name in the dispatch.
+# Each deviation is marked "OURS:".
+#
+#   OURS: checkpoint from the HF cache (sparkrun mounts it), not /var/tmp/models
+#   OURS: fabric enp1s0f1np1 / rocep1s0f1,roceP2p1s0f1 / 192.168.100.x - theirs is
+#         enp1s0f0np0 / rocep1s0f0 / 192.168.192.x. Same retarget every recipe in
+#         this repo already carries; left as theirs, NCCL falls back to WiFi TCP.
+#   OURS: --distributed-executor-backend / --nnodes / --node-rank / --master-addr
+#         are supplied by sparkrun's vllm-distributed runtime, not the command.
+#   OURS: taskset dropped for arm 1. Their script has none; add back as a later arm.
+#
+# Their SPEED profile == PLE_MODE=none (stock loader, table in unified memory, each
+# rank holds half) + GRAPHS=nocompile. That path mounts NO ple patch files, only
+# the five upstream overlays. So arm 1 mounts exactly those five, sha-verified
+# against their PROVENANCE.md (patches/tonyd2wild-vllm/upstream-overlays/).
+#
+# Not enabled in arm 1, deliberately - each is a later arm:
+#   --enable-prefix-caching        they run it OFF; our workload is cached turns
+#   index_share_for_mtp_iteration  their MTP_INDEX_SHARE=1 knob, unmeasured by them
+#   --async-scheduling             their ASYNC_SCHED=1 knob, unmeasured by them
+#   DRAFT_VOCAB=65536              FR-Spec reduced-vocab drafting, measured once, not default
+#   MTP 4                          their own A/B: 31.8 vs 30.6, a wash. Skip.
+description: Qwen3.8-Flash-Next nvidia/NVFP4 on vLLM TP2 - tonyd2wild SPEED profile verbatim (MTP3, seqs 6, chunk 4096, fp8 KV, gmu 0.70, mode 0 FULL_DECODE_ONLY)
+name: qwen38-flash-next-nvidia-nvfp4-vllm-tony-speed
+model: nvidia/Qwen3.8-Flash-Next-NVFP4
+container: vllm/vllm-openai:nightly-8a728663c1c3eeace834a95f5654fa653cc1998c
+runtime: vllm-distributed
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  description: tonyd2wild TP2 SPEED profile, nvidia checkpoint, five sha-verified upstream overlays mounted
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.70
+  served_model_name: qwen3.8-flash-next
+  revision: fc694b54fb0174e0913e6adf86691ef85a4ead47
+  max_model_len: 262144
+  max_num_seqs: 6
+  max_num_batched_tokens: 4096
+  num_speculative_tokens: 3
+
+executor_config:
+  # The upstream nightly declares ENTRYPOINT ["vllm","serve"], which would parse
+  # sparkrun's launcher as its own flags. flashnext-vllm.yaml clears it the same way.
+  entrypoint: ""
+  cap_add:
+    - SYS_PTRACE
+    - IPC_LOCK
+  shm_size: 32gb
+  volumes:
+    # the five upstream overlays, byte-identical to their PROVENANCE.md sha256s
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/ops_ple.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/ple.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/ops_qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/ops/qsa.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/qsa.py:/usr/local/lib/python3.12/dist-packages/vllm/models/qwen4_exp/nvidia/qsa.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/tonyd2wild-vllm/upstream-overlays/platforms_interface.py:/usr/local/lib/python3.12/dist-packages/vllm/platforms/interface.py:ro
+    - /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/patches/fn-vllm-nvidia-fc694b54/modelopt.py:/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py:ro
+
+env:
+  # theirs, verbatim
+  HF_HUB_OFFLINE: '1'
+  TRANSFORMERS_OFFLINE: '1'
+  VLLM_ENGINE_READY_TIMEOUT_S: '3600'
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  CUTE_DSL_ARCH: sm_121a
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_DISABLE_VERSION_CHECK: '1'
+  VLLM_USE_DEEP_GEMM: '0'
+  VLLM_USE_V2_MODEL_RUNNER: '1'
+  NCCL_NET: IB
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_ADDR_FAMILY: AF_INET
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  NCCL_IB_MERGE_NICS: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_IGNORE_CPU_AFFINITY: '1'
+  NCCL_DEBUG: WARN
+  TORCH_NCCL_ASYNC_ERROR_HANDLING: '1'
+  VLLM_HTTP_TIMEOUT_KEEP_ALIVE: '600'
+  # OURS: fabric retarget. They pin ONE HCA (rocep1s0f0); we have two active and every
+  # recipe here uses both. Kept as ours for arm 1 so it boots; "one HCA" is a later arm.
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_ADDR_RANGE: 192.168.100.0/24
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  TP_SOCKET_IFNAME: enp1s0f1np1
+  MN_IF_NAME: enp1s0f1np1
+
+command: |
+  vllm serve {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --quantization modelopt \
+    --tensor-parallel-size {tensor_parallel} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --no-enable-flashinfer-autotune \
+    --no-enable-prefix-caching \
+    --reasoning-parser qwen3 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_xml \
+    --default-chat-template-kwargs '{{"enable_thinking": false}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens}}}' \
+    --compilation-config '{{"mode":0,"cudagraph_mode":"FULL_DECODE_ONLY"}}' \
+    --kv-cache-dtype fp8_e4m3
+
+recipe_version: '1'
+builder: docker-pull

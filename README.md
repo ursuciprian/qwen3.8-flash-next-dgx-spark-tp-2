@@ -219,26 +219,50 @@ llama-benchy T1 24.1 tok/s at one stream against 36.7 on our vLLM recipe
 
 ## Credits
 
+The vLLM route now served by default (`recipes/eugr/eugr-agents-serve-local16-la.yaml`,
+image `spark-vllm-b12x:local-20260918-a8333658`) is built on other people's work.
+Exact pins:
+
+- [eugr](https://github.com/eugr) (Eugene Rakhmatulin):
+  [spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) at `798528a2`
+  (2026-09-16) is the Dockerfile our image is built from, unchanged except for the
+  build-plumbing fixes in `~/GEN-AI/build/apply_submodule_fix.py`;
+  [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 launches every recipe here and
+  defines the recipe/mod format; [llama-benchy](https://github.com/eugr/llama-benchy)
+  at `e9be344` measured the concurrency sweeps; the `eugr-agents` recipe family
+  started as his `eugr-agents.yaml`.
+- [local-inference-lab](https://github.com/local-inference-lab) (Luke Alonso):
+  the vLLM fork [local-inference-lab/vllm](https://github.com/local-inference-lab/vllm)
+  branch `dev/jovian-judgement` at `8e1f1e58` (2026-09-16), which carries the
+  Qwen3.8-Flash-Next model code, MTP drafter and the QSA scratch-isolation fix that
+  removed our batch 5-7 straggler; the [b12x](https://github.com/local-inference-lab/b12x)
+  kernels at `a8333658` (2026-09-17): GDN prefill/decode, NVFP4 GEMM, kernel
+  autotune and plan cache; the checkpoint
+  [local-inference-lab/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
+  QAD revision `7c4f1bc1` (2026-09-16).
+- [MiaAI-Lab](https://github.com/MiaAI-Lab): the fast sparse-attention SGLang
+  profile the SGLang recipes grew from, the llama-benchy measurement spec, the
+  expert-parallel launch shape, and the 47,149-id draft-vocab table
+  `files/draft_vocab_en_code_47k.txt` from
+  [Qwen3.8-Flash-Next-Dual-DGX-Sparks](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Dual-DGX-Sparks)
+  at `3f99abc2` (2026-09-16), used to test the reduced-vocab MTP head (AGPL-3.0;
+  used locally, not redistributed in this repo or in our image tags).
 - [RadixArk](https://huggingface.co/RadixArk): the NVFP4 checkpoint the SGLang
   recipes serve, and the day-0 SGLang engine work for this model.
 - [tonyd2wild](https://github.com/tonyd2wild): the vLLM SM121 overlays and the
-  TP2 profile the vLLM recipe grew from, and the 40-prompt category harness used
-  for every decode, TTFT and cold-prefill figure here.
-- [MiaAI-Lab](https://github.com/MiaAI-Lab): the fast sparse-attention SGLang
-  profile the SGLang recipes grew from, the llama-benchy measurement spec, and
-  the expert-parallel launch shape.
+  TP2 profile the first vLLM recipe grew from, and the 40-prompt category harness
+  (`tools/tony-bench`) behind every decode, TTFT and cold-prefill figure here.
 - [Weschera](https://github.com/Weschera): spark-bench, the 76-scenario graded
   eval behind the fp8 quality gate.
-- [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench, the
-  15-scenario tool-calling gate.
-- [eugr](https://github.com/eugr): sparkrun, and the recipe and mod format this
-  registry follows.
+- [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench
+  2.6.1 (`--hardmode`, 88 scenarios), the tool-calling gate.
 - Upstream: sgl-project/sglang#36845 and #38855, vllm-project/vllm#53945 and
   #55557, whose authors fixed the kernels these recipes depend on.
 
 Their work made this run faster on my hardware. The measurements, the
-cache-reuse diagnosis, the SM121 fp8 KV fix and the quality gate are mine, and
-so are any mistakes.
+cache-reuse diagnosis, the SM121 fp8 KV fix, the straggler root-cause and own
+image build, the `B12X_AUTOTUNE=1` finding, the quality gates and the
+draft-vocab experiments are mine, and so are any mistakes.
 
 ## License
 

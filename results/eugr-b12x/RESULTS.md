@@ -1,0 +1,68 @@
+# Qwen3.8-Flash-Next on eugr's b12x vLLM route, two DGX Sparks, 2026-09-15
+
+Recipe: eugr/spark-vllm-docker `recipes/qwen3.8-flash-next-nvfp4-cluster.yaml` (repo 3e1578b), run unchanged through `sparkrun run <recipe> --cluster dgx-cluster-cx7 --tp 2 --trust --no-follow`. Image `ghcr.io/spark-arena/dgx-vllm-eugr-nightly-b12x:latest` (79ecfeff, built 2026-09-13), vLLM fork `local-inference-lab/vllm` v0.1.dev20759, b12x kernel library. Checkpoint `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` (98.6 GiB, 37 shards, ada4da32). Model load 45 s with the b12x loader, 52 GiB per rank, healthy in about 9 minutes.
+
+All decode numbers below are `scripts/decode_probe.py` (Tony's method: streaming, temp 0, decode = (completion-1)/(t_last-t_first), three repeats, mean). The probe times `content` deltas; on vLLM the thinking phase streams as `reasoning_content`, so the node copy of the probe was patched to time reasoning deltas too. Before that patch the code lane reported FAILED on vLLM. Structured-lane spread inside one arm reaches +-15%; treat deltas under 10 tok/s as noise.
+
+## eugr route vs our SGLang recipe
+
+| lane | SGLang `flashnext-fp8kv-1m8` (Triton GDN, NEXTN 3) | SGLang + `--linear-attn-decode-backend cutedsl` | SGLang + flashinfer GDN | eugr b12x vLLM, first boot 08:37 | eugr b12x vLLM, later clean boots |
+|---|---|---|---|---|---|
+| code | 44.9 | probe failed (old probe) | 42.7 | probe failed (old probe) | 49-55 |
+| structured | 54.7 | 92.5 (one valid run) | 55.1 | 113.1 | 70-85 |
+| counting | 63.9 | 79.2 | 62.9 | 112.3 | 84-94 |
+| prose | 37.7 | 47.2 | 36.6 | 53.2 | 43-47 |
+| llama-benchy tg128 c1 | 37.5 | 36.5 | 37.3 | 39.1 | 42-46 |
+| llama-benchy pp2048 c1 | | | | 2612 | 2127-2368 |
+| tool-eval short | 93-95 (2026-09-14) | | | 100 | 100 on every arm |
+| essays T 0 to 1.0, 24 tries | | | | 0 loops, 42-47 tok/s | 0 loops |
+
+The 08:37 structured/counting figures (113/112) did not reproduce on six later boots of the same image and recipe (70-85 structured). Same image ID on both nodes for all runs. The bisect that ran between 10:06 and 10:52 was partly contaminated by numeric kernel checks running on the head GPU in a second container, so its one-flag deltas are not reported as findings; MTP off is the only clean result there: plain decode 32 tok/s on every lane, so MTP-4 is worth about 2.5x.
+
+## Agents ladder (recipes/eugr/eugr-agents*.yaml)
+
+Base changes for agent use: `max_num_seqs 8`, `max_num_batched_tokens 8192`, `gpu_memory_utilization 0.85`. Clean boots, no other GPU load.
+
+| arm | code | structured | counting | prose | tg128 c1 | tool-eval short |
+|---|---|---|---|---|---|---|
+| eugr-agents (MTP 4, RoCE 2MB) | 53.8 | 70.2 | 93.4 | 43.6 | 45.9 | 100 |
+| MTP 3 | 53.4 | 72.0 | 83.8 | 46.6 | 37.0 | 100 |
+| MTP 5, MTP 6 | boot failed: `QSA currently supports at most four speculative tokens` | | | | | |
+| RoCE all-reduce threshold 4MB | 55.4 | 85.3 | 90.5 | 44.4 | 42.3 | 100 |
+| RoCE all-reduce threshold 1MB | 49.0 | 70.9 | 94.4 | 43.0 | 42.3 | 100 |
+
+RoCE 4MB looked like the only arm outside the noise band on structured (83-87 vs 62-77) but the A/B/A re-check with five-repeat probes did not confirm it: RoCE 4MB 76.1 (70-85), base 79.0 (68-86). The threshold stays at 2MB. Five-repeat base numbers: code 51.6, structured 79.0, counting 89.6, prose 44.0. Tool-eval hardmode on the base recipe (T=1.0, thinking medium, 32 turns): 91/100, 77 passed, 6 partial, 5 failed, median turn 2.7 s. Prefix caching works: over the ladder 946k prefix-cache queries and 834k hits (88%); an identical 4k-token prompt goes 1.55 s, 0.21 s, 0.21 s. The usage field `prompt_tokens_details` is not filled by this fork, so client-side cached-token accounting reads None; the multi-turn prefix gate (68 requests, 5 concurrent growing chats) had 0 failures.
+
+## Sep 15 LPT4096 benchmark evidence
+
+The exploratory `llama-benchy` LPT4096 run used `pp=2048`, `tg=256`, depths 32768 and 65536, and concurrency 1/2/5. Values below are aggregate `ctx_tg` throughput (total / mean per-request tok/s); LPT is `lpt4096-benchy.csv`, and baseline is `serve-agents-benchy-65k.csv`.
+
+| depth | c | LPT ctx_tg total / req | baseline ctx_tg total / req | LPT cached tg256 | baseline cached tg256 |
+|---|---:|---:|---:|---:|---:|
+| 32k | 1 | 36.71 / 36.71 | 39.68 / 39.68 | 40.63 | 42.18 |
+| 32k | 2 | 53.40 / 31.84 | 35.40 / 24.77 | 54.35 | 58.01 |
+| 32k | 5 | 16.12 / 9.13 | 20.38 / 10.31 | 60.70 | 56.47 |
+| 65k | 1 | 42.85 / 42.85 | 40.41 / 40.41 | 39.25 | 41.70 |
+| 65k | 2 | 51.71 / 31.17 | 13.73 / 19.29 | 46.60 | 44.35 |
+| 65k | 5 | 10.87 / 6.33 | 7.09 / 5.85 | 58.80 | 58.04 |
+
+Cold context TTFT was mixed: at 65k/c2 LPT was 49,478.76 ms versus 42,235.31 ms baseline (about +17%); at 65k/c5 it was 91,438.77 ms versus 87,660.72 ms. These numbers do not establish a fix. Aggregate `ctx_tg` uses earliest-first-token to latest-last-token across overlapping/staggered requests, not a per-request denominator; peak columns are rates, not token-count assertions. This run did not use `--exact-tg`, so generated-length evidence is provisional. Sep 16 controlled confirmation is pending.
+
+## Sep 16: decode-aware prefill scheduling fixes the c5 depth collapse
+
+Root cause of the c2/c5 decode collapse at 32k-65k depth: this vLLM fork's scheduler defaults to `max_parallel_prefills=1` with round-robin service, so concurrent long prefills starve decode of already-running requests. `long_prefill_token_threshold` (tested Sep 15) does not touch this and made no reliable difference. The actual fix is `--max-parallel-prefills 4 --prefill-policy decode-aware --decode-refill-target auto`, which reserves a decode lane whenever runnable decode occupancy is below target.
+
+`ctx_tg` (decode immediately after a fresh long prefill), aggregate / per-request tok/s:
+
+| depth, concurrency | baseline | LPT4096 | decode-aware |
+|---|---|---|---|
+| 32k, c2 | 35.4 / 24.8 | 53.4 / 31.8 | 45.9 / 33.9 |
+| 32k, c5 | 20.4 / 10.3 | 16.1 / 9.1 | 23.7 / 18.9 |
+| 65k, c2 | 13.7 / 19.3 | 51.7 / 31.2 | 57.1 / 34.3 |
+| 65k, c5 | 7.1 / 5.9 | 10.9 / 6.3 | 17.8 / 11.4 |
+
+At 65k/c5, the worst cell, aggregate decode is ~2.5x baseline and per-request decode is ~2x. c1 decode is unaffected (43 tok/s at 32k, 43 tok/s at 65k, matching baseline within noise). This is now the default in `recipes/eugr/eugr-agents.yaml`. Raw data: `results/eugr-b12x/decode-aware-benchy.csv`.
+
+## SGLang b12x GDN kernel port (mods/sglang-gdn-b12x-decode)
+
+b12x installs into the SGLang nightly image (`pip install git+https://github.com/local-inference-lab/b12x@40bcdf82a03b`, Apache-2.0). The mod adds `B12xGDNKernel` behind SGLang's linear-attention kernel contract: `packed_decode` (v1) and `target_verify` for the NEXTN chain (v2), routed by two anchors in `GDNKernelDispatcher` when `SGLANG_GDN_B12X=1`. Numeric checks on GB10 against the Triton kernels passed (decode: |rmsnorm(triton) - b12x| <= 1e-3, states <= 1e-3; verify over 4 chained tokens: output <= 0.03 bf16, intermediate checkpoints <= 0.004, committed states untouched). The v1 arm (decode kernel only) measured the same as Triton under NEXTN, as expected: the target runs `target_verify`. The v2 arm (decode + verify on b12x) is broken in the live server although both isolated checks and a CUDA-graph replay check pass: acceptance length collapses to 1.0-1.5, output is repeated garbage, tool-eval 0/100. The call-site mismatch is not identified yet; an instrumented boot (`SGLANG_GDN_B12X_DEBUG=1`, in-situ Triton A/B on the real tensors) is queued. The cutedsl re-run with the fixed probe measured the same as Triton (44.8 / 56.7 / 62.8 / 39.5, tool-eval 97), so with NEXTN the GDN decode kernel choice does not move SGLang; only a working verify port could.

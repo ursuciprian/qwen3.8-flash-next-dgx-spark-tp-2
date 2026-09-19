@@ -44,4 +44,18 @@ else:
     if s.count(old) != 1:
         print(f"gdn-b12x: dispatcher anchor matched {s.count(old)} times, expected 1; refusing"); sys.exit(1)
     import ast; ast.parse(s.replace(old, new)); p.write_text(s.replace(old, new)); print(f"gdn-b12x: patched {p}")
+# 4. verify anchor: route NEXTN target_verify to the same kernel unless SGLANG_GDN_B12X_VERIFY=0
+old2 = ("        self.supports_packed_decode = getattr(\n"
+        "            self.decode_kernel, \"supports_packed_decode\", False\n"
+        "        )\n")
+new2 = old2 + ("        if os.environ.get(\"SGLANG_GDN_B12X\") == \"1\" and os.environ.get(\"SGLANG_GDN_B12X_VERIFY\", \"1\") == \"1\":  # " + tag + "\n"
+               "            self.verify_kernel = self.decode_kernel\n"
+               "            self.verify_kernel_is_flashinfer = False\n")
+s = p.read_text()
+if tag + "\n            self.verify_kernel" in s:
+    print("gdn-b12x: verify anchor already patched")
+else:
+    if s.count(old2) != 1:
+        print(f"gdn-b12x: verify anchor matched {s.count(old2)} times, expected 1; refusing"); sys.exit(1)
+    import ast; ast.parse(s.replace(old2, new2)); p.write_text(s.replace(old2, new2)); print("gdn-b12x: patched verify routing")
 PY

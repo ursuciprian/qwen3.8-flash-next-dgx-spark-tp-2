@@ -1,0 +1,147 @@
+--- patchroot/vllm/v1/worker/b12x_startup.py	2026-09-19 14:42:15
++++ patchroot_new/vllm/v1/worker/b12x_startup.py	2026-09-19 14:42:15
+@@ -10,15 +10,55 @@
+ 
+ from __future__ import annotations
+ 
++import logging as _logging
+ import os
+ import pickle
+ import time
+ from contextlib import nullcontext
++from datetime import timedelta as _timedelta
+ 
+ 
+ _CONTROL_GROUPS: dict[tuple[int, int], object] = {}
+ 
++# --- b12x-startup-trace instrumentation (diagnostic mod, no protocol change) ---
++# Rank-tagged tracing of the coordinator's round/exchange rendezvous, added to
++# root-cause a cross-rank deadlock (results/kernel-pass/prep-deadlock/). Writes
++# to stderr via its own logger/handler so it is visible regardless of vLLM's
++# logging config, and is fully additive: it observes state, never changes it,
++# except for replacing unbounded Store.get() calls with a 120s-bounded wait
++# that logs and retries instead of blocking forever (same eventual read, same
++# payload/decision format).
++_trace_log = _logging.getLogger("b12x_startup_trace")
++if not _trace_log.handlers:
++    _trace_handler = _logging.StreamHandler()
++    _trace_handler.setFormatter(_logging.Formatter("%(asctime)s [b12x-trace] %(message)s"))
++    _trace_log.addHandler(_trace_handler)
++    _trace_log.setLevel(_logging.INFO)
++    _trace_log.propagate = False
+ 
++
++def _bounded_get(store, key: str, *, rank: int, round_num: int, timeout_s: int = 120):
++    """Like store.get(key), but never blocks silently forever.
++
++    Polls store.wait([key], timeout) in a loop, logging every timeout instead
++    of hanging with no evidence. Returns the same value store.get(key) would.
++    """
++    while True:
++        started = time.monotonic()
++        try:
++            store.wait([key], _timedelta(seconds=timeout_s))
++            elapsed = time.monotonic() - started
++            _trace_log.info(
++                "GOT rank=%s round=%s key=%s waited=%.1fs", rank, round_num, key, elapsed
++            )
++            return store.get(key)
++        except Exception:
++            _trace_log.info(
++                "WAIT round=%s key=%s rank=%s %ss", round_num, key, rank, timeout_s
++            )
++            continue
++
++
+ def _scoped_key(key: str, ranks: tuple[int, ...]) -> str:
+     return f"{','.join(str(rank) for rank in ranks)}|{key}"
+ 
+@@ -101,17 +141,27 @@
+         return self._outcome()
+ 
+     def advance(self, *, cancel_tuning: bool = False) -> dict[str, object]:
+-        if self._timing is None:
+-            return self._advance(cancel_tuning=cancel_tuning)
+         started = time.perf_counter()
+-        if self._last_advance_end is not None:
++        if self._timing is not None and self._last_advance_end is not None:
+             self._timing.add("between_advances", started - self._last_advance_end)
+         try:
+             return self._advance(cancel_tuning=cancel_tuning)
+         finally:
+-            self._timing.add("advance", time.perf_counter() - started)
+-            self._timing.record("progress", periodic=not self._global_done, round=self._round)
+-            self._last_advance_end = time.perf_counter()
++            if self._timing is not None:
++                self._timing.add("advance", time.perf_counter() - started)
++                self._timing.record("progress", periodic=not self._global_done, round=self._round)
++                self._last_advance_end = time.perf_counter()
++            progress = self._last_progress
++            active_names = tuple(getattr(r, "name", repr(r)) for r in self._active_requests)
++            _trace_log.info(
++                "ADVANCE rank=%s round=%s local_done=%s global_done=%s "
++                "ready=%s ready_tuning=%s active_requests=%s candidates=%s/%s",
++                self.global_rank, self._round, self._local_done, self._global_done,
++                self._ready(), tuple(item[0] for item in self._ready_tuning()),
++                active_names,
++                None if progress is None else progress.candidates_prepared,
++                None if progress is None else progress.candidate_count,
++            )
+ 
+     def _advance(self, *, cancel_tuning: bool = False) -> dict[str, object]:
+         """Advance locally; exchange metadata only when local work is blocked."""
+@@ -184,14 +234,31 @@
+         return self._outcome()
+ 
+     def _exchange(self):
++        started = time.monotonic()
+         payload = self._payload()
+-        if self._control is None:
+-            return self._decision([payload])
+         prefix = f"round-{self._round}"
++        _trace_log.info(
++            "EXCHANGE ENTER rank=%s round=%s authority=%s key=%s/%s",
++            self.global_rank, self._round,
++            self.global_rank == self.world_ranks[0] if self._control is not None else True,
++            prefix, self.global_rank,
++        )
++        if self._control is None:
++            decision = self._decision([payload])
++            _trace_log.info(
++                "EXCHANGE EXIT rank=%s round=%s waited=%.1fs (no control group)",
++                self.global_rank, self._round, time.monotonic() - started,
++            )
++            return decision
+         self._control.set(f"{prefix}/{self.global_rank}", pickle.dumps(payload))
+         if self.global_rank == self.world_ranks[0]:
+             gathered = [
+-                pickle.loads(self._control.get(f"{prefix}/{rank}"))
++                pickle.loads(
++                    _bounded_get(
++                        self._control, f"{prefix}/{rank}",
++                        rank=self.global_rank, round_num=self._round,
++                    )
++                )
+                 for rank in self.world_ranks
+             ]
+             try:
+@@ -200,7 +267,18 @@
+                 self._record_error(error)
+                 decision = dict(stop=True, error=self._error, collective=None, tuning=(), done=False)
+             self._control.set(f"{prefix}/decision", pickle.dumps(decision))
+-        return pickle.loads(self._control.get(f"{prefix}/decision"))
++        result = pickle.loads(
++            _bounded_get(
++                self._control, f"{prefix}/decision",
++                rank=self.global_rank, round_num=self._round,
++            )
++        )
++        _trace_log.info(
++            "EXCHANGE EXIT rank=%s round=%s waited=%.1fs done=%s tuning_keys=%s",
++            self.global_rank, self._round, time.monotonic() - started,
++            result.get("done"), tuple(item[0] for item in result.get("tuning", ())),
++        )
++        return result
+ 
+     def _decision(self, gathered):
+         self._validate_domain(gathered)

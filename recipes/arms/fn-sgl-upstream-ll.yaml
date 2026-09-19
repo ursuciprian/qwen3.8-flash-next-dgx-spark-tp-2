@@ -1,0 +1,87 @@
+# SGLang arm: the upstream DGX Spark 2-node low-latency cell from sglang #37995, verbatim flags
+# (plus --enable-metrics/--enable-cache-report for our probes, our taskset, our NCCL env), on the
+# image the cookbook prescribes (dev-qwen38-next-local, qwen4-main-squashed 4ccff141db).
+# Claimed there: 50 tok/s single-stream (TPOT 19.9 ms), MTP accept 3.5-3.7 of 4, 1.48M KV pool.
+# Differences from our control: image, --no-ple-offload-embedding, mem 0.85, 24 requests / 120
+# mamba slots, track interval default 256, no explicit decode graph list, no bf16 SSM state,
+# context 262144, no --trust-remote-code.
+description: Qwen3.8-Flash-Next NVFP4 TP2 - upstream cookbook low-latency cell (sglang #37995) on dev-qwen38-next-local
+name: fn-sgl-upstream-ll
+model: RadixArk/Qwen3.8-Flash-Next-NVFP4
+runtime: sglang
+container: lmsysorg/sglang:dev-qwen38-next-local
+
+min_nodes: 2
+max_nodes: 2
+
+metadata:
+  description: MiaAI fast-QSA candidate, adapted. Their container image is not
+    published; this uses the public day-0 base with our SM121 QSA guard fix
+    bind-mounted, which is the same upstream fix (sgl-project/sglang#36556).
+    Network flags retargeted from their enp1s0f0np0 / rocep1s0f0 to this
+    cluster's enp1s0f1np1 / rocep1s0f1 - left unchanged, NCCL would fall back
+    to TCP over WiFi and cost 18-65 ms of jitter per decode step.
+  model_dtype: nvfp4
+  quantization: nvfp4
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  gpu_memory_utilization: 0.8
+  max_model_len: 110000
+  max_num_seqs: 10
+  served_model_name: qwen3.8-flash-next
+  revision: 7b719225242aacd3dbd3f9407468c2ee9a9d2594
+  max_total_tokens: 900000
+  chunked_prefill_size: 4096
+  speculative_num_steps: 3
+  speculative_num_draft_tokens: 4
+
+executor_config:
+  cap_add:
+    - SYS_PTRACE
+
+env:
+  PYTHONUNBUFFERED: '1'
+  NCCL_SOCKET_IFNAME: enp1s0f1np1
+  GLOO_SOCKET_IFNAME: enp1s0f1np1
+  NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
+  NCCL_IB_DISABLE: '0'
+  NCCL_IB_ROCE_VERSION_NUM: '2'
+  NCCL_IB_GID_INDEX: '3'
+  NCCL_NET: IB
+  NCCL_NET_PLUGIN: none
+  NCCL_NVLS_ENABLE: '0'
+  NCCL_CUMEM_ENABLE: '0'
+  NCCL_CROSS_NIC: '0'
+  TORCH_CUDA_ARCH_LIST: 12.1a
+  FLASHINFER_CUDA_ARCH_LIST: 12.1a
+
+command: |
+  taskset -c 5-9,15-19 python3 -m sglang.launch_server \
+    --model-path {model} \
+    --revision {revision} \
+    --served-model-name {served_model_name} \
+    --host {host} \
+    --port {port} \
+    --tp 2 \
+    --quantization modelopt_fp4 \
+    --fp4-gemm-backend flashinfer_cutlass \
+    --page-size 64 \
+    --chunked-prefill-size 4096 \
+    --context-length 262144 \
+    --speculative-algorithm NEXTN \
+    --speculative-num-steps 3 \
+    --speculative-eagle-topk 1 \
+    --speculative-num-draft-tokens 4 \
+    --max-running-requests 24 \
+    --max-mamba-cache-size 120 \
+    --reasoning-parser qwen3 \
+    --mem-fraction-static 0.85 \
+    --no-ple-offload-embedding \
+    --enable-metrics \
+    --enable-cache-report
+
+recipe_version: '2'
+builder: docker-pull
