@@ -23,8 +23,19 @@
 # still has no collapsed-engine re-pointing step, so that fix wasn't
 # superseded either.
 #
-# No mods: (same reasoning as -ghcr.yaml) both fixes are baked into the
-# image as source commits; a runtime mod would be redundant dead weight.
+# mods: [vllm-tc45-cheap-kk]. The image tag below moved past 57a80980 to
+# a229c7a1 (still cherry-picked onto ursuciprian/vllm@dgx-spark-kk), which
+# also carries the tool_choice=required parser fix (9e0825c968, a cherry
+# pick of 5d1df69f) -- but that fix still gates the structural-tag grammar
+# on tool_choice="auto" as well as required/named, costing ~10% single
+# -stream decode (c1 97 -> 85-88 tok/s, MTP acceptance 3.15 -> 2.77 tokens
+# per draft; see results/arms/tooleval-fix/cheap-design.md), and
+# parser_manager.py's collapse branch mutates the shared ParserEngine
+# subclass in place. vllm-tc45-cheap-kk applies the cheap-path rework
+# (patches/vllm-tc45-cheap/0003-tc45-cheap-kk-a229c7a1.patch) as a runtime
+# mod so this recipe doesn't need its own image build; the fix is on
+# ursuciprian/vllm@dgx-spark-kk (029b0a3220) for the next wheel build to
+# pick up, at which point the mod becomes redundant and can be dropped.
 # New volume path (not la's) because tuning_cache_version likely changed
 # under the KK vllm/b12x combination -- keeps la's own cache untouched.
 
@@ -45,8 +56,11 @@ build_args: []
 
 cluster_only: true
 
-# No mods: see header comment -- KK carries its own tuning-cache coordination
-# redesign, and both of our source fixes are baked into this image already.
+# See header comment: applies the cheap-path structural-tag fix
+# (patches/vllm-tc45-cheap/0003-tc45-cheap-kk-a229c7a1.patch) on top of the
+# image's baked-in tool_choice=required fix. KK still carries its own
+# tuning-cache coordination redesign, unrelated to this mod.
+mods: [vllm-tc45-cheap-kk]
 
 executor_config:
   volumes:
