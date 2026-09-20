@@ -1,0 +1,87 @@
+From 2bf88ae09ee16806da946e5ed5735b1f5276d09c Mon Sep 17 00:00:00 2001
+From: Ciprian Ursu <ciprian.ursu@deepstash.com>
+Date: Mon, 21 Sep 2026 00:37:49 +0300
+Subject: [PATCH] fix(parser): keep tool_choice="auto" structural tags for
+ strict tools
+
+v1 of the a229c7a1 cheap-path fix dropped "auto" from needs_structural_tag()
+outright. That was one step too far: get_model_structural_tag()
+(vllm/tool_parsers/structural_tag_registry.py) already returns None for
+tool_choice="auto" unless a tool sets strict: true, so plain auto never put
+a request on the structured-output path in the first place -- there was no
+per-step decode cost to remove there, only the wasted work of constructing a
+tool parser (a second parser engine, tokenizer vocab included) to be handed
+None back. Dropping auto unconditionally therefore bought nothing at decode
+time and silently broke strict schema enforcement under auto.
+
+Gate on the same rule the registry uses: required/named always, auto only
+when _any_tool_strict(tools). Behaviour is now identical to upstream, and
+the wasted tool-parser construction under plain auto is still gone.
+
+Matches patches/vllm-tc45-cheap/0001b (jovian) and 0002b (KK).
+---
+ vllm/parser/abstract_parser.py | 44 ++++++++++++++++++++++++----------
+ 1 file changed, 31 insertions(+), 13 deletions(-)
+
+diff --git a/vllm/parser/abstract_parser.py b/vllm/parser/abstract_parser.py
+index fca3af016e..e4d5db6197 100644
+--- a/vllm/parser/abstract_parser.py
++++ b/vllm/parser/abstract_parser.py
+@@ -405,23 +405,41 @@ class Parser:
+ def needs_structural_tag(
+     request: "ChatCompletionRequest | ResponsesRequest",
+ ) -> bool:
+-    """Whether the request must be grammar-constrained into a tool call.
+-
+-    Only ``required`` and named tool choices force one. ``auto`` leaves the
+-    model free to answer in prose, so a structural tag changes nothing it is
+-    allowed to emit -- but it does put the request on the engine's
+-    structured-output path for its whole lifetime: a per-step grammar bitmask
+-    fill, H2D copy and mask kernel, deferred sampling in
+-    EngineCore.step_with_batch_queue() (which drops async-scheduling overlap
+-    for the *whole* batch), and grammar rejection of speculative draft
+-    tokens. Keep the grammar for the case that actually needs it.
++    """Whether a structural tag could constrain this request at all.
++
++    A cheap pre-filter in front of attach_structural_tag, matching what
++    vllm.tool_parsers.structural_tag_registry.get_model_structural_tag would
++    decide anyway -- ``required`` and named choices get a grammar, and
++    ``auto`` gets one only when a tool opts into strict schema enforcement
++    (get_model_structural_tag: ``tool_choice == "auto" and not
++    _any_tool_strict(tools)`` -> None). Answering that here means an
++    ordinary agentic request (tools + auto, nothing strict) never
++    constructs a tool parser just to be handed None back -- a tool parser
++    is a ParserEngineToolAdapter, so building one builds a second parser
++    engine, tokenizer vocab included, on every request.
++
++    A grammar is not free once attached, either: the request is a
++    structured-output request for its whole lifetime, and the engine then
++    pays, every step, a grammar bitmask fill, H2D copy and mask kernel,
++    deferred sampling in EngineCore.step_with_batch_queue() (which drops
++    async-scheduling overlap for the *whole* batch), the draft-token D2H
++    copy async scheduling otherwise skips, and grammar rejection of
++    speculative draft tokens.
+     """
+-    if not getattr(request, "tools", None):
++    tools = getattr(request, "tools", None)
++    if not tools:
+         return False
+     tool_choice = getattr(request, "tool_choice", None)
+-    return tool_choice == "required" or isinstance(
++    if tool_choice == "required" or isinstance(
+         tool_choice, (ChatCompletionNamedToolChoiceParam, ToolChoiceFunction)
+-    )
++    ):
++        return True
++    if tool_choice != "auto":
++        return False
++    # Imported here so the common paths above never touch the registry.
++    from vllm.tool_parsers.structural_tag_registry import _any_tool_strict
++
++    return _any_tool_strict(tools)
+ 
+ 
+ def attach_structural_tag(
+-- 
+2.43.0
+

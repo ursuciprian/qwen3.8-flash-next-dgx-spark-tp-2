@@ -26,15 +26,21 @@
 # mods: [vllm-tc45-cheap-kk]. The image tag below moved past 57a80980 to
 # a229c7a1 (still cherry-picked onto ursuciprian/vllm@dgx-spark-kk), which
 # also carries the tool_choice=required parser fix (9e0825c968, a cherry
-# pick of 5d1df69f) -- but that fix still gates the structural-tag grammar
-# on tool_choice="auto" as well as required/named, costing ~10% single
-# -stream decode (c1 97 -> 85-88 tok/s, MTP acceptance 3.15 -> 2.77 tokens
-# per draft; see results/arms/tooleval-fix/cheap-design.md), and
-# parser_manager.py's collapse branch mutates the shared ParserEngine
-# subclass in place. vllm-tc45-cheap-kk applies the cheap-path rework
-# (patches/vllm-tc45-cheap/0003-tc45-cheap-kk-a229c7a1.patch) as a runtime
-# mod so this recipe doesn't need its own image build; the fix is on
-# ursuciprian/vllm@dgx-spark-kk (029b0a3220) for the next wheel build to
+# pick of 5d1df69f) -- but that fix unconditionally gated the structural-tag
+# grammar on tool_choice="auto" as well as required/named, wastefully
+# building a tool parser (a second parser engine) on every plain-auto
+# agentic request just to get None back (get_model_structural_tag() already
+# returns None for auto unless a tool sets strict: true -- see
+# results/arms/tooleval-fix/cheap-design.md), mutated the shared
+# ParserEngine subclass in place, and called
+# ParserManager._get_parser_engine_cls(), which was never ported into KK's
+# parser_manager.py -- crashing any server boot with both
+# --reasoning-parser and --tool-call-parser set. vllm-tc45-cheap-kk applies
+# the cheap-path rework (patches/vllm-tc45-cheap/0003 + 0003b
+# -tc45-cheap-kk-a229c7a1.patch: required/named always, auto only when a
+# tool is strict, per-call subclass, _get_parser_engine_cls restored) as a
+# runtime mod so this recipe doesn't need its own image build; the fix is
+# on ursuciprian/vllm@dgx-spark-kk (2bf88ae09e) for the next wheel build to
 # pick up, at which point the mod becomes redundant and can be dropped.
 # New volume path (not la's) because tuning_cache_version likely changed
 # under the KK vllm/b12x combination -- keeps la's own cache untouched.
