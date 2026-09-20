@@ -70,6 +70,75 @@ x6 37.7/112.6, x8 33.7/124.8.
   acceptance is much higher: 98.9% overall, 99.9/99.1/98.6/97.9% by position
   (`results/profiling/README.md`), 0 preemptions.
 
+## Cache-mount fix and ghcr image gate, 2026-09-20
+
+Root cause of "0 cached" / ~9-min boots on `la`: the recipe never mounted a
+persistent cache dir, and the container's `HOME=/tmp` (sparkrun's docker
+executor), so b12x's SelectionCache and vLLM/torch's own compile caches
+resolve under `/tmp/.cache` — wiped on every `sparkrun stop`+`run`. The
+plan-cache JSON the container writes fresh each boot has an identical
+identity hash to the one already on the host under
+`runtime-cache/.../b12x/compile/preparation/` (`b12x/preparation/_cache.py:
+cache_identity` only hashes `device_name`+`namespace`+version, not
+driver/firmware — both nodes run the same 580.173.02 driver). Fix: mount
+`runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-ca6f25af`
+at `/tmp/.cache` via `executor_config.volumes`. Applied to `la`, `local16`,
+and the ghcr variant. `la` boot log went from 0 cached / c1 86 to 272
+cached / c1 97.4.
+
+The ghcr recipe's first gate (`results/arms/ghcr`) ran *before* this fix
+existed (0 cached, ~9-min boot) — treat those numbers as tainted noise, not
+a real reading. Re-gated with the mount as `results/arms/ghcr2`: boot log
+confirms `272 cached` (same plan-cache hit as `la`, since both pin b12x SHA
+`a8333658`), health 200 in ~4 min (down from ~9).
+
+| | `la` (own build) | `ghcr` (tainted, 0 cached) | `ghcr2` (272 cached) |
+|---|---:|---:|---:|
+| c1 tok/s | 97.4 (boot band 85-99) | 85.6 | 87.7 |
+| c4 tok/s | 285.2 | 283.5 | 286.2 |
+| c8 tok/s | 412-442 | 429.9 | 433.7 |
+| c16 tok/s | 629.9 | 634.4 | 625.6 |
+| fidelity (8k/32k/64k/128k) | 100% exact x4 | 100% exact x4 | 100% exact x4 |
+| hardmode Quality | 88-91/100 | 86/100 | 89/100 |
+| TC-45 (`tool_choice=required`) | **fails every boot** | fails | **passes** |
+| straggler probe | clean | not run (`/tmp/straggler.py` lost) | clean, ~3.98 accepted/draft |
+
+`ghcr2`'s c1 (87.7) sits inside `la`'s own documented boot-to-boot noise
+band (85-99, see above) — one boot isn't enough to call it a regression
+distinct from that noise. c4/c8/c16 are all within a percent or two of `la`.
+Everything else (fidelity, hardmode, straggler) is equal or better, and
+`ghcr2` is the first boot of this stack, own build or ghcr, where TC-45
+passes.
+
+**TC-45 root-cause check.** `la` (and every prior own-build boot) fails
+TC-45 because `ParserManager`'s collapse branch and `ParserEngine.
+adjust_request()` never build the `tool_choice=required` structural tag for
+Qwen3 (see `mods/vllm-tc45-reasoning-structag-fix/run.sh` for the two-bug
+trace). The ghcr image (`wheels-20260919-77bdd10-a833365`) carries that fix
+as a source commit rather than a runtime mod. Diffed
+`vllm/parser/parser_manager.py`, `vllm/parser/engine/parser_engine.py`, and
+`vllm/parser/abstract_parser.py` between the running ghcr container and a
+container of `spark-vllm-b12x:local-20260918-a8333658` with
+`vllm-tc45-reasoning-structag-fix` applied (that mod scored 93/100 on
+`la-tc`, see above): **all three files are byte-identical**. So the ghcr
+image's parser code is exactly the mod's fix, baked in. The tainted `ghcr`
+gate still failed TC-45 (0/2, "No tool calls despite tool_choice=
+'required'") — most likely explained by the 0-cached boot's degraded state
+rather than a source gap, since the re-gated `ghcr2` (272 cached, otherwise
+identical image) passes TC-45 cleanly (2/2).
+
+**Verdict: promote `ghcr2` to serving**, replacing `la`. Rationale: real
+correctness win (TC-45 now passes, first time on this stack), quality equal
+or better everywhere else, and the only metric below `la`'s single-boot
+number (c1) is inside `la`'s own established noise band. `la-tc`'s earlier
+finding that the same fix (applied as a runtime mod) costs ~11% at c1
+(95.7 → 85.0) does not clearly replicate here — 85.0 and 87.7 are both
+within the noise band, so that cost claim may itself have been an
+unlucky boot rather than the fix's overhead. Recommend a repeat `ghcr2`
+boot before fully retiring that caveat. Pulls (`docker pull`) instead of
+requiring `build.sh` on every cluster host, superseding the ghcr recipe from
+PR #8.
+
 ## Rejected arms
 
 Gated against the `la` baseline (bar: +3% c1 or +5% c8, nothing else worse
