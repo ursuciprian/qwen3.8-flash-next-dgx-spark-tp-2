@@ -127,17 +127,36 @@ gate still failed TC-45 (0/2, "No tool calls despite tool_choice=
 rather than a source gap, since the re-gated `ghcr2` (272 cached, otherwise
 identical image) passes TC-45 cleanly (2/2).
 
-**Verdict: promote `ghcr2` to serving**, replacing `la`. Rationale: real
-correctness win (TC-45 now passes, first time on this stack), quality equal
-or better everywhere else, and the only metric below `la`'s single-boot
-number (c1) is inside `la`'s own established noise band. `la-tc`'s earlier
-finding that the same fix (applied as a runtime mod) costs ~11% at c1
-(95.7 → 85.0) does not clearly replicate here — 85.0 and 87.7 are both
-within the noise band, so that cost claim may itself have been an
-unlucky boot rather than the fix's overhead. Recommend a repeat `ghcr2`
-boot before fully retiring that caveat. Pulls (`docker pull`) instead of
-requiring `build.sh` on every cluster host, superseding the ghcr recipe from
-PR #8.
+**Verdict (revised): `la` stays the default, `ghcr2` is not promoted.**
+The "noise band 85-99" cited above was measured *before* the cache-mount bug
+was understood — those boots mixed cold (0/partial-cached) and warm
+(272-cached) runs, so the band is not a clean same-conditions comparison.
+With the cache fix applied to both and same-day, same-node re-checks:
+
+| c1 tok/s (3 rounds x 300 tok, `--levels 1`) | run 1 | run 2 | run 3 |
+|---|---:|---:|---:|
+| `la` (272 cached) | 97.4 (gate) | 98.1 | 96.4 |
+| `ghcr2` (272 cached) | 87.7 (gate) | 82.2 | 99.2 |
+
+`la` medians 97.4, consistently >=95 across three checks. `ghcr2` medians
+87.7 across three checks (one high outlier at 99.2, but two of three land
+~10% below `la`) — this matches `la-tc`'s earlier finding that the
+structural-tag parser path (the TC-45 fix, whether applied as a runtime mod
+or baked into the ghcr image's source) costs roughly -11% at c1 (95.7 →
+85.0 there; 97.4 → ~87.7-88 here). The parser source is confirmed
+byte-identical between the ghcr image and the mod-patched local image (see
+below), so this looks like a real cost of the fix itself, not a boot
+artifact.
+
+**Verdict: `ghcr2` is a quality win (TC-45 passes, first time on this
+stack) but a throughput regression (~-10% c1) versus `la`. `la` stays the
+default/serving recipe until the structural-tag parser path's slowdown is
+root-caused and fixed** (candidate follow-up: check whether
+`_apply_structural_tag()`'s extra work — schema tag construction, grammar
+compile — is on the hot per-request path at c1 and can be cached/skipped
+when tools don't change turn-to-turn). The ghcr recipe (this PR) is still
+useful as a pull-based alternative to `build.sh`, but is not the promoted
+default; re-run before re-promoting once the c1 cost is addressed.
 
 ## Rejected arms
 
