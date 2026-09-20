@@ -19,7 +19,7 @@ echo "-- health" | tee -a "$OUT/gate.log"
 curl -s -m 10 "$BASE/health" -w " HTTP:%{http_code}\n" | tee -a "$OUT/gate.log"
 
 echo "-- straggler (batches 5 6 7 8 12 16)" | tee -a "$OUT/gate.log"
-python3 /tmp/straggler.py 5 6 7 8 12 16 > "$OUT/straggler.log" 2>&1
+python3 "$REPO/scripts/straggler_probe.py" 5 6 7 8 12 16 > "$OUT/straggler.log" 2>&1
 tail -20 "$OUT/straggler.log" | tee -a "$OUT/gate.log"
 
 echo "-- fidelity_probe (8k/32k/64k/128k)" | tee -a "$OUT/gate.log"
