@@ -20,6 +20,10 @@ cluster_only: true
 
 mods: []
 
+executor_config:
+  volumes:
+    - "/home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-ca6f25af:/tmp/.cache"
+
 defaults:
   port: 8000
   host: 0.0.0.0
