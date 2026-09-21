@@ -1,0 +1,252 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dgx-build <build@dgx-01.local>
+Date: Sun, 21 Sep 2026 12:00:00 +0300
+Subject: [PATCH] logits: run the multi-row vocabulary projection on b12x
+ gemm.bf16_gemv
+
+The Qwen3.8-Flash-Next verify head ([124160, 2560] BF16 per node, 636 MB)
+costs 3.60 ms of a 55.03 ms c1 decode step -- 6.5% -- on cuBLAS's
+cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8, at 65%
+of the LPDDR5x roofline.
+
+It already takes the b12x route. `use_b12x_vocab_projection` is true, the head
+is registered, and its plans are primed ("b12x priming
+gemm.bf16_vocab_projection" in the boot log). The route is a dead end at
+M > 1: b12x.gemm.bf16_vocab_projection's tuning contract admits its Triton
+backend only for `max_tokens == 1` (_default_config, _validate_config and
+_tuning_parameters all gate on it), so every other capacity resolves to
+`backend="torch"` and `materialize` hands back
+`torch.nn.functional.linear`. The saved plan cache confirms it: exactly one
+gemm.bf16_vocab_projection record exists for this model, `{algorithm: row,
+backend: triton, block_k: 4096, num_warps: 4}` -- the M=1 plan -- and the
+torch backend compiles nothing, so no other capacity leaves a record.
+
+The Triton kernel cannot be widened in place: its grid is (N, rows) with one
+program per (vocab row, token row), so it re-reads the whole weight matrix per
+token. b12x.gemm.bf16_gemv's SIMT backend is the kernel for this shape --
+one CTA per output column, up to SMALL_M_MAX=8 source rows accumulated against
+a single weight load, vectorised 16B global loads. This declares a GEMV plan
+instead of a torch plan for every prepared capacity in 1 < M <= SMALL_M_MAX,
+and dispatches to it in _apply_head.
+
+Bit-exactness: NOT bit-identical. bf16 x bf16 products are exact in fp32 under
+both kernels, but the summation order differs (cuBLAS: 16x16x16 WMMA tiles
+walking K; b12x: 128-thread strided fp32 FMA chains plus a tree reduction), so
+the result differs by fp32 rounding, ~5e-6 relative over K=2560. Gate with
+scripts/logits_equiv.py at --tol 1e-3.
+
+Anything the GEMV cannot serve -- M = 1 (which keeps the Triton vocabulary
+GEMV), M > 8, a misaligned or non-contiguous hidden-state buffer, a
+quantized head, b12x absent -- keeps the stock path and is bit-identical to
+stock. VLLM_B12X_VOCAB_GEMV=0 reverts without a rebuild.
+
+Two log lines make the routing decision greppable at boot:
+  "b12x vocab projection plan: head=%dx%d capacity=%d component=%s"
+  "b12x vocab projection: rows=%d component=%s"
+
+Applies on top of 8e1f1e587f.
+---
+diff --git a/vllm/utils/b12x.py b/vllm/utils/b12x.py
+index f5c7e95a8138b34bcaeed0a3dcfb1aefa5b512eb..f35e9e29690383be4f9cdde10ba7fae25b0acbcc 100644
+--- a/vllm/utils/b12x.py
++++ b/vllm/utils/b12x.py
+@@ -257,6 +257,7 @@
+         "b12x.attention.compressed_sparse_mla",
+         "b12x.attention.dsa_indexer",
+         "b12x.attention.qsa",
++        "b12x.gemm.bf16_gemv",
+         "b12x.gemm.bf16_vocab_projection",
+         "b12x.gemm.blockscaled",
+         "b12x.gemm.mla_query_projection",
+@@ -292,6 +293,10 @@
+     return _get_submodule("b12x.gemm.blockscaled")
+ 
+ 
++def get_b12x_bf16_gemv() -> ModuleType | None:
++    return _get_submodule("b12x.gemm.bf16_gemv")
++
++
+ def get_b12x_bf16_vocab_projection() -> ModuleType | None:
+     return _get_submodule("b12x.gemm.bf16_vocab_projection")
+ 
+diff --git a/vllm/model_executor/layers/logits_processor.py b/vllm/model_executor/layers/logits_processor.py
+index b9804cb366d3f9961dcc1138d48bdbe77c3f9e59..79bd0d9dd7a82d0cce0f80bf18eecc2cb4eb5bbe 100644
+--- a/vllm/model_executor/layers/logits_processor.py
++++ b/vllm/model_executor/layers/logits_processor.py
+@@ -2,6 +2,7 @@
+ # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+ """A layer that compute logits from hidden_stats."""
+ 
++import os
+ from collections.abc import Callable, Sequence
+ from functools import cache
+ 
+@@ -24,6 +25,7 @@
+ from vllm.utils.b12x import (
+     B12xPreparationUnit,
+     B12xWorkload,
++    get_b12x_bf16_gemv,
+     get_b12x_bf16_vocab_projection,
+     set_b12x_preparation_provider,
+ )
+@@ -59,6 +61,49 @@
+     return impl(scores, k, sorted=True, deterministic=True)
+ 
+ 
++# ---------------------------------------------------------------------------
++# Multi-row vocabulary projection (b12x gemm.bf16_gemv)
++#
++# b12x's gemm.bf16_vocab_projection only owns a native kernel at
++# ``max_tokens == 1``: its tuning contract rejects the Triton backend for any
++# other capacity, so every multi-row plan resolves to ``backend="torch"``,
++# i.e. ``F.linear`` -> cuBLAS.  At an MTP verify step (M = 1 + speculative
++# tokens) that is cuBLAS's one-warp SM80 WMMA small-M fallback: measured
++# 3.60 ms/step for a [124160, 2560] BF16 head on GB10, 65% of the LPDDR5x
++# roofline, while the weight is streamed exactly once either way.
++#
++# gemm.bf16_gemv's SIMT backend loads each weight row once and accumulates up
++# to ``SMALL_M_MAX`` source rows against it -- exactly the verify shape.  It is
++# NOT bit-identical: both kernels accumulate bf16 products (which are exact in
++# fp32) into fp32 registers, but in a different order.
++#
++# ``VLLM_B12X_VOCAB_GEMV=0`` reverts to the stock route without a rebuild.
++# See results/kernel-pass/lmhead-hc-design.md.
++# ---------------------------------------------------------------------------
++_VOCAB_GEMV_ENABLED = os.getenv("VLLM_B12X_VOCAB_GEMV", "1").lower() not in (
++    "0",
++    "off",
++    "false",
++    "no",
++)
++
++
++@cache
++def _b12x_vocab_gemv():
++    """The b12x small-M BF16 GEMV module, or None when it cannot serve here."""
++    if not _VOCAB_GEMV_ENABLED:
++        return None
++    api = get_b12x_bf16_gemv()
++    if api is None:
++        return None
++    try:
++        if not api.is_supported():
++            return None
++    except Exception:  # noqa: BLE001 - absence is a routing decision
++        return None
++    return api
++
++
+ # --8<-- [start:logits_processor]
+ @PluggableLayer.register("logits_processor")
+ class LogitsProcessor(PluggableLayer):
+@@ -144,18 +189,56 @@
+     def _b12x_vocab_name(self, head: VocabParallelEmbedding, tokens: int) -> str:
+         return f"logits.vocab.{id(self):x}.{id(head):x}.m{tokens}"
+ 
+-    def _declare_b12x_vocab_plan(self, head: VocabParallelEmbedding, rows: int):
++    def _declare_b12x_vocab_plan(
++        self,
++        head: VocabParallelEmbedding,
++        rows: int,
++        *,
++        gemv: bool = False,
++    ):
+         projection = self._b12x_vocab_projection
+         assert head is not None and projection is not None
+         out_features, in_features = map(int, head.weight.shape)
+-        return projection.plan(
+-            projection.Caps(
+-                device=head.weight.device,
+-                max_tokens=rows,
+-                in_features=in_features,
+-                out_features=out_features,
++        api = _b12x_vocab_gemv() if gemv and rows > 1 else None
++        if (
++            api is not None
++            and rows <= api.SMALL_M_MAX
++            and in_features % 8 == 0
++            and head.weight.is_contiguous()
++            and not head.weight.data_ptr() % 16
++        ):
++            # A prepared exact-capacity GEMV; the launch grid uses the live
++            # row count, so one plan serves every M up to ``rows``.
++            plan = api.plan(
++                api.GemvQuery(
++                    source_dtype="bfloat16",
++                    weight_dtype="bfloat16",
++                    max_rows=rows,
++                    in_features=in_features,
++                    out_features=out_features,
++                    source_contiguous=True,
++                    source_aligned=True,
++                    weight_contiguous=True,
++                    weight_aligned=True,
++                )
++            )
++        else:
++            plan = projection.plan(
++                projection.Caps(
++                    device=head.weight.device,
++                    max_tokens=rows,
++                    in_features=in_features,
++                    out_features=out_features,
++                )
+             )
++        logger.info(
++            "b12x vocab projection plan: head=%dx%d capacity=%d component=%s",
++            out_features,
++            in_features,
++            rows,
++            plan.contract.component_id,
+         )
++        return plan
+ 
+     def _b12x_vocab_call(self, head: VocabParallelEmbedding, rows: int):
+         in_features = int(head.weight.shape[1])
+@@ -217,10 +300,16 @@
+                 continue
+             plans = self._b12x_vocab_plans.setdefault(head_id, {})
+             requests = []
+-            for tokens in workload.token_counts:
++            # The MTP verify step is exactly 1 + speculative_tokens rows wide,
++            # which need not be a captured graph size; declare it so the
++            # capacity lookup cannot skip past the GEMV window.
++            wanted = {int(count) for count in workload.token_counts}
++            if workload.speculative_tokens:
++                wanted.add(1 + int(workload.speculative_tokens))
++            for tokens in sorted(wanted):
+                 plan = plans.get(tokens)
+                 if plan is None:
+-                    plan = self._declare_b12x_vocab_plan(head, tokens)
++                    plan = self._declare_b12x_vocab_plan(head, tokens, gemv=True)
+                     plans[tokens] = plan
+                 call = self._b12x_vocab_call(head, tokens)
+                 requests.append(
+@@ -300,6 +389,25 @@
+                 # this capacity lookup is plain Python, not traced.
+                 flat = hidden_states.reshape(-1, hidden_states.shape[-1])
+                 plan = self._b12x_vocab_plan_for(lm_head, int(flat.shape[0]))
++                logger.info_once(
++                    "b12x vocab projection: rows=%d component=%s",
++                    int(flat.shape[0]),
++                    plan.contract.component_id,
++                )
++                if plan.contract.component_id == "gemm.bf16_gemv":
++                    api = _b12x_vocab_gemv()
++                    # The GEMV's prepared state re-checks layout and raises;
++                    # anything it cannot serve takes the stock cuBLAS path.
++                    if (
++                        api is not None
++                        and flat.is_contiguous()
++                        and not flat.data_ptr() % 16
++                    ):
++                        logits = api.mm(flat, lm_head.weight, plan=plan)
++                        return logits.reshape(*hidden_states.shape[:-1], -1)
++                    return lm_head.quant_method.apply(
++                        lm_head, hidden_states, bias=embedding_bias
++                    )
+                 projection = self._b12x_vocab_projection
+                 assert projection is not None
+                 binding = projection.bind(
+-- 
+2.43.0

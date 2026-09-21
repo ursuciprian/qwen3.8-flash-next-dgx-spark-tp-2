@@ -2,7 +2,7 @@
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents-serve-local16-la
+name: eugr-agents-serve-local16-la-lmq
 description: "Arm 2 (la): local16 + use_local_argmax_reduction:true in the MTP speculative config (communication-only optimization, no rebuild -- same container as local16)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
@@ -64,16 +64,6 @@ env:
   B12X_POLICY_MODE: "auto"
   VLLM_ENABLE_ROCE_ALLREDUCE: "1"
   VLLM_ROCE_ALLREDUCE_MAX_SIZE: "2MB"
-  # verify-head lm_head (124160x2560 BF16) ran on cuBLAS every decode step
-  # because b12x's BF16 vocab projection only has a kernel for M=1: 636 MB
-  # read per step, 3.6 ms = 6.5% of the 55 ms c1 step. Online MXFP8 (W8A16,
-  # Mxfp8OnlineLinearMethod(use_a16=True), activations stay BF16) halves the
-  # bytes read. Measured 2026-09-21 (arm la-lmq, 6 sweeps each, same boot
-  # night): c1 median 99.5 / max 101.8 tok/s vs baseline 95.6 / 99.5, c8 440.7
-  # vs 433.0, gate sweep c1 100.6 / c4 293.7 / c8 454.7 / c16 645.1, hardmode
-  # 89/100 (la band 86-93), fidelity 8k-128k 20/20 x4, straggler c5-16 clean
-  # at 3.98-3.99 accepted/draft. MTP draft head is already NVFP4
-  # (VLLM_MTP_NVFP4_LM_HEAD default 1) -- both heads are now quantized.
   VLLM_MXFP8_LM_HEAD: "1"
 
 command: |
