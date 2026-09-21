@@ -1,4 +1,4 @@
-From c44756699b318df02427d287df9dc59b8074c640 Mon Sep 17 00:00:00 2001
+From be5c36c47c66b0eda9483faaf95e068224ea254a Mon Sep 17 00:00:00 2001
 From: Ciprian Ursu <ciprian.ursu@deepstash.com>
 Date: Mon, 21 Sep 2026 00:19:39 +0300
 Subject: [PATCH] perf(parser): only force a tool-call grammar when tool_choice
@@ -38,8 +38,6 @@ constructs a second parser engine).
 
 Combines the jovian (0001) and KK (0002) fixes for a229c7a1, which already
 had the 5d1df69f cherry-pick baked in.
-
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ---
  vllm/parser/abstract_parser.py      | 78 ++++++++++++++++++-----------
  vllm/parser/engine/parser_engine.py | 78 +++++++++++------------------
