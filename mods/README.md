@@ -69,14 +69,61 @@ Newer vLLM/b12x-era mods, tried against the `la` baseline 2026-09-20/21.
 None of these are wired into `eugr-agents-serve-local16-la.yaml`; see each
 mod's own patch and the linked verdict for detail.
 
-- `vllm-qwen38-bf16-gemv` — awaiting GPU A/B. Boot failed
+- `vllm-qwen38-bf16-gemv` — rejected. Boot failed
   (`results/arms/gemv/verdict.md`): b12x's candidate-racing preparation
   raises `ValueError: candidate races require an activation-producing
   context` for the new `gemm.bf16_gemv` target before `/health` ever came up.
 - `vllm-qwen38-lmhead-b12x` — superseded by `VLLM_MXFP8_LM_HEAD` (see main
   README, Known issues / fixes) unless quality needs a BF16 head instead of
   MXFP8.
-- `vllm-qwen38-hc-mxfp8` — quality-gated arm pending.
+- `vllm-qwen38-hc-mxfp8` — quality-gated arm pending (hyper-connection/router
+  online MXFP8, expected +7.8% from bytes alone, mutually exclusive with
+  `vllm-qwen38-bf16-gemv`; see `results/kernel-pass/lmhead-hc-design.md` §B2).
+
+## vLLM/b12x-era mods (current as of 2026-09-21)
+
+Everything below is used by the `recipes/eugr/` family that serves the model
+today. One line each; see `recipes/README.md` for which recipe wires each
+one in and `results/README.md` for the verdict behind each status.
+
+- `b12x-startup-boundedwait` — **in the default recipe.** Bounded-wait fix
+  for the TP2 preparation deadlock: `B12xPreparationCoordinator._exchange()`
+  fails fast instead of parking forever on an unresolved candidate-racing
+  handshake. Paired with `B12X_ROCE_SPIN_LIMIT: "300000000"` in the recipe
+  env. See `results/kernel-pass/prep-deadlock/mechanism.md`.
+- `b12x-startup-trace` — diagnostic instrumentation for the same handshake,
+  kept for future debugging, not in the served recipe.
+- `b12x-revert-06809d5` — reverse-applies a b12x commit to unblock the first
+  TP2-preparation hang barrier; superseded (the forward-ported fix it
+  enabled was itself rejected, and reverting only moved the hang to a second
+  barrier), kept for reference.
+- `b12x-fwd-57f3572` — forward-ports b12x's native W4A16 MoE-autotune fix
+  onto the old image; the resulting arm was rejected (loses most candidate
+  races, repeatable regression).
+- `vllm-qwen-scratch-isolation` — documents the fork's QSA/GDN
+  scratch-isolation fix that removed the batch 5-7 straggler; baked into the
+  served image, not applied as a live mod.
+- `vllm-tc45-reasoning-structag-fix` — first TC-45 (`tool_choice=required`)
+  fix. Works (hardmode 93/100) but costs ~-11% c1 throughput; reverted, see
+  `vllm-tc45-cheap` below for the replacement.
+- `vllm-tc45-cheap` — second, cheaper TC-45 fix: narrows the structural-tag
+  grammar gate to `required`/named tool choice instead of also firing on
+  `auto`, which was serializing async sampling every decode step for any
+  tool-bearing request. Validation recipe written
+  (`eugr-agents-serve-local16-la-tcc.yaml`), GPU promotion pending. See
+  `results/arms/tooleval-fix/cheap-design.md`.
+- `vllm-decode-profiler` — rank-local `torch.profiler` wrapper used for the
+  per-kernel profile in `results/profiling/README.md`; no cross-rank RPC,
+  avoids the `--profiler-config` endpoint deadlock.
+- `vllm-dv-devicefix` — device-placement fixes for the reduced-draft-vocab
+  MTP head experiment; boots clean but the arm is rejected (0% acceptance).
+- `vllm-spec-trace` — diagnostic per-step spec-decode tracer used to chase
+  the batch 5-7 straggler; not in the served recipe.
+- `sglang-gdn-b12x-decode` — SGLang-era: routes SGLang's GDN decode to the
+  b12x CuTeDSL kernel; not used by the vLLM route this repo now serves. The
+  decode-only kernel matches Triton; the decode+verify kernel breaks MTP
+  acceptance in the live server (root cause not found). See
+  `results/eugr-b12x/RESULTS.md` §"SGLang b12x GDN kernel port".
 
 ## Licensing
 

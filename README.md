@@ -25,7 +25,10 @@ answers on port 8000 with the OpenAI API, model name `qwen3.8-flash-next`.
 |---|---|---|
 | `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** `use_local_argmax_reduction: true` in the MTP spec config, startup robustness mod, `B12X_AUTOTUNE=1`. |
 | `recipes/eugr/eugr-agents-serve-local16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
-| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Built from a public wheel release (see [Build provenance](#build-provenance)). **Not yet gated on the nodes** — pull and boot were interrupted by a shutdown before this recipe was measured. Do not treat it as the default until it has a screen against `la`. |
+| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but c1 is ~-10% vs `la`. Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
+
+Every recipe in `recipes/eugr/`, including the rejected/experimental arms, is
+tabled with status and a verdict pointer in `recipes/README.md`.
 
 Image identity for the default: eugr `spark-vllm-docker` Dockerfile `798528a2`
 + fork `local-inference-lab/vllm` `dev/jovian-judgement` `8e1f1e58` + b12x
@@ -207,53 +210,26 @@ image from those wheels:
   used by the default recipe), `ursuciprian/b12x@dgx-spark` (`a8333658`) with
   `exp/fwd-57f3572` for the rejected forward-port arm.
 - The recipe that serves this image, `eugr-agents-serve-local16-la-ghcr.yaml`,
-  is on an open PR (#8) and has not been pulled or gated on the nodes yet —
-  do not switch the default to it until it has a `la`-comparable screen.
+  has been pulled and gated on the nodes (`ghcr2`, cache-mount fix applied):
+  TC-45 passes for the first time on this stack, but c1 is ~-10% vs `la`.
+  Kept as an alternate pull-based path, not promoted to default — see
+  `results/README.md`.
 
 ## Repo map
 
 | Path | What |
 |---|---|
-| `recipes/eugr/` | The served recipe family. `eugr-agents-serve-local16-la.yaml` (default), `-local16.yaml` (fallback), `-la-ghcr.yaml` (ungated, PR #8). Everything else under here is an arm tried and either promoted (baked into the default) or rejected — see `results/kernel-pass/arms.md` for the record. |
-| `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route. |
-| `mods/` | Engine patches, one directory per mod, `mods/README.md` has details for the SGLang-era mods (stale for the newer vLLM/b12x ones — see below). |
+| `recipes/eugr/` | The served recipe family. `eugr-agents-serve-local16-la.yaml` (default), `-local16.yaml` (fallback), `-la-ghcr.yaml` (alternate pull-based image, gated but not promoted). Full table with status and verdict pointers: `recipes/README.md`. |
+| `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route. See `recipes/README.md`. |
+| `mods/` | Engine patches, one directory per mod. `mods/README.md` has a one-line summary of every mod, current and SGLang-era. |
 | `scripts/` | `gate_arm.sh` (full quality gate, needs `--hardmode`), `fidelity_probe.py`, `prof_summary.py`, `needle_ladder.py`, `decode_probe.py`, `validate_recipes.py`, `run.sh`, and the arm-bisection scripts (`vllm_ladder.sh`, `qwen_ladder*.sh`, …). |
-| `results/kernel-pass/`, `results/profiling/`, `results/arms/` | The 2026-09-18/19 arms, hang evidence, and per-kernel profile behind the tables above. |
+| `results/kernel-pass/`, `results/profiling/`, `results/arms/` | The 2026-09-18/21 arms, hang evidence, and per-kernel profile behind the tables above. Full index: `results/README.md`. |
 | `results/eugr-b12x/`, `results/fp8-gate/`, `results/sglang-*`, `results/vllm-cached-*` | Earlier (pre-09-18) SGLang/vLLM-nightly measurements, kept for history. |
 | `misc/` | Working notes not promoted into a result file. |
 
-### Mods, one line each
-
-Current as of 2026-09-19; `mods/README.md` only documents the SGLang-era mods
-(`sglang-*`, `vllm-flashnext-nightly-8a728663`, `vllm-qsa-fp8kv-pr55557`) and
-needs a follow-up pass to cover the rest:
-
-- `b12x-startup-boundedwait` — **in the default recipe.** Bounded-wait fix for
-  the TP2 preparation deadlock (see Known issues).
-- `b12x-startup-trace` — diagnostic instrumentation for the same handshake,
-  kept for future debugging, not in the served recipe.
-- `b12x-revert-06809d5` — reverse-applies a b12x commit to unblock the first
-  hang barrier; superseded (the forward-ported fix it enabled was itself
-  rejected), kept for reference.
-- `b12x-fwd-57f3572` — forward-ports b12x's native W4A16 MoE-autotune fix onto
-  the old image; the resulting arm was rejected (see table above).
-- `vllm-qwen-scratch-isolation` — documents the fork's QSA/GDN scratch-isolation
-  fix that removed the batch 5-7 straggler; baked into the image, not applied
-  as a live mod.
-- `vllm-tc45-reasoning-structag-fix` — fixes TC-45 (`tool_choice=required`);
-  not enabled by default, costs ~-12% c1 throughput (see Quality gates).
-- `vllm-decode-profiler` — rank-local `torch.profiler` wrapper used for the
-  per-kernel profile above; no cross-rank RPC, avoids the `--profiler-config`
-  endpoint deadlock.
-- `vllm-dv-devicefix` — device-placement fixes for the reduced-draft-vocab MTP
-  head experiment; boots clean but the arm is rejected (0% acceptance).
-- `vllm-spec-trace` — diagnostic per-step spec-decode tracer used to chase the
-  batch 5-7 straggler; not in the served recipe.
-- `sglang-gdn-b12x-decode` — SGLang-era: routes SGLang's GDN decode to the
-  b12x CuTeDSL kernel; not used by the vLLM route this repo now serves.
-- `sglang-sm121-qsa-fp8kv`, `vllm-flashnext-nightly-8a728663`,
-  `vllm-qsa-fp8kv-pr55557`, `sglang-radix-chunked-insert-fix` — SGLang/vLLM-
-  nightly era, documented in `mods/README.md`.
+For every recipe's status (default/fallback/experimental/rejected) and every
+mod's one-line summary, see `recipes/README.md` and `mods/README.md`. For
+every measurement and verdict this repo has produced, see `results/README.md`.
 
 ## Hardware
 
