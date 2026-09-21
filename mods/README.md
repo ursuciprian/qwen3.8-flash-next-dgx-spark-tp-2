@@ -63,6 +63,21 @@ upstream PR #38355 onto the pinned nightly: the chunked insert is skipped and
 deferred to request completion. `SGLANG_DISABLE_CHUNKED_RADIX_INSERT=0`
 restores stock behaviour. Idempotent, fail-closed on the four anchors.
 
+## Experimental (not in the default recipe)
+
+Newer vLLM/b12x-era mods, tried against the `la` baseline 2026-09-20/21.
+None of these are wired into `eugr-agents-serve-local16-la.yaml`; see each
+mod's own patch and the linked verdict for detail.
+
+- `vllm-qwen38-bf16-gemv` — awaiting GPU A/B. Boot failed
+  (`results/arms/gemv/verdict.md`): b12x's candidate-racing preparation
+  raises `ValueError: candidate races require an activation-producing
+  context` for the new `gemm.bf16_gemv` target before `/health` ever came up.
+- `vllm-qwen38-lmhead-b12x` — superseded by `VLLM_MXFP8_LM_HEAD` (see main
+  README, Known issues / fixes) unless quality needs a BF16 head instead of
+  MXFP8.
+- `vllm-qwen38-hc-mxfp8` — quality-gated arm pending.
+
 ## Licensing
 
 Every overlay is a modified copy of a file from vLLM, which is Apache-2.0, and

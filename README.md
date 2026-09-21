@@ -35,21 +35,24 @@ revision `7c4f1bc1`. fp8 KV, MTP width 4, prefix caching on, `max_num_seqs 16`.
 ## Headline numbers
 
 `tools/tony-bench/bench_sweep.py`, 3 rounds x 300 tokens, counting workload,
-default (`la`) recipe. Boot-to-boot noise band: c1 85-99 tok/s, c8 412-442
-tok/s — nothing inside that band is a result; promotion decisions used 3-boot
-medians. Sources: `results/arms/la/sweep.json`, `results/arms/la-final/sweep.json`,
-`results/kernel-pass/prep-deadlock/sweep_la_boundedwait_restore_r2.json`.
+default (`la`) recipe — now with online MXFP8 lm_head (`VLLM_MXFP8_LM_HEAD=1`,
+see [Known issues / fixes](#known-issues--fixes)). Boot-to-boot noise
+band: c1 85-102 tok/s, bimodal (fast mode 94-102, slow mode 84-88, see
+`results/arms/c1-decline/verdict.md`) — report the median of >=5 sweeps and
+the max (fast-mode) value, not a single run. Sources:
+`results/arms/la-lmq/verdict.md`, `results/arms/la-lmq/sweep.json`,
+`results/arms/lmhead/lmqB*.json`.
 
 | concurrency | agg tok/s | per-stream tok/s | TTFT (c1 only) |
 |---|---:|---:|---:|
-| c1 | 95.7-98.8 (boot band 85-99) | same | 0.74-0.79 s |
-| c4 | 285.2 | 72.3 | 2.2 s |
-| c8 | 412-442 | 52.5-56.0 | 4.3 s |
-| c16 | 629.9 | 40.3 | 8.3 s |
+| c1 | 99.5 median / 101.8 max (boot band 85-102) | same | 0.73-0.81 s |
+| c4 | 293.7 | 74.0 | 2.21 s |
+| c8 | 440-455 | 56.2-57.9 | 4.27-4.31 s |
+| c16 | 645.1 | 41.4 | 8.27 s |
 
-Cold prefill 2236-2303 tok/s (c1). Decode-probe workload mix (single stream,
-peak of 3 repeats, `results/arms/la/decode_probe.txt`): code 59.6, structured
-90.5, counting 98.0, prose 47.9 tok/s.
+Cold prefill 2093-2340 tok/s (c1). Decode-probe workload mix (single stream,
+peak of 3 repeats, `results/arms/la-lmq/decode_probe.txt`): code 69.0,
+structured 86.4, counting 100.3, prose 50.2 tok/s.
 
 ### Category harness (tonyd2wild, 40 prompts, concurrency 1)
 
@@ -71,10 +74,12 @@ x6 37.7/112.6, x8 33.7/124.8.
 
 ## Quality gates (`la`)
 
-- **Fidelity probe** (`results/arms/la/fidelity.json`, `fidelity_probe.txt`):
-  100% exact retrieval at 8k/32k/64k/128k context, 0 typos, thinking on.
-- **tool-eval-bench 2.6.1 `--hardmode`** (88 scenarios): 88-91/100 across
-  boots; baseline image scored 90. Two scenarios fail consistently:
+- **Fidelity probe** (`results/arms/la-lmq/fidelity.json`, `fidelity_probe.txt`):
+  100% exact retrieval at 8k/32k/64k/128k context (20/20 x4 depths), 0 typos,
+  thinking on.
+- **tool-eval-bench 2.6.1 `--hardmode`** (88 scenarios): 89/100 with the
+  MXFP8 lm_head default (la band across arms: 86-93/100). Two scenarios fail
+  consistently:
   - **TC-45** (`tool_choice=required`): parser bug, see
     [Known issues / fixes](#known-issues--fixes). Fixed by
     `mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs
@@ -177,6 +182,11 @@ stack.
   first `la` gate accidentally ran the 69-scenario default set and gave a
   score that wasn't comparable — fixed, always pass `--hardmode` for a real
   promotion decision.
+- lm_head online MXFP8 (W8A16) via `VLLM_MXFP8_LM_HEAD=1` — a fork feature
+  (`local-inference-lab/vllm` `dev/jovian-judgement` `8e1f1e58`,
+  `_supports_default_lm_head_quantization`), enabled here. Halves the bytes
+  read for the verify-head lm_head matmul (previously BF16-only on b12x at
+  M=1, cuBLAS fallback); see `results/arms/la-lmq/verdict.md`.
 
 ## Build provenance
 

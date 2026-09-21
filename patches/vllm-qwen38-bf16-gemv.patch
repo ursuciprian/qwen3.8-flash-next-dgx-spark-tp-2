@@ -1,0 +1,411 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dgx-build <build@dgx-01.local>
+Date: Sun, 21 Sep 2026 00:00:00 +0300
+Subject: [PATCH] qwen3.8-flash-next: route the small-N BF16 linears through
+ b12x gemm.bf16_gemv
+
+Two unquantized BF16 projections dominate the non-MoE GEMM bucket at decode:
+
+  hyper-connection down/block-inject  [336, 10240]  97 launches/step  3.79 ms
+  MoE router gate                     [512,  2560]  48 launches/step  0.85 ms
+
+Both are unquantized, so they reach cuBLAS, which for M=5 selects
+cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8 -- a
+one-warp-per-CTA SM80 WMMA kernel. Measured on rank0 (98 decode steps, c1):
+39.09 us for 6.64 MB of weights and 17.82 us for 2.62 MB, i.e. 170 and 147
+GB/s against a 273 GB/s LPDDR5x roofline.
+
+b12x already ships a CuTe small-N GEMV sized for exactly this envelope
+(gemm.bf16_gemv: N <= SMALL_N_GEMV_MAX_OUT=1024, K >= SMALL_N_GEMV_MIN_IN=1024,
+M <= SMALL_M_MAX=8), and its own comment names "narrow projections like the
+GDN in_proj_ba" as the target. The only route to it is
+B12XFp6Config.get_quant_method in b12x/integration/vllm/plugin.py, which is
+never instantiated for a modelopt MIXED_PRECISION checkpoint. This binds the
+same component directly for the two shapes above.
+
+This is NOT bit-identical -- the GEMV accumulates in a different order -- so
+it is gated by VLLM_QWEN38_BF16_GEMV (default "hc,gate"; "off", "hc" or
+"gate" to bisect) and must clear the full quality gate plus
+scripts/logits_equiv.py.
+
+Every guard that cannot be evaluated under Dynamo (16B alignment, whether
+this exact M was prepared) lives inside the custom op, whose fallback is
+torch.nn.functional.linear -- so any shape the GEMV cannot serve, including
+prefill and c8 decode (M=40 > SMALL_M_MAX), is bit-identical to stock.
+
+Applies on top of 8e1f1e587f.
+Fix on top of the first cut: b12x's candidate race requires every PreparedCall
+to carry an activation producer (b12x/preparation/_measurement.py:226,
+"candidate races require an activation-producing context").  The first cut
+built its benchmark source once with torch.randn and passed no `produce`, so
+with B12X_AUTOTUNE=1 preparation died as soon as it raced the gemm.bf16_gemv
+candidates:
+
+  b12x compiling gemm.bf16_gemv: candidates 2/3 prepared, 2 compilations
+  b12x failed gemm.bf16_gemv
+  RuntimeError: b12x preparation failed on rank 0:
+      ValueError: candidate races require an activation-producing context
+
+The benchmark call now follows the in-tree reference wiring in
+models/deepseek_v4_1/b12x_layers.py: an empty source refilled by
+`produce=lambda: source.normal_(std=0.25)`, and a caller-owned output so the
+allocator stays out of the timed region.  Autotune races these units.
+
+---
+diff --git a/vllm/models/qwen3_8_flash_next/hyperconnection.py b/vllm/models/qwen3_8_flash_next/hyperconnection.py
+index 15e09288951252b0bba933638d6b5f140ab0372c..f4eec5d703749c5669bb553753ab3506c6682cf1 100644
+--- a/vllm/models/qwen3_8_flash_next/hyperconnection.py
++++ b/vllm/models/qwen3_8_flash_next/hyperconnection.py
+@@ -4,6 +4,7 @@
+ 
+ from __future__ import annotations
+ 
++import os
+ from collections.abc import Sequence
+ from dataclasses import dataclass
+ from typing import Any
+@@ -14,17 +15,27 @@
+ from vllm.model_executor.layers.linear import (
+     MergedColumnParallelLinear,
+     ReplicatedLinear,
++    UnquantizedLinearMethod,
+ )
+ from vllm.model_executor.models.utils import maybe_prefix
+ from vllm.model_executor.weight_transfer import allocate_weights
+ from vllm.platforms import current_platform
+ from vllm.utils.b12x import (
+     set_b12x_preparation_provider,
++    b12x_layer,
++    b12x_layer_prefix,
++    register_b12x_layer,
+     B12xPreparationUnit,
+     B12xWorkload,
+     PreparationResourceUnavailableError,
+     get_b12x_hyperconnection,
+ )
++from vllm.utils.torch_utils import (
++    LayerNameType,
++    _encode_layer_name,
++    _resolve_layer_name,
++    direct_register_custom_op,
++)
+ 
+ 
+ def _hyperconnection_api() -> Any:
+@@ -37,6 +48,251 @@
+     return api
+ 
+ 
++# ---------------------------------------------------------------------------
++# Small-N BF16 GEMV route (b12x gemm.bf16_gemv)
++#
++# The HC mixer's down/block-inject projection ([336, 10240] BF16, replicated)
++# and the MoE router gate ([512, 2560] BF16) are unquantized, so they land on
++# cuBLAS, which at M=5 picks `cutlass_80_wmma_tensorop_bf16_16x16_128x2` -- a
++# one-warp-per-CTA SM80 WMMA kernel running at ~60% of the LPDDR5x roofline
++# (measured: 39.1 us for 6.64 MB, 17.8 us for 2.62 MB). b12x ships a CuTe
++# small-N GEMV built for exactly this envelope (N <= 1024, K >= 1024, M <= 8),
++# but the only route to it is B12XFp6Config.get_quant_method, which this
++# checkpoint (modelopt MIXED_PRECISION) never instantiates. This binds the
++# same b12x component directly.
++#
++# NOT bit-identical: a different accumulation order. Gated by
++# VLLM_QWEN38_BF16_GEMV (comma list of targets: "hc" = HC down/block-inject,
++# "gate" = MoE router gate, "hcup" = HC up-projection (opt-in, unmeasured);
++# "off" disables everything). Default: "hc,gate".
++# See results/kernel-pass/dense-gemm-fusion.md.
++# ---------------------------------------------------------------------------
++
++_SMALL_N_BF16_TARGETS = frozenset(
++    part
++    for part in os.getenv("VLLM_QWEN38_BF16_GEMV", "hc,gate")
++    .lower()
++    .replace(" ", "")
++    .split(",")
++    if part and part != "off"
++)
++
++
++def _bf16_gemv_api() -> Any:
++    """The b12x small-N BF16 GEMV module, or None when it cannot serve here."""
++    try:
++        from b12x.gemm import bf16_gemv
++
++        if not bf16_gemv.is_supported():
++            return None
++        return bf16_gemv
++    except Exception:  # noqa: BLE001 - absence is a routing decision, not an error
++        return None
++
++
++class _SmallNBF16Provider:
++    """Exact-M b12x GEMV plans owned by one loaded small-N BF16 linear."""
++
++    def __init__(self, layer: nn.Module, weight: torch.Tensor) -> None:
++        self.layer = layer
++        self.weight = weight
++        self.plans: dict[int, Any] = {}
++        self.prefix = str(getattr(layer, "prefix", "") or "qwen38.small_n_bf16")
++
++    def get_b12x_preparation_units(
++        self, layer: nn.Module, workload: B12xWorkload
++    ) -> Sequence[B12xPreparationUnit]:
++        del layer
++        if workload.stage != "weights":
++            return ()
++        api = _bf16_gemv_api()
++        if api is None:
++            return ()
++        from b12x.preparation import PreparedCall
++
++        if not self.plans:
++            for tokens in sorted({int(count) for count in workload.token_counts}):
++                if not 1 <= tokens <= api.SMALL_M_MAX:
++                    continue
++                self.plans[tokens] = api.plan(
++                    api.GemvQuery(
++                        source_dtype="bfloat16",
++                        weight_dtype="bfloat16",
++                        max_rows=tokens,
++                        in_features=int(self.weight.shape[1]),
++                        out_features=int(self.weight.shape[0]),
++                        source_contiguous=True,
++                        source_aligned=True,
++                        weight_contiguous=True,
++                        weight_aligned=True,
++                    )
++                )
++        if not self.plans:
++            return ()
++
++        def make_call(state):
++            query = state.query
++            source = torch.empty(
++                (int(query.max_rows), int(query.in_features)),
++                dtype=torch.bfloat16,
++                device=self.weight.device,
++            )
++            out = torch.empty(
++                (int(query.max_rows), int(query.out_features)),
++                dtype=torch.bfloat16,
++                device=self.weight.device,
++            )
++            # A candidate race re-produces its activations before every timed
++            # candidate and refuses a call that cannot: see
++            # b12x/preparation/_measurement.py:prepare_race_steps, "candidate
++            # races require an activation-producing context".  Caller-owned
++            # output keeps the allocator out of the timed region, matching
++            # models/deepseek_v4_1/b12x_layers.py.
++            return PreparedCall(
++                run=lambda: state.run(source, self.weight, out=out),
++                produce=lambda: source.normal_(std=0.25),
++                owners=(source, out, self.weight),
++            )
++
++        requests = tuple(
++            declaration.request(
++                name=f"qwen38-bf16-gemv:{self.prefix}:m{rows}:lane{workload.lane}",
++                prepare_call=make_call,
++                benchmark_call=make_call,
++            )
++            for rows, declaration in sorted(self.plans.items())
++        )
++        return (
++            B12xPreparationUnit(
++                name="QWEN38_SMALL_N_BF16",
++                key=(self.prefix, tuple(sorted(self.plans))),
++                requests=requests,
++                stage="weights",
++                autotune=not workload.eager_only,
++            ),
++        )
++
++
++class SmallNBF16LinearMethod(UnquantizedLinearMethod):
++    """Unquantized BF16 linear that uses b12x's GEMV at decode-sized M.
++
++    Every guard that cannot be evaluated under Dynamo (pointer alignment, an
++    exact prepared M) lives inside the custom op, which falls back to the
++    inherited cuBLAS path -- so an ineligible shape is bit-identical to stock.
++
++    ``relax_shape`` skips b12x's own N<=1024 / K>=1024 *routing* heuristic.
++    Those are integration thresholds, not kernel limits (``validate_query``
++    accepts any positive geometry), so a wide-N projection such as the HC
++    up-projection [10240, 320] can be measured against cuBLAS as well.
++    """
++
++    def __init__(self, relax_shape: bool = False) -> None:
++        super().__init__()
++        self.relax_shape = relax_shape
++
++    def process_weights_after_loading(self, layer: nn.Module) -> None:
++        super().process_weights_after_loading(layer)
++        api = _bf16_gemv_api()
++        weight = getattr(layer, "weight", None)
++        if api is None or weight is None:
++            return
++        if (
++            weight.dim() != 2
++            or not weight.is_cuda
++            or weight.dtype != torch.bfloat16
++            or not weight.is_contiguous()
++            or weight.data_ptr() % 16
++            or int(weight.shape[1]) % 8
++            or int(weight.shape[0]) <= 0
++        ):
++            return
++        if not self.relax_shape and (
++            int(weight.shape[0]) > api.SMALL_N_GEMV_MAX_OUT
++            or int(weight.shape[1]) < api.SMALL_N_GEMV_MIN_IN
++        ):
++            return
++        provider = _SmallNBF16Provider(layer, weight.data)
++        layer.b12x_gemv_weight = weight.data
++        layer.b12x_gemv_provider = provider
++        name = b12x_layer_prefix(layer)
++        layer.b12x_layer_name = _encode_layer_name(name)
++        register_b12x_layer(name, layer)
++        if not getattr(layer, "b12x_preparation_suppressed", False):
++            set_b12x_preparation_provider(layer, provider)
++
++    def apply(
++        self,
++        layer: nn.Module,
++        x: torch.Tensor,
++        bias: torch.Tensor | None = None,
++    ) -> torch.Tensor:
++        if bias is not None or getattr(layer, "b12x_gemv_provider", None) is None:
++            return super().apply(layer, x, bias)
++        flat = x.reshape(-1, x.shape[-1])
++        out_features = int(layer.b12x_gemv_weight.shape[0])
++        projected = torch.ops.vllm.qwen38_small_n_bf16_linear(
++            flat, out_features, layer.b12x_layer_name
++        )
++        return projected.reshape(*x.shape[:-1], out_features)
++
++
++def qwen38_small_n_bf16_linear(
++    x: torch.Tensor,
++    out_features: int,
++    layer_name: LayerNameType,
++) -> torch.Tensor:
++    """Run the b12x GEMV when this exact M was prepared, else plain cuBLAS."""
++    del out_features
++    layer = b12x_layer(_resolve_layer_name(layer_name))
++    weight = layer.b12x_gemv_weight
++    plan = layer.b12x_gemv_provider.plans.get(int(x.shape[0]))
++    if (
++        plan is None
++        or x.dtype != torch.bfloat16
++        or not x.is_contiguous()
++        or x.data_ptr() % 16
++    ):
++        return torch.nn.functional.linear(x, weight)
++    from b12x.gemm import bf16_gemv
++
++    return bf16_gemv.mm(x, weight, plan=plan)
++
++
++def _qwen38_small_n_bf16_linear_fake(
++    x: torch.Tensor,
++    out_features: int,
++    layer_name: LayerNameType,
++) -> torch.Tensor:
++    del layer_name
++    return x.new_empty((x.shape[0], out_features))
++
++
++direct_register_custom_op(
++    op_name="qwen38_small_n_bf16_linear",
++    op_func=qwen38_small_n_bf16_linear,
++    fake_impl=_qwen38_small_n_bf16_linear_fake,
++)
++
++
++def maybe_route_small_n_bf16(
++    linear: nn.Module, target: str, *, relax_shape: bool = False
++) -> bool:
++    """Rebind ``linear`` to the b12x small-N GEMV method when enabled.
++
++    Called at construction time, before weights load, so the replacement
++    method's ``process_weights_after_loading`` runs and does the real
++    eligibility check against the loaded weight.
++    """
++    if target not in _SMALL_N_BF16_TARGETS or not current_platform.is_cuda():
++        return False
++    if type(getattr(linear, "quant_method", None)) is not UnquantizedLinearMethod:
++        return False
++    if _bf16_gemv_api() is None:
++        return False
++    linear.quant_method = SmallNBF16LinearMethod(relax_shape=relax_shape)
++    return True
++
++
+ @dataclass(frozen=True)
+ class HyperConnectionConfig:
+     hc_count: int
+@@ -166,6 +422,9 @@
+                 return_bias=False,
+                 disable_tp=True,
+             )
++            maybe_route_small_n_bf16(
++                self.input_mix_weight_down_block_inject, "hc"
++            )
+         else:
+             self.input_mix_weight_down = ReplicatedLinear(
+                 self.hyper_hidden_size,
+@@ -176,6 +435,7 @@
+                 prefix=maybe_prefix(prefix, "input_mix_weight_down"),
+                 return_bias=False,
+             )
++            maybe_route_small_n_bf16(self.input_mix_weight_down, "hc")
+         self.input_mix_weight_up = ReplicatedLinear(
+             self.lora_rank,
+             self.hyper_hidden_size,
+@@ -185,6 +445,12 @@
+             prefix=maybe_prefix(prefix, "input_mix_weight_up"),
+             return_bias=False,
+         )
++        # Opt-in ("hcup"): N=10240 is past b12x's own small-N routing
++        # threshold, but it is the single largest gap against the roofline in
++        # the decode step (4.43 ms/step measured, 2.35 ms floor). A/B it.
++        maybe_route_small_n_bf16(
++            self.input_mix_weight_up, "hcup", relax_shape=True
++        )
+         self._preparation_prefix = prefix or "qwen3_8_flash_next.hyperconnection"
+         self._plans: dict[str, object] = {}
+         if not getattr(self, "b12x_preparation_suppressed", False):
+@@ -408,6 +674,8 @@
+ 
+ __all__ = [
+     "GatedResidual",
++    "SmallNBF16LinearMethod",
++    "maybe_route_small_n_bf16",
+     "GroupedGemmaRMSNorm",
+     "HyperConnectionConfig",
+     "HyperConnectionWorkspace",
+diff --git a/vllm/models/qwen3_8_flash_next/model.py b/vllm/models/qwen3_8_flash_next/model.py
+index 083c46f2d3d2d6570c8bc16a055ec051c04e40a3..88352bdf3f73db9e5001979ae1efe77c07056e31 100644
+--- a/vllm/models/qwen3_8_flash_next/model.py
++++ b/vllm/models/qwen3_8_flash_next/model.py
+@@ -78,6 +78,7 @@
+     GatedResidual,
+     HyperConnectionConfig,
+     HyperConnectionWorkspace,
++    maybe_route_small_n_bf16,
+ )
+ from .ple_layer import Qwen3_8FlashNextPLELayer, _resolve_ple_table_memory
+ 
+@@ -155,6 +156,10 @@
+         super().__init__(vllm_config=vllm_config, prefix=prefix)
+         config = vllm_config.model_config.hf_text_config
+         self.n_shared_experts = int(config.shared_expert_intermediate_size > 0)
++        # Router gate: [512, 2560] BF16, one GEMM per layer per decode step on
++        # the cuBLAS small-M WMMA fallback. See hyperconnection.py for the
++        # b12x small-N GEMV route and its env gate.
++        maybe_route_small_n_bf16(self.gate, "gate")
+ 
+ 
+ class Qwen3_8FlashNextDecoderLayer(nn.Module):
+-- 
+2.43.0
