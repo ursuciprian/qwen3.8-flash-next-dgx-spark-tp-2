@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Typed ship/reject verdict for a DGX arm vs the `la` baseline, via Jev (TypeSafe System One).
-Parses results/{arms,benchy}/<arm>* artifacts into a numbers-only fact sheet, asks Jev
-one Choice question against our written quality-gate rules, prints JSON + one-line summary.
-"""
+Parses results/{arms,benchy}/<arm>* artifacts into a numbers-only fact sheet, asks Jev one
+Choice question against our written quality-gate rules, prints JSON + one-line summary."""
 import argparse, glob, json, os, re, statistics, subprocess, sys
 
 DGX_ROOT = "dgx-01:~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/"
@@ -18,14 +17,12 @@ RULES = (
     "overrides it. Large swings between reruns are noise, not necessarily a regression -- "
     "judge the more favorable-to-reality reading when a rerun clearly stabilizes, but flag it."
 )
-
 def _read(path):
     try:
         with open(path) as f:
             return f.read()
     except OSError:
         return ""
-
 def parse_hardmode(d):
     scores, fails = [], []
     for p in sorted(glob.glob(os.path.join(d, "hardmode*.log"))):
@@ -35,7 +32,6 @@ def parse_hardmode(d):
             scores.append(int(m.group(1)))
         fails.append(len(re.findall(r"❌\s*FAIL", text)))
     return {"quality_scores": scores, "fail_counts": fails}
-
 def parse_fidelity(d):
     out = {}
     for line in _read(os.path.join(d, "fidelity_probe.txt")).splitlines():
@@ -43,7 +39,6 @@ def parse_fidelity(d):
         if m:
             out[int(m.group(1))] = {"exact": int(m.group(2)), "wrong": int(m.group(3))}
     return out
-
 def parse_decode(d):
     by_c = {}
     for p in sorted(glob.glob(os.path.join(d, "decode_c*.json"))):
@@ -54,14 +49,12 @@ def parse_decode(d):
         for row in data.get("rows", []):
             by_c.setdefault(row["c"], []).append(row.get("agg_tok_s"))
     return by_c
-
 def parse_straggler(d):
     rounds = {}
     text = _read(os.path.join(d, "straggler.log"))
     for m in re.finditer(r"c=(\d+) round wall ([\d.]+)s.*?accept ([\d.]+)/draft", text, re.S):
         rounds[int(m.group(1))] = {"wall_s": float(m.group(2)), "accept": float(m.group(3))}
     return rounds
-
 def parse_benchy(root, arm):
     """First prose table row at depth 0, concurrency 1 (default-temperature c1)."""
     for p in sorted(glob.glob(os.path.join(root, "results", "benchy", f"{arm}-prose*.md"))):
@@ -76,7 +69,6 @@ def parse_benchy(root, arm):
             if depth == 0 and conc == 1:
                 return {"gen_tok_s": float(cells[3].split("±")[0]), "ttft_ms": float(cells[5].split("±")[0])}
     return {}
-
 def collect(root, arm):
     d = os.path.join(root, "results", "arms", arm)
     return {
@@ -84,7 +76,6 @@ def collect(root, arm):
         "decode_c_tok_s": parse_decode(d), "straggler": parse_straggler(d),
         "benchy_c1": parse_benchy(root, arm),
     }
-
 def noise_suspects(facts, arm):
     out = []
     for c, vals in facts["decode_c_tok_s"].items():
@@ -99,10 +90,8 @@ def noise_suspects(facts, arm):
         if v["exact"] < 20:
             out.append(f"{arm} depth {depth} missed {20 - v['exact']}/20 on fidelity probe")
     return out
-
 def pct_diff(a, b):
     return None if not b else round(100 * (a - b) / b, 1)
-
 def fact_sheet(arm, arm_facts, base_facts):
     c_compare = {}
     for c in (1, 8, 16):
@@ -122,7 +111,6 @@ def fact_sheet(arm, arm_facts, base_facts):
         "straggler_max_round_wall_s": max((r["wall_s"] for r in arm_facts["straggler"].values()), default=None),
         "noise_suspects": noise_suspects(arm_facts, arm) + noise_suspects(base_facts, "la"),
     }
-
 def ask_jev(sheet):
     from typesafe_sdk import Choice, TypeSafeClient
 
@@ -149,7 +137,6 @@ def ask_jev(sheet):
         )
     answer = response.choices["verdict"]
     return answer.choice, answer.confidence
-
 def reason_for(verdict, sheet):
     bits = [
         f"hardmode={sheet['arm_hardmode_scores'] or 'missing'}",
@@ -161,7 +148,6 @@ def reason_for(verdict, sheet):
     if sheet["noise_suspects"]:
         bits.append(f"{len(sheet['noise_suspects'])} noise suspect(s)")
     return f"Jev verdict={verdict} from: " + "; ".join(bits)
-
 def fetch(arm, scratch):
     for rel in (
         f"results/benchy/{arm}-prose*.md", f"results/arms/{arm}/decode_c*.json",
@@ -171,7 +157,6 @@ def fetch(arm, scratch):
         dest = os.path.join(scratch, os.path.dirname(rel))
         os.makedirs(dest, exist_ok=True)
         subprocess.run(["rsync", "-az", f"{DGX_ROOT}{rel}", dest + "/"], check=False)
-
 SELFTEST_SHEET = {
     "arm": "selftest-arm", "arm_hardmode_scores": [86, 90], "arm_hardmode_fail_counts": [7, 1],
     "la_hardmode_scores": [91, 88, 89],
@@ -185,7 +170,6 @@ SELFTEST_SHEET = {
         "selftest-arm hardmode 86 then 90 (within la band 86-93)",
     ],
 }
-
 def run(sheet, label):
     verdict, confidence = ask_jev(sheet)
     result = {
@@ -194,7 +178,6 @@ def run(sheet, label):
     }
     print(json.dumps(result, indent=2))
     print(f"[{label}] {result['verdict']} (confidence={result['confidence']:.2f}): {result['reason']}")
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("arm", nargs="?", help="arm name, e.g. la-mtpprob")
@@ -213,6 +196,5 @@ def main():
 
     sheet = fact_sheet(args.arm, collect(args.root, args.arm), collect(args.root, "la"))
     run(sheet, args.arm)
-
 if __name__ == "__main__":
     sys.exit(main())
