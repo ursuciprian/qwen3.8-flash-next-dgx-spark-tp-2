@@ -7,15 +7,12 @@ import argparse, glob, json, os, re, statistics, subprocess, sys
 DGX_ROOT = "dgx-01:~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/"
 LA_BAND = (86, 93)
 RULES = (
-    "Ship-gate rules: hardmode quality score >= 88 (la's own band is 86-93; a score of "
-    "86-87 should be rerun once before judging). Fidelity must be 20/20 exact at every "
-    "probed depth (a depth that misses once should be rerun; judge on 2-of-3 passing). "
-    "Temp-0 decode throughput (c1/c8/c16 tok/s) must be within 3% of la at the same "
-    "concurrency. Default-temperature benchy c1 (depth 0, concurrency 1) gen throughput "
-    "must be >= +10% vs la, OR TTFT must be >= 20% better (lower) than la, to ship on "
-    "speed. The quality gate (hardmode + fidelity) is non-negotiable: no speed win "
-    "overrides it. Large swings between reruns are noise, not necessarily a regression -- "
-    "judge the more favorable-to-reality reading when a rerun clearly stabilizes, but flag it."
+    "Ship-gate rules: hardmode quality score >= 88 (la's own band is 86-93; a score of 86-87 should be rerun once before judging). Fidelity must be "
+    "20/20 exact at every probed depth (a depth that misses once should be rerun; judge on 2-of-3 passing). Temp-0 decode throughput (c1/c8/c16 tok/s) "
+    "must be within 3% of la at the same concurrency. Default-temperature benchy c1 (depth 0, concurrency 1) gen throughput must be >= +10% vs la, OR "
+    "TTFT must be >= 20% better (lower) than la, to ship on speed. The quality gate (hardmode + fidelity) is non-negotiable: no speed win overrides it. "
+    "Large swings between reruns are noise, not necessarily a regression -- judge the more favorable-to-reality reading when a rerun clearly "
+    "stabilizes, but flag it."
 )
 def _read(path):
     try:
@@ -56,8 +53,9 @@ def parse_straggler(d):
         rounds[int(m.group(1))] = {"wall_s": float(m.group(2)), "accept": float(m.group(3))}
     return rounds
 def parse_benchy(root, arm):
-    """First prose table row at depth 0, concurrency 1 (default-temperature c1)."""
-    for p in sorted(glob.glob(os.path.join(root, "results", "benchy", f"{arm}-prose*.md"))):
+    """Default-temp prose grid, depth 0/c1. Prefers *-prose16.md over *-prose.md; a `-t0` file is a different (temp-0) benchmark, never the baseline."""
+    cands = [p for p in glob.glob(os.path.join(root, "results", "benchy", f"{arm}-prose*.md")) if "-t0" not in p]
+    for p in sorted(cands, key=lambda p: (0 if "16" in os.path.basename(p) else 1, p)):
         for line in _read(p).splitlines():
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if len(cells) < 6 or cells[0] in ("depth", "---:"):
@@ -107,13 +105,12 @@ def fact_sheet(arm, arm_facts, base_facts):
         "arm_fidelity_wrong_by_depth": {d: v["wrong"] for d, v in arm_facts["fidelity"].items()},
         "temp0_decode_pct_diff_vs_la_by_c": c_compare,
         "benchy_c1_gain_pct_vs_la": pct_diff(arm_facts["benchy_c1"].get("gen_tok_s", 0), base_facts["benchy_c1"].get("gen_tok_s", 0)),
-        "benchy_c1_ttft_gain_pct_vs_la": pct_diff(base_facts["benchy_c1"].get("ttft_ms", 0), arm_facts["benchy_c1"].get("ttft_ms", 0)),
+        "benchy_c1_ttft_gain_pct_vs_la": -pct_diff(arm_facts["benchy_c1"].get("ttft_ms", 0), base_facts["benchy_c1"].get("ttft_ms", 0)),
         "straggler_max_round_wall_s": max((r["wall_s"] for r in arm_facts["straggler"].values()), default=None),
         "noise_suspects": noise_suspects(arm_facts, arm) + noise_suspects(base_facts, "la"),
     }
 def ask_jev(sheet):
     from typesafe_sdk import Choice, TypeSafeClient
-
     api_key = subprocess.run(
         ["security", "find-generic-password", "-s", "dev/typesafe-ai-api-key", "-w"],
         capture_output=True, text=True, check=True,
@@ -123,26 +120,22 @@ def ask_jev(sheet):
             {"rules": RULES, "facts": sheet},
             {"verdict": Choice(
                 instructions=(
-                    "Given `rules` and `facts` (a fact sheet for arm `facts.arm` vs baseline "
-                    "`la`, numbers only, plus any `noise_suspects`), what is the ship verdict "
-                    "for this arm?"
+                    "Given `rules` and `facts` (a fact sheet for arm `facts.arm` vs baseline `la`, "
+                    "numbers only, plus any `noise_suspects`), what is the ship verdict for this arm?"
                 ),
                 criteria={
                     "ship": "Clears the quality gate and the speed bar with clean, non-noisy numbers.",
                     "ship_with_caveat": "Clears the quality gate and speed bar, but a number is borderline or a noise_suspect entry casts some doubt.",
                     "reject": "Fails the quality gate (hardmode < 88 after any rerun, or fidelity misses persist), or fails the speed bar with no offsetting caveat.",
-                    "rerun": "Too noisy or too few data points to call; a rule-required rerun (hardmode 86-87, or a single fidelity miss) has not happened yet.",
-                },
+                    "rerun": "Too noisy or too few data points to call; a rule-required rerun (hardmode 86-87, or a single fidelity miss) has not happened yet."},
             )},
         )
     answer = response.choices["verdict"]
     return answer.choice, answer.confidence
 def reason_for(verdict, sheet):
     bits = [
-        f"hardmode={sheet['arm_hardmode_scores'] or 'missing'}",
-        f"fidelity_wrong_total={sum(sheet['arm_fidelity_wrong_by_depth'].values())}",
-        f"c1/8/16_diff_vs_la={sheet['temp0_decode_pct_diff_vs_la_by_c']}",
-        f"benchy_c1_gain={sheet['benchy_c1_gain_pct_vs_la']}%",
+        f"hardmode={sheet['arm_hardmode_scores'] or 'missing'}", f"fidelity_wrong_total={sum(sheet['arm_fidelity_wrong_by_depth'].values())}",
+        f"c1/8/16_diff_vs_la={sheet['temp0_decode_pct_diff_vs_la_by_c']}", f"benchy_c1_gain={sheet['benchy_c1_gain_pct_vs_la']}%",
         f"ttft_gain={sheet['benchy_c1_ttft_gain_pct_vs_la']}%",
     ]
     if sheet["noise_suspects"]:
@@ -150,26 +143,34 @@ def reason_for(verdict, sheet):
     return f"Jev verdict={verdict} from: " + "; ".join(bits)
 def fetch(arm, scratch):
     for rel in (
-        f"results/benchy/{arm}-prose*.md", f"results/arms/{arm}/decode_c*.json",
-        f"results/arms/{arm}/hardmode*.log", f"results/arms/{arm}/fidelity_probe.txt",
-        f"results/arms/{arm}/straggler.log",
+        f"results/benchy/{arm}-prose*.md", f"results/arms/{arm}/decode_c*.json", f"results/arms/{arm}/hardmode*.log",
+        f"results/arms/{arm}/fidelity_probe.txt", f"results/arms/{arm}/straggler.log",
     ):
         dest = os.path.join(scratch, os.path.dirname(rel))
         os.makedirs(dest, exist_ok=True)
         subprocess.run(["rsync", "-az", f"{DGX_ROOT}{rel}", dest + "/"], check=False)
 SELFTEST_SHEET = {
-    "arm": "selftest-arm", "arm_hardmode_scores": [86, 90], "arm_hardmode_fail_counts": [7, 1],
-    "la_hardmode_scores": [91, 88, 89],
+    "arm": "selftest-arm", "arm_hardmode_scores": [86, 90], "arm_hardmode_fail_counts": [7, 1], "la_hardmode_scores": [91, 88, 89],
     "arm_fidelity_exact_by_depth": {8000: 20, 32000: 20, 64000: 20, 128000: 19},
     "arm_fidelity_wrong_by_depth": {8000: 0, 32000: 0, 64000: 0, 128000: 1},
     "temp0_decode_pct_diff_vs_la_by_c": {1: 1.2, 8: -0.5, 16: -2.1},
-    "benchy_c1_gain_pct_vs_la": 12.4, "benchy_c1_ttft_gain_pct_vs_la": 1.1,
-    "straggler_max_round_wall_s": 13.7,
-    "noise_suspects": [
-        "selftest-arm c16 399 vs 641 across reruns",
-        "selftest-arm hardmode 86 then 90 (within la band 86-93)",
-    ],
+    "benchy_c1_gain_pct_vs_la": 12.4, "benchy_c1_ttft_gain_pct_vs_la": 1.1, "straggler_max_round_wall_s": 13.7,
+    "noise_suspects": ["selftest-arm c16 399 vs 641 across reruns", "selftest-arm hardmode 86 then 90 (within la band 86-93)"],
 }
+def selftest_parse_benchy():
+    """Regression for the la-prose-t0.md baseline bug: la (45.97/706.81) vs x (56.48/755.90) must give +22.9% gen gain, -6.9% (worse) TTFT gain."""
+    import tempfile
+    head = "| depth | concurrency | prompt t/s (agg) | gen t/s (agg) | gen t/s (per stream) | e2e TTFT (ms) |\n"
+    row = "| 0 | 1 | 1 ± 1 | {gen} ± 1 | {gen} ± 1 | {ttft} ± 1 |\n"
+    with tempfile.TemporaryDirectory() as t:
+        d = os.path.join(t, "results", "benchy")
+        os.makedirs(d)
+        for name, gen, ttft in (("la-prose.md", 45.97, 706.81), ("la-prose-t0.md", 999, 1), ("x-prose.md", 56.48, 755.90)):
+            open(os.path.join(d, name), "w").write(head + row.format(gen=gen, ttft=ttft))
+        base, arm = parse_benchy(t, "la"), parse_benchy(t, "x")
+        gain, ttft_gain = pct_diff(arm["gen_tok_s"], base["gen_tok_s"]), -pct_diff(arm["ttft_ms"], base["ttft_ms"])
+        assert abs(gain - 22.9) < 0.05 and abs(ttft_gain - (-6.9)) < 0.05, (gain, ttft_gain)
+    print(f"selftest_parse_benchy OK: gain=+{gain}% ttft_gain={ttft_gain}%")
 def run(sheet, label):
     verdict, confidence = ask_jev(sheet)
     result = {
@@ -185,15 +186,14 @@ def main():
     ap.add_argument("--fetch", action="store_true", help="rsync this arm + la from dgx-01 into --root")
     ap.add_argument("--selftest", action="store_true", help="run against an embedded fake fact sheet")
     args = ap.parse_args()
-
     if args.selftest:
+        selftest_parse_benchy()
         return run(SELFTEST_SHEET, "selftest")
     if not args.arm:
         ap.error("arm is required unless --selftest")
     if args.fetch:
         fetch(args.arm, args.root)
         fetch("la", args.root)
-
     sheet = fact_sheet(args.arm, collect(args.root, args.arm), collect(args.root, "la"))
     run(sheet, args.arm)
 if __name__ == "__main__":
