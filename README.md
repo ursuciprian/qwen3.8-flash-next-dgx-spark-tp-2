@@ -23,7 +23,8 @@ answers on port 8000 with the OpenAI API, model name `qwen3.8-flash-next`.
 
 | Recipe | Image | Status |
 |---|---|---|
-| `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** `use_local_argmax_reduction: true` in the MTP spec config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| `recipes/eugr/eugr-agents-serve-local16-la-argmax.yaml` | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
 | `recipes/eugr/eugr-agents-serve-local16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
 | `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but c1 is ~-10% vs `la`. Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
 
@@ -56,6 +57,13 @@ the max (fast-mode) value, not a single run. Sources:
 Cold prefill 2093-2340 tok/s (c1). Decode-probe workload mix (single stream,
 peak of 3 repeats, `results/arms/la-lmq/decode_probe.txt`): code 69.0,
 structured 86.4, counting 100.3, prose 50.2 tok/s.
+
+**Default sampling (temperature 1.0).** The numbers above are all temperature-0
+sweeps. Clients that send no temperature run at the checkpoint default
+(1.0/0.95/20); probabilistic MTP draft sampling (promoted 2026-09-22,
+`results/arms/la-mtpprob/verdict.md`) lifts that case: prose c1 46->61 tok/s
+(+33%), c4 79->95. Temp-0 numbers are unaffected. Previous default (one-hot
+drafts + `use_local_argmax_reduction`) is kept as `la-argmax` for rollback.
 
 ### Category harness (tonyd2wild, 40 prompts, concurrency 1)
 

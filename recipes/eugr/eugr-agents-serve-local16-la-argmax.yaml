@@ -1,9 +1,11 @@
+# Previous default (one-hot drafts + use_local_argmax_reduction), kept as fallback.
+# Superseded 2026-09-22 by probabilistic drafts in eugr-agents-serve-local16-la.yaml.
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
 
 recipe_version: "1"
-name: eugr-agents-serve-local16-la
-description: "Default (la): local16 + probabilistic MTP draft sampling (draft_sample_method:probabilistic), promoted 2026-09-22 for default-temperature (1.0) clients -- fallback with the previous one-hot/use_local_argmax_reduction config is eugr-agents-serve-local16-la-argmax.yaml."
+name: eugr-agents-serve-local16-la-argmax
+description: "Arm 2 (la): local16 + use_local_argmax_reduction:true in the MTP speculative config (communication-only optimization, no rebuild -- same container as local16)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 container: spark-vllm-b12x:local-20260918-a8333658
@@ -76,19 +78,6 @@ env:
   # (VLLM_MTP_NVFP4_LM_HEAD default 1) -- both heads are now quantized.
   VLLM_MXFP8_LM_HEAD: "1"
 
-# --speculative-config: promoted 2026-09-22 (was use_local_argmax_reduction:
-# true, one-hot drafts). Clients that send no temperature run at the
-# checkpoint default (1.0/0.95/20), where one-hot drafts only got 0.27
-# accepted per draft token -- the draft always proposes its argmax, so the
-# rejection test against a temperature-1 target distribution throws most of
-# it away. Probabilistic drafts sample from the full draft distribution, so
-# the rejection test stays distribution-preserving by construction. vLLM
-# refuses use_local_argmax_reduction combined with draft_sample_method=
-# probabilistic (ValueError), so this drops that flag. Measured 2026-09-22 on
-# this recipe: default-temperature prose c1 46->61 tok/s (+33%), c4 79->95;
-# temp-0 unaffected (c1 ~101, c8 ~437, c16 ~638); quality gate: fidelity
-# 8k-128k 20/20 x4, straggler c5-16 clean, hardmode 86->90 (la band 86-93).
-# Fallback (previous default): eugr-agents-serve-local16-la-argmax.yaml.
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --host {host} \
@@ -111,7 +100,7 @@ command: |
     --max-model-len {max_model_len} \
     --max-num-seqs {max_num_seqs} \
     --max-num-batched-tokens {max_num_batched_tokens} \
-    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"draft_sample_method":"probabilistic"}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"use_local_argmax_reduction":true}}' \
     --gdn-decode-kernel b12x \
     --linear-backend b12x \
     --moe-backend b12x \

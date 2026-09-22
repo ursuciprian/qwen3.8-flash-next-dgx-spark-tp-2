@@ -10,7 +10,8 @@ the top-level `README.md` for how to boot the default recipe, and
 
 | recipe | image | status | notes |
 |---|---|---|---|
-| `eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **default, serving** | local16 + `use_local_argmax_reduction: true` + `VLLM_MXFP8_LM_HEAD: "1"` (promoted 2026-09-21). See `results/arms/la-lmq/verdict.md`. |
+| `eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **default, serving** | local16 + probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) + `VLLM_MXFP8_LM_HEAD: "1"` (probabilistic drafts promoted 2026-09-22, MXFP8 lm_head promoted 2026-09-21). See `results/arms/la-mtpprob/verdict.md`, `results/arms/la-lmq/verdict.md`. |
+| `eugr-agents-serve-local16-la-argmax.yaml` | same image | fallback | previous default: one-hot drafts + `use_local_argmax_reduction: true`, kept in case probabilistic drafts need to be rolled back. |
 | `eugr-agents-serve-local16.yaml` | same image | fallback | same as the default minus `use_local_argmax_reduction`. |
 | `eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` | not promoted | pull-based build from published wheels instead of `build.sh`. `ghcr2` gate: TC-45 passes (first time on this stack) but c1 ~-10% vs `la`. See `results/RESULTS.md` §"Cache-mount fix and ghcr image gate". |
 | `eugr-agents-serve-local16-la-kk.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260920-kk-a229c7a-e9ce547` | in progress | karmic-kraken-beta build (vllm `57a80980` + b12x `e9ce5477`) instead of dev/jovian-judgement; not yet gated against `la`. See `results/README.md`. |
