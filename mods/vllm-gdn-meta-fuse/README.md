@@ -93,5 +93,5 @@ container). It needs a GPU boot.
 mods: [b12x-startup-boundedwait, vllm-gdn-meta-fuse]
 ```
 
-i.e. `recipes/eugr/eugr-agents-serve-local16-la.yaml` with that line, A/B
+i.e. `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml` with that line, A/B
 against the unmodified `la` recipe on `bench_sweep.py --levels 1,8`.

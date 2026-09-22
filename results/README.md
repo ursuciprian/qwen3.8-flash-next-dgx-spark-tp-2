@@ -84,7 +84,7 @@ aren't summarized here.
 | date | subject | file |
 |---|---|---|
 | 2026-09-15 | eugr's b12x vLLM route vs the SGLang recipes, first measurements on this checkpoint; agents-ladder MTP/RoCE-threshold arms; LPT4096 exploratory benchmark | `results/eugr-b12x/RESULTS.md` |
-| 2026-09-16 | decode-aware prefill scheduling fixes the c5/c9/c12 depth collapse (root cause: `max_parallel_prefills=1` starving decode); promoted into `recipes/eugr/eugr-agents.yaml` | `results/eugr-b12x/RESULTS.md` §"decode-aware prefill scheduling" |
+| 2026-09-16 | decode-aware prefill scheduling fixes the c5/c9/c12 depth collapse (root cause: `max_parallel_prefills=1` starving decode); promoted into `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-tuned-baseline.yaml` | `results/eugr-b12x/RESULTS.md` §"decode-aware prefill scheduling" |
 | 2026-09-16 | SGLang b12x GDN kernel port (`mods/sglang-gdn-b12x-decode`) — decode-only kernel matches Triton; decode+verify kernel breaks acceptance in the live server, root cause not found | `results/eugr-b12x/RESULTS.md` §"SGLang b12x GDN kernel port" |
 | 2026-09-11 and before | SGLang vs vLLM-nightly comparison (bigkv/nospec/vllm-cached grids), fp8 KV quality gate (spark-bench, 76 scenarios) | `results/RESULTS.md` §"Reference: earlier engine comparison", `results/sglang-bigkv-*.csv`, `results/vllm-cached-*.csv`, `results/fp8-gate/` |
 

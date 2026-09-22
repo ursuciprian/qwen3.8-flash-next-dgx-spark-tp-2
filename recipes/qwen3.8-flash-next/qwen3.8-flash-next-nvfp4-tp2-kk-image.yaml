@@ -1,0 +1,139 @@
+# formerly eugr-agents-serve-local16-la-kk.yaml
+# Same as qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml, but points at the
+# integration/karmic-kraken-beta (KK) matched vllm+b12x build:
+#   vllm  57a80980 (KK) + our tool_choice=required parser fix (9e0825c968) +
+#         our bounded-PrefixStore-waits fix (a229c7a19d), cherry-picked onto
+#         ursuciprian/vllm@dgx-spark-kk. The MTP draft-vocab head commit
+#         (77bdd107) was DROPPED: KK restructured the model tree into
+#         per-vendor subdirs (vllm/models/qwen4_exp/{amd,nvidia}/mtp.py etc)
+#         and vllm/models/qwen3_8_flash_next/ no longer has an mtp.py to
+#         patch, so the cherry-pick does not apply cleanly. That head was
+#         already experimental/inert (~0% draft acceptance) so nothing of
+#         value is lost.
+#   b12x  e9ce5477 (KK) exactly, no cherry-picks -- ursuciprian/b12x@dgx-spark-kk.
+# Built via wheels-release.yml + build-image-from-wheels.yml from
+# ursuciprian/spark-vllm-b12x; see that repo's README for the pipeline.
+#
+# Bounded PrefixStore waits: KK's own 0f60770e ("Coordinate b12x tuning cache
+# agreement across startup ranks") reworked B12xPreparationCoordinator's
+# cache-agreement protocol (gather-then-authorize caches across ranks) but
+# left B12xPreparationCoordinator._exchange()'s underlying Store reads as
+# plain, unbounded store.get() calls -- our bounded-wait fix is therefore
+# NOT superseded and was cherry-picked in as a real source commit, same as
+# the -ghcr.yaml image. tool_choice=required: KK's ParserManager.get_parser()
+# still has no collapsed-engine re-pointing step, so that fix wasn't
+# superseded either.
+#
+# mods: [vllm-tc45-cheap-kk]. The image tag below moved past 57a80980 to
+# a229c7a1 (still cherry-picked onto ursuciprian/vllm@dgx-spark-kk), which
+# also carries the tool_choice=required parser fix (9e0825c968, a cherry
+# pick of 5d1df69f) -- but that fix unconditionally gated the structural-tag
+# grammar on tool_choice="auto" as well as required/named, wastefully
+# building a tool parser (a second parser engine) on every plain-auto
+# agentic request just to get None back (get_model_structural_tag() already
+# returns None for auto unless a tool sets strict: true -- see
+# results/arms/tooleval-fix/cheap-design.md), mutated the shared
+# ParserEngine subclass in place, and called
+# ParserManager._get_parser_engine_cls(), which was never ported into KK's
+# parser_manager.py -- crashing any server boot with both
+# --reasoning-parser and --tool-call-parser set. vllm-tc45-cheap-kk applies
+# the cheap-path rework (patches/vllm-tc45-cheap/0003 + 0003b
+# -tc45-cheap-kk-a229c7a1.patch: required/named always, auto only when a
+# tool is strict, per-call subclass, _get_parser_engine_cls restored) as a
+# runtime mod so this recipe doesn't need its own image build; the fix is
+# on ursuciprian/vllm@dgx-spark-kk (d2dbe9bf41) for the next wheel build to
+# pick up, at which point the mod becomes redundant and can be dropped.
+# New volume path (not la's) because tuning_cache_version likely changed
+# under the KK vllm/b12x combination -- keeps la's own cache untouched.
+
+recipe_version: "1"
+name: qwen3.8-flash-next-nvfp4-tp2-kk-image
+description: "Arm 2 (la), KK image: same as eugr-agents-serve-local16-la-ghcr, but container is built from local-inference-lab's integration/karmic-kraken-beta branch (vllm 57a80980 + b12x e9ce5477) via our fork+cherry-pick pipeline instead of the dev/jovian-judgement-based dgx-spark forks."
+
+model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+container: ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260920-kk-a229c7a-e9ce547
+
+# Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
+# eugr builder either substitute its own pullable nightly or try to build via
+# build-and-copy.sh (sparkrun/builders/eugr.py: _wants_build()/_wants_b12x()) --
+# both wrong for a tag build.sh already built and loaded on every cluster host.
+# With build_args empty and a non-sentinel tag already present on all hosts,
+# sparkrun's pull-first-default branch just uses it verbatim.
+build_args: []
+
+cluster_only: true
+
+# See header comment: applies the cheap-path structural-tag fix
+# (patches/vllm-tc45-cheap/0003-tc45-cheap-kk-a229c7a1.patch) on top of the
+# image's baked-in tool_choice=required fix. KK still carries its own
+# tuning-cache coordination redesign, unrelated to this mod.
+mods: [vllm-tc45-cheap-kk]
+
+executor_config:
+  volumes:
+    - "/home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-ca6f25af_kk:/tmp/.cache"
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  pipeline_parallel: 1
+  block_size: 16
+  max_model_len: 262144
+  max_num_seqs: 16
+  max_num_batched_tokens: 8192
+  num_speculative_tokens: 4
+  gpu_memory_utilization: 0.80
+
+env:
+  B12X_AUTOTUNE: "1"
+  B12X_ROCE_SPIN_LIMIT: "300000000"
+  CUTE_DSL_ARCH: "sm_121a"
+  SAFETENSORS_FAST_GPU: "1"
+  VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+  VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+  VLLM_USE_AOT_COMPILE: "1"
+  VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+  VLLM_USE_V2_MODEL_RUNNER: "1"
+  B12X_POLICY_MODE: "auto"
+  VLLM_ENABLE_ROCE_ALLREDUCE: "1"
+  VLLM_ROCE_ALLREDUCE_MAX_SIZE: "2MB"
+  # Match the promoted default (la): online MXFP8 (W8A16) for the verify
+  # lm_head. Without this the KK arm is not comparable with la, which gained
+  # c1 95.6 -> 99.5 median tok/s from it on 2026-09-21 (bench_sweep counting
+  # diagnostic, temp 0, thinking off).
+  VLLM_MXFP8_LM_HEAD: "1"
+
+command: |
+  vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --tensor-parallel-size {tensor_parallel} \
+    --pipeline-parallel-size {pipeline_parallel} \
+    --mamba-cache-mode align \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
+    --dtype bfloat16 \
+    --kv-cache-dtype fp8 \
+    --quantization modelopt_mixed \
+    --block-size {block_size} \
+    --load-format b12x \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"use_local_argmax_reduction":true}}' \
+    --gdn-decode-kernel b12x \
+    --linear-backend b12x \
+    --moe-backend b12x \
+    --no-enable-flashinfer-autotune \
+    --mm-encoder-tp-mode data \
+    --reasoning-parser qwen3 \
+    --tool-call-parser qwen3_xml \
+    --enable-auto-tool-choice \
+    --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
+    --gpu-memory-utilization {gpu_memory_utilization}

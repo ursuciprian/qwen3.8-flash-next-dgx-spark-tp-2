@@ -4,7 +4,7 @@ Two DGX Spark (GB10, SM121), tensor parallel 2 over ConnectX-7 RoCE, image
 `spark-vllm-b12x:local-20260918-a8333658`, checkpoint
 `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD `7c4f1bc1`, fp8 KV, MTP 4,
 prefix caching, `B12X_AUTOTUNE=1`, `max_num_seqs 16`. Default recipe
-`recipes/eugr/eugr-agents-serve-local16-la.yaml` (adds
+`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml` (adds
 `use_local_argmax_reduction: true`).
 
 Two fresh boots of the same recipe differ by up to 15% at c1 (bench_sweep

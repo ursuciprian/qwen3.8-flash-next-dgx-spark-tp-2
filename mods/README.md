@@ -82,7 +82,7 @@ from the commit message. See `mods/vllm-gdn-meta-fuse/README.md`.
 ## Experimental (not in the default recipe)
 
 Newer vLLM/b12x-era mods, tried against the `la` baseline 2026-09-20/21.
-None of these are wired into `eugr-agents-serve-local16-la.yaml`; see each
+None of these are wired into `qwen3.8-flash-next-nvfp4-tp2.yaml`; see each
 mod's own patch and the linked verdict for detail.
 
 - `vllm-qwen38-bf16-gemv` — rejected. Boot failed
@@ -108,7 +108,7 @@ mod's own patch and the linked verdict for detail.
 
 ## vLLM/b12x-era mods (current as of 2026-09-21)
 
-Everything below is used by the `recipes/eugr/` family that serves the model
+Everything below is used by the `recipes/qwen3.8-flash-next/` family that serves the model
 today. One line each; see `recipes/README.md` for which recipe wires each
 one in and `results/README.md` for the verdict behind each status.
 
