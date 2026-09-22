@@ -1,25 +1,42 @@
 # Results index
 
 Every measurement, arm and verdict in this repo, newest ideas first within
-each group. Ground truth for the current serving numbers is
-`results/arms/la-lmq/verdict.md` plus the top-level `README.md` — this file
-is the index, not a second source of numbers. "File" points at the primary
+each group. Ground truth for the current serving numbers is the top-level
+`README.md` ("Headline numbers" and "Default recipe … measured numbers"),
+backed by `results/benchy/*.md` and `results/arms/la-mtpprob/` — this file is
+the index, not a second source of numbers.
+
+Workload key used below — every number carries one of these tags:
+
+- **[count]** `tools/tony-bench/bench_sweep.py`: "List the numbers from 1 to
+  300…", temp 0, thinking off, non-streaming, 320 max tokens, fresh context,
+  3 rounds; aggregate tok/s (at c1 = per-stream). MTP accepts ~4 of 4 drafts
+  here, so it is a speculative-decoding ceiling diagnostic, not the speed of
+  coding or chat.
+- **[task]** llama-benchy fork `--prompt-mode task`: agent coding turn, 2048
+  new prompt tokens on a cached context (depth 0/16k/64k), up to 512 output
+  tokens, thinking on, prefix caching; aggregate gen tok/s. Temperature
+  stated per entry.
+- **[prose]** llama-benchy 0.4.0 default book continuation, 2048 new prompt
+  tokens, 128 output tokens, default temperature 1.0; aggregate gen tok/s. "File" points at the primary
 doc for that entry; most arms also have raw JSON/logs alongside it that
 aren't summarized here.
 
-## Current default recipe: la (+ MXFP8 lm_head)
+## Current default recipe: la (probabilistic MTP drafts + MXFP8 lm_head)
 
 | date | recipe / arm | key numbers | verdict | file |
 |---|---|---|---|---|
-| 2026-09-21 | `la-lmq` — online MXFP8 verify-head lm_head (`VLLM_MXFP8_LM_HEAD=1`) | c1 99.5 median/101.8 max (was 95.6/99.5), c8 440.7 (was 433.0), hardmode 89/100, fidelity 100%x4, straggler clean | **promoted, now default** | `results/arms/la-lmq/verdict.md` |
-| 2026-09-21 | c1 "decline" investigation | 25 runs, bimodal 94-99 (fast) / 84-88 (slow), no monotonic decline; GPU-internal or async-scheduling suspected, not host/thermal/RoCE/CPU-placement | root-caused as measurement noise, not a regression — report median of >=5 + max | `results/arms/c1-decline/verdict.md` |
-| 2026-09-20/21 | ghcr / ghcr2 — pull-based image from published wheels | ghcr (0 cached, tainted) c1 85.6; ghcr2 (272 cached) c1 87.7 (~-10% vs la's 97.4), TC-45 passes (first time), quality/fidelity/straggler equal or better | **not promoted** — quality win, throughput regression vs `la`; kept as an alternate pull path (PR #8) | `results/RESULTS.md` §"Cache-mount fix and ghcr image gate" |
-| 2026-09-19/20 | cache-mount fix (`executor_config.volumes` -> `/tmp/.cache`) | root cause of "0 cached" boots: `HOME=/tmp` in container, plan cache never persisted; la boot log 0 cached / c1 86 -> 272 cached / c1 97.4 | fixed, applied to `la`/`local16`/ghcr variants | `results/RESULTS.md` §"Cache-mount fix and ghcr image gate" |
-| 2026-09-19 | `la-tc` — `vllm-tc45-reasoning-structag-fix` (Phase B) | TC-45 fixed, hardmode 93/100 (was 91), but c1 85.0 vs baseline 95.7 (~-11%) | **reverted** — quality win not worth the throughput cost | `results/arms/tooleval-fix/notes.md` |
+| 2026-09-22 | `la-mtpprob` — `draft_sample_method: probabilistic` | [task] temp 1.0: c1 45.6 ± 13.7 (old la 46.1, tie), c16 221.9 (186.3), 64k c1 58.4 (42.4), 16k c16 115.4 ± 24.3 (120.3); [prose]: c1 56.1 (41.1), c16 126.7 (117.8), 64k c16 36.78 (38.15, regression); [count]: c1 100.9-102.1, c8 434.6-439.4, c16 635.0-641.3; hardmode 86 then 90, fidelity 8k-64k 20/20, 128k 19/20 then 20/20 x2, straggler clean | **promoted, now default** (PR #25) | `results/arms/la-mtpprob/verdict.md`, `results/benchy/la-mtpprob-{task16,prose16}.md` vs `la-{task16,prose16}.md` |
+| 2026-09-22 | old la (argmax) at temp 0, [task] | c1 55.3, c16 217.7; 16k c1 55.3; 64k c1 55.9; temp 0.6 grid pending | reference for temperature effect | `results/benchy/la-task16-t0.md` |
+| 2026-09-21 | `la-lmq` — online MXFP8 verify-head lm_head (`VLLM_MXFP8_LM_HEAD=1`) | [count] c1 99.5 median/101.8 max (was 95.6/99.5), c8 440.7 (was 433.0), hardmode 89/100, fidelity 100%x4, straggler clean | **promoted, now default** | `results/arms/la-lmq/verdict.md` |
+| 2026-09-21 | c1 "decline" investigation | [count] 25 runs, bimodal 94-99 (fast) / 84-88 (slow), no monotonic decline; GPU-internal or async-scheduling suspected, not host/thermal/RoCE/CPU-placement | root-caused as measurement noise, not a regression — report median of >=5 + max | `results/arms/c1-decline/verdict.md` |
+| 2026-09-20/21 | ghcr / ghcr2 — pull-based image from published wheels | [count] ghcr (0 cached, tainted) c1 85.6; ghcr2 (272 cached) c1 87.7 (~-10% vs la's 97.4), TC-45 passes (first time), quality/fidelity/straggler equal or better | **not promoted** — quality win, throughput regression vs `la`; kept as an alternate pull path (PR #8) | `results/RESULTS.md` §"Cache-mount fix and ghcr image gate" |
+| 2026-09-19/20 | cache-mount fix (`executor_config.volumes` -> `/tmp/.cache`) | root cause of "0 cached" boots: `HOME=/tmp` in container, plan cache never persisted; la boot log 0 cached / [count] c1 86 -> 272 cached / c1 97.4 | fixed, applied to `la`/`local16`/ghcr variants | `results/RESULTS.md` §"Cache-mount fix and ghcr image gate" |
+| 2026-09-19 | `la-tc` — `vllm-tc45-reasoning-structag-fix` (Phase B) | TC-45 fixed, hardmode 93/100 (was 91), but [count] c1 85.0 vs baseline 95.7 (~-11%) | **reverted** — quality win not worth the throughput cost | `results/arms/tooleval-fix/notes.md` |
 | 2026-09-20/21 | `la-tcc` — `vllm-tc45-cheap` (v2, gates on `required`/named only, not `auto`) | mechanism: old fix's grammar gate fired on `tool_choice=auto` too, serializing async sampling every step for any tool-bearing request; new gate narrows to `required`/named | validation recipe written, GPU validation pending — see file for the 6-step promotion checklist | `results/arms/tooleval-fix/cheap-design.md` |
 | 2026-09-20 | `la-kk` — KK (karmic-kraken-beta) image, vllm `57a80980` + b12x `e9ce5477` | KK's `ParserManager` never collapses Qwen3 onto a shared engine (design difference from jovian), so the TC-45 bug class doesn't exist there; still needs the `abstract_parser.py` `reasoning=False` + `auto`-gate fixes (`vllm-tc45-cheap` variant `0002`) | in progress, not gated against `la` yet | `mods/vllm-tc45-reasoning-structag-fix/`, `results/arms/tooleval-fix/cheap-design.md` §"Karmic-kraken differs" |
 
-## Rejected arms (screened against `la`, bar +3% c1 / +5% c8, nothing else worse than -2%)
+## Rejected arms (screened against `la` on [count], bar +3% c1 / +5% c8, nothing else worse than -2%)
 
 | date | arm | change | result | verdict | file |
 |---|---|---|---|---|---|
@@ -60,7 +77,7 @@ aren't summarized here.
 
 | doc | subject |
 |---|---|
-| `results/profiling/README.md` | rank-local `torch.profiler` decode-step kernel breakdown at c1/c8 on `la`: GEMM 83.6%/65.6%, GDN/SSM 2.3%/13.5%, all-reduce 4.0%/6.0%, both concurrencies compute-bound (idle <=7.6%); ranked list of optimization targets |
+| `results/profiling/README.md` | rank-local `torch.profiler` decode-step kernel breakdown at c1/c8 on `la` under the [count] prompt: GEMM 83.6%/65.6%, GDN/SSM 2.3%/13.5%, all-reduce 4.0%/6.0%, both concurrencies compute-bound (idle <=7.6%); ranked list of optimization targets |
 
 ## Earlier (pre-2026-09-18) engine comparisons — kept for history, not the current serving route
 

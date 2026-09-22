@@ -1,5 +1,13 @@
 # b12x TP=2 preparation deadlock — mechanism (2026-09-19)
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+
 Traced against b12x @ a8333658 (`b12x/preparation/session.py`, 1657 lines — the
 version installed in the serving image) and the vLLM fork files that drive it
 (`vllm/model_executor/warmup/b12x_prepare.py`, `vllm/v1/worker/b12x_startup.py`).

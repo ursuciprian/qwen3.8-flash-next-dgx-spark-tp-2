@@ -159,7 +159,8 @@ knowing before treating 85.0 as the patch's steady-state price:
   hundreds of grammar requests. The la-tc/ghcr2 hardmode runs were also ~73%
   heavier than la's (42086 vs 24344 drafts).
 - In the *same* boots, `bench_categories --concurrency 1` and `decode_probe`
-  -- both single-stream, both run after hardmode and before the sweep -- show
+  -- both single-stream real-prompt probes (temp 0), unlike the bench_sweep
+  counting diagnostic, both run after hardmode and before the sweep -- show
   no regression at all (html2 100.1 / 100.4 / 99.8 tok/s for la / la-tc /
   ghcr2; json/coding/prose likewise within noise).
 

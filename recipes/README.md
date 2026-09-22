@@ -4,7 +4,12 @@ Every sparkrun recipe in this repo. `recipes/eugr/` is the served vLLM/b12x
 family and the one that matters day to day; everything else is either an
 earlier SGLang-era route or a bisection/debug script kept for history. See
 the top-level `README.md` for how to boot the default recipe, and
-`results/README.md` for the numbers behind each verdict below.
+`results/README.md` for the numbers behind each verdict below. Every "c1" /
+"c8" speed delta in this file is the `tools/tony-bench/bench_sweep.py`
+counting diagnostic (list 1 to 300, temp 0, thinking off, 320 tokens, fresh
+context, aggregate tok/s), a speculative-decoding ceiling, not user
+throughput; see the top-level README "Headline numbers" for agent-coding and
+prose numbers.
 
 ## `recipes/eugr/` — served recipe
 

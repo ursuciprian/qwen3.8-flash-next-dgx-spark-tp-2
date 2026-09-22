@@ -1,5 +1,13 @@
 # c1 "decline" investigation — verdict (2026-09-21, 00:19–00:50 EEST)
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+
 Serving: `eugr-agents-serve-local16-la.yaml`, image `spark-vllm-b12x:local-20260918-a8333658`, fresh boot, no docker pulls / CI builds on either node during the series.
 
 ## Data (bench_sweep c1, 3 rounds x 300 tokens, back-to-back, ~24 s per run)

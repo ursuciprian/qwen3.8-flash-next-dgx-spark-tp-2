@@ -7,7 +7,8 @@ prefix caching, `B12X_AUTOTUNE=1`, `max_num_seqs 16`. Default recipe
 `recipes/eugr/eugr-agents-serve-local16-la.yaml` (adds
 `use_local_argmax_reduction: true`).
 
-Two fresh boots of the same recipe differ by up to 15% at c1 and a few
+Two fresh boots of the same recipe differ by up to 15% at c1 (bench_sweep
+counting diagnostic, below) and a few
 percent at c8 (`results/arms/la/sweep.json` 95.7 vs `la-final` 98.8 vs
 `la-reboot1` 97.2 vs `sweep_la_final_restore` 94.9; c8 412.0-441.8 across
 boots). **Noise band: c1 85-99, c8 412-442. Nothing inside that band is a
@@ -16,7 +17,13 @@ result** — arm promotion used 3-boot medians and a gate bar of +3% at c1 or
 and vLLM-nightly measurements are kept below for history but are not the
 current serving route; see [Reference: earlier engine comparison](#reference-earlier-engine-comparison-2026-09-11-and-before).
 
-## Throughput sweep (`tools/tony-bench/bench_sweep.py`, 3 rounds x 300 tokens, counting workload)
+## Throughput sweep (`tools/tony-bench/bench_sweep.py`, counting diagnostic, not user throughput)
+
+Workload: "List the numbers from 1 to 300 separated by commas…", temperature
+0, thinking off, non-streaming, 320 max tokens (~300 generated), fresh
+context, 3 rounds per level; aggregate tok/s. MTP accepts ~4 of 4 drafts on
+this prompt, so these are speculative-decoding ceilings, not coding or chat
+speed. Agent-coding and prose numbers: top-level README.
 
 | concurrency | agg tok/s | per-stream tok/s | TTFT | source |
 |---|---:|---:|---:|---|
@@ -29,13 +36,20 @@ Cold prefill (c1) 2236-2303 tok/s across the same boots.
 
 ## Category harness (tonyd2wild, 40 prompts, concurrency 1, `--hardmode` 88 scenarios for tool-eval)
 
+Workload: `tools/tony-bench/bench_categories.py`, 5 real prompts per
+category, temp 0, thinking off, streaming, max 900 tokens, fresh context,
+c1; per-stream decode tok/s excluding TTFT. The coding column is its 5
+coding prompts (hidden tests), unrelated to bench_sweep.
+
 | build | median | json | html | reasoning | coding | summary | format | prose | narrative | tool-eval |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | old eugr image (pre-own-build) | 65.8 | 90.1 | 86.1 | 74.9 | 69.4 | 47.5 | 46.4 | 43.8 | 40.4 | 90 |
 | local16 (own image, plain) | 76.4 | 90.4 | 97.0 | 77.5 | 85.8 | 50.1 | 47.6 | 43.4 | 44.4 | — |
 | la (own image, argmax, default) | — (not re-run) | 94.6 | 95.1 | 78.8 | 82.4 | 51.5 | 60.0 | 49.1 | 45.0 | 88-91 |
 
-`decode_probe.py` (mean of 3, `code/structured/counting/prose`, tok/s):
+`decode_probe.py` (streaming, temp 0, thinking not set (server default),
+512 max tokens, fresh context, c1, decode excludes TTFT; code = red-black
+tree prompt; mean of 3, `code/structured/counting/prose`, tok/s):
 
 | build | code | structured | counting | prose |
 |---|---:|---:|---:|---:|
@@ -46,7 +60,7 @@ Cold prefill (c1) 2236-2303 tok/s across the same boots.
 `la` peak-of-3 decode probe (`results/arms/la/decode_probe.txt`): code 59.6,
 structured 90.5, counting 98.0, prose 47.9.
 
-Real-prompt concurrency lane (old image only, 2026-09-17, not re-measured on
+Real-prompt concurrency lane (prompt set, temperature and thinking setting not recorded; source is the 2026-09-17 journal entry only; old image only, 2026-09-17, not re-measured on
 the own image), per-stream/aggregate tok/s: x2 61.9/83.2, x4 47.8/81.0,
 x6 37.7/112.6, x8 33.7/124.8.
 
