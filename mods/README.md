@@ -94,6 +94,16 @@ mod's own patch and the linked verdict for detail.
 - `vllm-qwen38-hc-mxfp8` — quality-gated arm pending (hyper-connection/router
   online MXFP8, expected +7.8% from bytes alone, mutually exclusive with
   `vllm-qwen38-bf16-gemv`; see `results/kernel-pass/lmhead-hc-design.md` §B2).
+- `vllm-gdn-deferred` — experimental, **not bootable yet.** The vLLM half of
+  deferred GDN checkpoints: the b12x decode kernel keeps one base checkpoint
+  plus per-token records instead of one full state snapshot per verified
+  token, so the block-boundary state copies have to go through an
+  accepted-prefix commit first. 2.66x less GDN state traffic on a kernel
+  measured at 86% of the GB10's DRAM bandwidth, modelled at 13.5% -> ~6-7% of
+  the c8 step. Needs a b12x wheel built from `feat/gdn-deferred-checkpoints`,
+  which does not exist; until then the mod applies cleanly and
+  `VLLM_GDN_DEFERRED_CHECKPOINTS` must stay unset. See
+  `mods/vllm-gdn-deferred/README.md`.
 
 ## vLLM/b12x-era mods (current as of 2026-09-21)
 
