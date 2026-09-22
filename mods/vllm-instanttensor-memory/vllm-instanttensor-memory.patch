@@ -1,0 +1,14 @@
+--- a/instanttensor/_impl.py
++++ b/instanttensor/_impl.py
+@@ -737,7 +737,10 @@
+         if max_free_mem_usage is None:
+             max_free_mem_usage = 0.5
+         
+-        free_bytes, total_bytes = torch.cuda.mem_get_info()
++        # Share vLLM's UMA accounting and its CUDA-on-WSL policy.
++        from vllm.utils.mem_utils import MemorySnapshot
++
++        free_bytes = MemorySnapshot(device=self.device).free_memory
+         avail_bytes = int(free_bytes * max_free_mem_usage)
+ 
+         self.sync_time = time.perf_counter()

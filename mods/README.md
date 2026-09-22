@@ -150,6 +150,38 @@ one in and `results/README.md` for the verdict behind each status.
   acceptance in the live server (root cause not found). See
   `results/eugr-b12x/RESULTS.md` §"SGLang b12x GDN kernel port".
 
+## `vllm-instanttensor-memory`
+
+Port of eugr/spark-vllm-docker `f247397d`
+(`docker/patch_instanttensor_vllm_memory.py`, 2026-09-18). Not referenced by a
+shipped recipe yet. One line in `instanttensor/_impl.py`
+(`safe_open._determine_io_params`): the weight-load budget reads
+`vllm.utils.mem_utils.MemorySnapshot(device).free_memory` instead of
+`torch.cuda.mem_get_info()`. On UMA parts cudaMemGetInfo does not count
+reclaimable host memory, and vLLM's snapshot already substitutes
+`psutil.virtual_memory().available` for integrated non-WSL GPUs -- which is
+our case, so the staging budget grows from half of cudaMemGetInfo free to half
+of `MemAvailable`. Weight-load staging only; nothing downstream of load.
+Details, SHAs and the fail-closed checks in
+`mods/vllm-instanttensor-memory/README.md`.
+
+### Not ported: eugr's b12x MoE tuning-memory fix
+
+eugr `a33f4b5c` (`docker/patch_vllm_b12x_moe_tuning_memory.py`, "fix memory
+regression in b12x lane") drops `owners=tensors` from the `PreparedCall` built
+in `_PreparedMoECall.make`, because `PreparationSession._publish` copies
+`call.owners` into the long-lived serving plan. **Not applicable to us.** At
+our pinned `local-inference-lab/vllm 8e1f1e58` (and unchanged at the clone's
+current `e624ae19`, and in the installed
+`spark-vllm-b12x:local-20260918-a8333658`), `fused_moe/b12x.py` has no
+`owners=`, no `route_patterns` and no `route_ids.unbind(0)`: the factory shares
+one trial tensor set through `weakref` and the call is published with the
+default `owners=()`. eugr's script agrees -- run against 8e1f1e58 it prints
+"B12X MoE trial ownership is unaffected or already patched; skipping" and
+writes nothing. It therefore does **not** explain the multi-candidate retune
+host OOM (journal 2026-09-20/21), which stays worked around with
+`B12X_COMPILE_WORKERS=4` and tune-time `gpu_memory_utilization 0.70`.
+
 ## Licensing
 
 Every overlay is a modified copy of a file from vLLM, which is Apache-2.0, and
