@@ -1,5 +1,23 @@
 # Arm la-mtpprob: draft_sample_method=probabilistic -- verdict (2026-09-22, corrected)
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+>
+> **Status update 2026-09-22:** promoted to the default `la` recipe by PR #25
+> on the default-temperature prose grid (llama-benchy 0.4.0 book, pp 2048,
+> tg 128, temp 1.0: c1 46.0 -> 61.2, c4 78.9 -> 95.3 aggregate; dgx-01
+> `results/benchy/la-prose.md` vs `la-mtpprob-prose.md`). The full
+> c1-c16 x depth grids were measured afterwards
+> (`results/benchy/la-mtpprob-{task16,prose16}.md` vs `la-{task16,prose16}.md`,
+> summarized in the top-level README). The "Not promoted" text below is the
+> state at the time of writing. hardmode here is tool-eval-bench `--hardmode`,
+> thinking on.
+
 **Verdict: SHIP-with-caveat.**
 
 ## Gate results

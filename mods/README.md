@@ -73,7 +73,8 @@ plus a host-side `torch.where` to one Triton launch, with destination pointers
 kept stable so graph replay still holds. Applies with zero conflicts --
 `b12x_gdn_metadata.py` is byte-identical between our base and the commit's
 parent. KK measured 41.19 -> 40.16 ms verifier step on TP2 Qwen (-2.5%);
-against our 55.03 ms c1 / 87.11 ms c8 that ~1 ms lands as ~-1.9% / ~-1.2%, and
+against our 55.03 ms c1 / 87.11 ms c8 decode steps (bench_sweep counting
+prompt, temp 0, thinking off, `results/profiling/README.md`) that ~1 ms lands as ~-1.9% / ~-1.2%, and
 it lands inside the busy 94% (idle is 5.4-5.6%). Fires only when a second GDN
 cache group reuses the captured sibling's metadata -- verify on the A/B, not
 from the commit message. See `mods/vllm-gdn-meta-fuse/README.md`.
@@ -129,7 +130,8 @@ one in and `results/README.md` for the verdict behind each status.
   scratch-isolation fix that removed the batch 5-7 straggler; baked into the
   served image, not applied as a live mod.
 - `vllm-tc45-reasoning-structag-fix` — first TC-45 (`tool_choice=required`)
-  fix. Works (hardmode 93/100) but costs ~-11% c1 throughput; reverted, see
+  fix. Works (hardmode 93/100) but costs ~-11% c1 on the bench_sweep counting
+  diagnostic (temp 0, thinking off; 85.0 vs 95.7 tok/s); reverted, see
   `vllm-tc45-cheap` below for the replacement.
 - `vllm-tc45-cheap` — second, cheaper TC-45 fix: narrows the structural-tag
   grammar gate to `required`/named tool choice instead of also firing on

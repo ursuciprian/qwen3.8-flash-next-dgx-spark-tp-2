@@ -1,5 +1,13 @@
 # Patches for the local b12x/vLLM build
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+
 Drop `*.patch` files here (unified diff, `git apply` compatible) to be applied,
 in filename sort order, to the matching clone before the image is built:
 

@@ -3,8 +3,9 @@
 Serving recipes for `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` at tensor
 parallel 2 across two NVIDIA DGX Spark (GB10, SM121) over ConnectX-7 RoCE,
 packaged for [sparkrun](https://sparkrun.dev). The served route is vLLM on a
-b12x-kernel fork, built as our own container image. All numbers below come
-from fresh boots, measured 2026-09-18/19, with the same harnesses.
+b12x-kernel fork, built as our own container image. Numbers below come from
+fresh boots measured 2026-09-18 to 2026-09-22; each one states its workload
+and source file.
 
 ## Quick start
 
@@ -26,7 +27,7 @@ answers on port 8000 with the OpenAI API, model name `qwen3.8-flash-next`.
 | `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
 | `recipes/eugr/eugr-agents-serve-local16-la-argmax.yaml` | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
 | `recipes/eugr/eugr-agents-serve-local16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
-| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but c1 is ~-10% vs `la`. Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
+| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
 
 Every recipe in `recipes/eugr/`, including the rejected/experimental arms, is
 tabled with status and a verdict pointer in `recipes/README.md`.
@@ -38,37 +39,221 @@ revision `7c4f1bc1`. fp8 KV, MTP width 4, prefix caching on, `max_num_seqs 16`.
 
 ## Headline numbers
 
-`tools/tony-bench/bench_sweep.py`, 3 rounds x 300 tokens, counting workload,
-default (`la`) recipe — now with online MXFP8 lm_head (`VLLM_MXFP8_LM_HEAD=1`,
-see [Known issues / fixes](#known-issues--fixes)). Boot-to-boot noise
-band: c1 85-102 tok/s, bimodal (fast mode 94-102, slow mode 84-88, see
-`results/arms/c1-decline/verdict.md`) — report the median of >=5 sweeps and
-the max (fast-mode) value, not a single run. Sources:
-`results/arms/la-lmq/verdict.md`, `results/arms/la-lmq/sweep.json`,
-`results/arms/lmhead/lmqB*.json`.
+Every figure in this repo names its workload. Three workloads are used, and
+their numbers are not comparable with each other (see
+[How to read these numbers](#how-to-read-these-numbers)). "Old la" is the
+previous default (one-hot drafts + `use_local_argmax_reduction`, now
+`-la-argmax.yaml`); "probabilistic" is the current default
+(`draft_sample_method: probabilistic`). Aggregate = generated tokens per
+second summed over all concurrent streams; per-stream = one request's rate.
 
-| concurrency | agg tok/s | per-stream tok/s | TTFT (c1 only) |
-|---|---:|---:|---:|
-| c1 | 99.5 median / 101.8 max (boot band 85-102) | same | 0.73-0.81 s |
-| c4 | 293.7 | 74.0 | 2.21 s |
-| c8 | 440-455 | 56.2-57.9 | 4.27-4.31 s |
-| c16 | 645.1 | 41.4 | 8.27 s |
+### Agent coding task (primary number)
 
-Cold prefill 2093-2340 tok/s (c1). Decode-probe workload mix (single stream,
-peak of 3 repeats, `results/arms/la-lmq/decode_probe.txt`): code 69.0,
-structured 86.4, counting 100.3, prose 50.2 tok/s.
+Our llama-benchy fork ([ursuciprian/llama-benchy](https://github.com/ursuciprian/llama-benchy) `0d4de42`, `--prompt-mode
+task --no-force-length`, command shape in `scripts/run_b_arm.sh`, with
+`--concurrency 1 4 10 16` and `--temperature 0` for the temp-0 grid): chat-shaped agent
+coding turn (short fixed system prompt, file excerpt, coding instruction),
+2048 new prompt tokens on top of a cached context of the given depth (prefix
+caching on), up to 512 output tokens (stops naturally), thinking on (server
+default; reasoning tokens counted), 3 runs per cell. Values are **aggregate
+gen tok/s**; at c1 aggregate = per-stream.
 
-**Default sampling (temperature 1.0).** The numbers above are all temperature-0
-sweeps. Clients that send no temperature run at the checkpoint default
-(1.0/0.95/20); probabilistic MTP draft sampling (promoted 2026-09-22,
-`results/arms/la-mtpprob/verdict.md`) lifts that case: prose c1 46->61 tok/s
-(+33%), c4 79->95. Temp-0 numbers are unaffected. Previous default (one-hot
-drafts + `use_local_argmax_reduction`) is kept as `la-argmax` for rollback.
+| cached depth | conc. | old la, temp 1.0 (default) | old la, temp 0 | probabilistic, temp 1.0 (default) | old la, temp 0.6 |
+|---:|---:|---:|---:|---:|---|
+| 0 | 1 | 46.1 ± 1.5 | 55.3 ± 3.6 | 45.6 ± 13.7 | pending |
+| 0 | 4 | 104.4 | 128.1 | 115.2 | pending |
+| 0 | 10 | 155.8 | 184.1 | 171.1 | pending |
+| 0 | 16 | 186.3 | 217.7 | 221.9 | pending |
+| 16k | 1 | 41.2 | 55.3 | 55.4 | pending |
+| 16k | 16 | 120.3 | 134.2 | 115.4 ± 24.3 | pending |
+| 64k | 1 | 42.4 | 55.9 | 58.4 | pending |
+| 64k | 16 | 100.0 | 111.4 | 106.8 | pending |
+| source | | `results/benchy/la-task16.md` | `results/benchy/la-task16-t0.md` | `results/benchy/la-mtpprob-task16.md` | `la-task16-t06` still running on dgx-01 |
 
-### Category harness (tonyd2wild, 40 prompts, concurrency 1)
+Temperature 1.0 is the checkpoint default (1.0 / top-p 0.95 / top-k 20),
+i.e. what a client that sends no temperature gets. Probabilistic at temp 0 was
+not measured on this workload.
 
-Old = eugr's original nightly image before this repo's own build; local16 =
-own image, plain recipe; la = own image with `use_local_argmax_reduction`.
+## Default recipe (la, probabilistic MTP drafts) — measured numbers
+
+All three tables are from the current default recipe
+(`eugr-agents-serve-local16-la.yaml`, `draft_sample_method: probabilistic`),
+measured 2026-09-21/22. ± is the spread across runs as llama-benchy reports it.
+
+**Agent coding.** `results/benchy/la-mtpprob-task16.md`: llama-benchy fork
+`--prompt-mode task --no-force-length`, 2048 new prompt tokens on a cached
+context of the given depth, up to 512 output tokens, thinking on, default
+temperature (1.0 / top-p 0.95 / top-k 20), prefix caching, 3 runs per cell.
+
+| cached depth | conc. | gen agg tok/s | gen per-stream tok/s | prompt tok/s (agg) | TTFT (ms) |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 1 | 45.57 ± 13.67 | 45.57 ± 13.67 | 3010.03 ± 114.52 | 698.46 ± 27.32 |
+| 0 | 4 | 115.24 ± 22.77 | 30.68 ± 6.80 | 3230.00 ± 77.69 | 2027.22 ± 539.05 |
+| 0 | 10 | 171.11 ± 19.49 | 19.69 ± 2.97 | 3196.54 ± 38.95 | 4058.79 ± 1753.61 |
+| 0 | 16 | 221.91 ± 2.05 | 17.09 ± 1.59 | 3280.83 ± 7.19 | 5968.70 ± 2934.10 |
+| 16k | 1 | 55.42 ± 3.20 | 55.42 ± 3.20 | 779.44 ± 4.34 | 2630.36 ± 14.96 |
+| 16k | 4 | 102.47 ± 1.81 | 32.45 ± 3.57 | 852.46 ± 1.39 | 7588.48 ± 2095.66 |
+| 16k | 10 | 122.32 ± 0.58 | 18.01 ± 3.77 | 861.12 ± 0.48 | 15065.82 ± 6497.38 |
+| 16k | 16 | 115.40 ± 24.27 | 10.97 ± 4.01 | 814.81 ± 56.80 | 23850.35 ± 11577.43 |
+| 64k | 1 | 58.42 ± 3.45 | 58.42 ± 3.45 | 570.51 ± 5.98 | 3596.16 ± 39.15 |
+| 64k | 4 | 91.66 ± 0.93 | 30.10 ± 4.46 | 635.86 ± 1.16 | 10129.08 ± 2788.80 |
+| 64k | 10 | 93.70 ± 12.18 | 14.70 ± 4.22 | 602.19 ± 61.42 | 21165.63 ± 10081.95 |
+| 64k | 16 | 106.82 ± 5.89 | 10.89 ± 3.54 | 644.61 ± 1.14 | 29218.89 ± 14327.02 |
+
+Temperature-0 and temperature-0.6 agent-coding grids exist only for the old
+argmax config so far (`results/benchy/la-task16-t0.md`: c1 55.3, c16 217.7;
+temp 0.6 still running) and are pending for this recipe.
+
+**Prose continuation.** `results/benchy/la-mtpprob-prose16.md`: llama-benchy
+0.4.0 default book corpus, 2048 new prompt tokens on a cached context of the
+given depth, 128 output tokens, default temperature (1.0), thinking not set
+(server default), prefix caching, 2 runs per cell.
+
+| cached depth | conc. | gen agg tok/s | gen per-stream tok/s | prompt tok/s (agg) | TTFT (ms) |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 1 | 56.05 ± 2.56 | 56.05 ± 2.56 | 3012.77 ± 65.69 | 683.13 ± 14.84 |
+| 0 | 4 | 100.29 ± 14.00 | 29.90 ± 3.45 | 3279.76 ± 87.54 | 1972.35 ± 596.46 |
+| 0 | 10 | 116.86 ± 5.94 | 17.19 ± 3.71 | 3296.24 ± 36.55 | 3902.41 ± 1719.24 |
+| 0 | 16 | 126.72 ± 1.56 | 12.86 ± 3.85 | 3284.74 ± 32.87 | 5802.02 ± 2824.02 |
+| 16k | 1 | 58.64 ± 7.35 | 58.64 ± 7.35 | 805.47 ± 1.96 | 2545.33 ± 6.20 |
+| 16k | 4 | 55.50 ± 0.15 | 25.76 ± 7.54 | 859.38 ± 0.89 | 7531.04 ± 2086.44 |
+| 16k | 10 | 50.49 ± 0.05 | 11.95 ± 6.10 | 866.41 ± 0.05 | 14976.77 ± 6459.43 |
+| 16k | 16 | 49.50 ± 0.97 | 8.17 ± 5.45 | 861.38 ± 0.36 | 21843.41 ± 10786.61 |
+| 64k | 1 | 51.63 ± 4.85 | 51.63 ± 4.85 | 584.03 ± 0.76 | 3509.35 ± 4.56 |
+| 64k | 4 | 44.63 ± 0.80 | 22.72 ± 7.81 | 640.82 ± 3.27 | 10052.57 ± 2772.32 |
+| 64k | 10 | 38.39 ± 1.41 | 10.19 ± 6.35 | 654.04 ± 0.52 | 19792.30 ± 8539.95 |
+| 64k | 16 | 36.78 ± 2.68 | 6.85 ± 5.43 | 619.90 ± 30.22 | 30082.58 ± 15450.70 |
+
+**Counting ceiling (not user throughput).** `results/arms/la-mtpprob/decode_c*.json`
+and `sweep.json` (dgx-01): `tools/tony-bench/bench_sweep.py`, "List the
+numbers from 1 to 300 separated by commas…", temperature 0, thinking off,
+non-streaming, fresh context, 320 max tokens, 3 rounds per level.
+
+| conc. | agg tok/s | per-stream tok/s | source |
+|---:|---:|---:|---|
+| 1 | 100.9 / 102.1 / 101.8 | = aggregate | `decode_c1_run{1,2,3}.json` |
+| 1 | 101.6 | 101.7 | `sweep.json` (gate sweep) |
+| 4 | 288.3 | 72.7 | `sweep.json` |
+| 8 | 439.4 / 434.6 | 56.3 / 55.0 | `decode_c8.json` / `sweep.json` |
+| 12 | 545.3 | 46.6 | `decode_c12.json` |
+| 16 | 641.3 / 635.0 | 41.2 / 40.9 | `decode_c16_run{1,2}.json` |
+
+The gate's own c16 sweep read 399.5 once (`sweep.json`) and did not reproduce
+in the two reruns above.
+
+**Quality.** tool-eval-bench `--hardmode` 86/100, rerun 90/100; fidelity
+8k/32k/64k 20/20, 128k 19/20 then 20/20 and 20/20; straggler c5-16 no
+one-request stall, 3.96-4.00 accepted/draft. Details in
+[Quality gates](#quality-gates).
+
+**Against the old argmax config** (same workloads, tables below): sampled
+throughput improves mostly at concurrency and long context (agent coding c16
+186.3 -> 221.9, 64k c1 42.4 -> 58.4; prose c1 41.1 -> 56.1). Exceptions:
+fresh agent coding c1 is a tie (46.1 vs 45.6 ± 13.7); prose 64k c16
+regresses (38.15 -> 36.78); agent coding 16k c16 is lower (120.3 vs
+115.4 ± 24.3). Counting ceiling unchanged within noise.
+
+## Old la vs probabilistic, by workload
+
+### Prose continuation (comparison)
+
+llama-benchy 0.4.0 default book corpus (raw text continuation), 2048 new
+prompt tokens on a cached context of the given depth, 128 output tokens,
+default temperature (1.0), thinking not set (server default), 2 runs per
+cell, `--enable-prefix-caching`. Aggregate gen tok/s.
+
+| cached depth | conc. | old la | probabilistic |
+|---:|---:|---:|---:|
+| 0 | 1 | 41.1 | 56.1 |
+| 0 | 16 | 117.8 | 126.7 |
+| 16k | 1 | 38.1 | 58.6 |
+| 16k | 16 | 43.1 | 49.5 |
+| 64k | 1 | 48.9 | 51.6 |
+| 64k | 16 | 38.15 | 36.78 (regression) |
+| source | | `results/benchy/la-prose16.md` | `results/benchy/la-mtpprob-prose16.md` |
+
+### Time to first token
+
+From the agent coding task files above (end-to-end TTFT for the 2048 new
+prompt tokens; at c>1 all requests arrive at once, so TTFT includes queueing
+behind the other prefills). Old la (`la-task16.md`) / probabilistic
+(`la-mtpprob-task16.md`):
+
+| cached depth | c1 | c10 |
+|---:|---:|---:|
+| 0 | 0.69 / 0.70 s | 4.07 / 4.06 s |
+| 16k | 2.60 / 2.63 s | 15.2 / 15.1 s |
+| 64k | 3.48 / 3.60 s | 20.1 / 21.2 s |
+
+Multi-turn continuation (`scripts/multiturn_ttft.py`, old la, c1, temp 0,
+turn 1 = depth-token prose context + one question, 128 output tokens; turn 2 =
+turn 1 + its answer + ~200 new tokens; median of 3,
+`results/benchy/la-multiturn.txt`): turn-2 TTFT 1.89 s at 16k (turn 1
+5.39 s), 2.92 s at 64k (turn 1 23.3 s).
+
+### Speculative-decoding ceiling (not user throughput)
+
+`tools/tony-bench/bench_sweep.py` (tonyd2wild): prompt "List the numbers from
+1 to 300 separated by commas. Output only the numbers, nothing else, no
+commentary.", temperature 0, thinking off, non-streaming, 320 max tokens
+(~300 generated), fresh context, 3 rounds per level. This is a counting task
+the MTP drafter predicts almost perfectly (~3.96-4.00 of 4 drafts accepted,
+`results/arms/*/straggler.log`), so it measures how fast the stack can go when
+speculation never misses. It is a regression diagnostic, **not** the speed of
+coding, chat or agent work. Raw files are on dgx-01 (`results/arms/` is not
+mirrored here, see `results/README.md`).
+
+| conc. | old la, agg (per-stream) | probabilistic, agg (per-stream) |
+|---:|---:|---:|
+| 1 | 99.5 median / 101.8 max of 6 sweeps (boot band 85-102) | 100.9-102.1 (3 runs), sweep 101.6 |
+| 8 | 440.7-454.7 (56.2-57.9) | 434.6-439.4 (55.0-56.3) |
+| 12 | 547.6 (46.8) | 545.3 (46.6) |
+| 16 | 645.1 (41.4); 641.6-645.9 on 2026-09-22 | 635.0-641.3 (40.9-41.2) |
+| source | `results/arms/la-lmq/verdict.md`, `results/arms/la/decode_c{12,16}*.json` | `results/arms/la-mtpprob/decode_c*.json`, `sweep.json` |
+
+c1 is bimodal boot to boot (fast mode 94-102, slow mode 84-88,
+`results/arms/c1-decline/verdict.md`): report the median of >=5 sweeps and
+the max, not one run. One probabilistic c16 sweep read 399.5
+(`la-mtpprob/sweep.json`) and did not reproduce in two reruns.
+
+### How to read these numbers
+
+- **Draft acceptance.** MTP proposes 4 tokens per step. On the counting
+  prompt nearly all 4 are accepted (98.9% overall, ~3.96 per step,
+  `results/profiling/README.md`). On the sampled (temp 1.0) prose and agent
+  task grids with probabilistic drafts, 39-41% are accepted, ~1.6 per step
+  (`results/arms/la-mtpprob/mtp_{before,after}_{prose,task}.txt` on dgx-01:
+  prose 10523/26872, task 87368/213924). The same engine therefore shows
+  ~100 tok/s on counting and ~45-58 on real single-stream work.
+- **Temperature.** At temp 0 the target and draft agree more often, so
+  acceptance and throughput rise (task c1 55.3 at temp 0 vs 46.1 at 1.0,
+  old la). Clients that send no temperature get 1.0.
+- **Thinking tokens.** The task and prose runs have thinking on; reasoning
+  tokens are generated and counted like answer tokens. The counting
+  diagnostic and the category harness run with thinking off.
+- **Cached-context prefill.** Depth runs prefill 2048 new tokens on top of a
+  cached context; attention and GDN cost grow with depth, so both TTFT and
+  per-token decode slow down, and concurrency at depth queues prefills.
+
+### Other single-stream probes
+
+`scripts/decode_probe.py` (streaming, temp 0, thinking not set (server
+default), 512 max tokens, fresh context, c1, decode rate excludes TTFT;
+prompts: code = "Write a complete Python implementation of a red-black
+tree…", structured = 40-object JSON array, counting = 1 to 200, prose =
+reflective essay). Old la + MXFP8 lm_head, peak of 3
+(`results/arms/la-lmq/decode_probe.txt`): code 69.0 (mean 57.1), structured
+86.4, counting 100.3, prose 50.2 tok/s. Mean of 3 across builds: old eugr
+image 56/73/94/46, local16 58.1/71.7/87.2/45.9, la 53.5/72.3/89.6/45.5
+(code/structured/counting/prose, `results/RESULTS.md`).
+
+Category harness (tonyd2wild `tools/tony-bench/bench_categories.py`, 40 real
+prompts, 5 per category, temp 0, thinking off, streaming, max 900 tokens,
+fresh context, c1, per-stream decode tok/s excluding TTFT; the coding column
+is its 5 coding prompts with hidden tests, not bench_sweep). Old = eugr's
+nightly image before this repo's own build; local16 = own image, plain
+recipe; la = own image with `use_local_argmax_reduction`. Source
+`results/RESULTS.md`.
 
 | | median | json | html | reasoning | coding | summary | format | prose | narrative |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -76,44 +261,59 @@ own image, plain recipe; la = own image with `use_local_argmax_reduction`.
 | local16 (own image) | 76.4 | 90.4 | 97.0 | 77.5 | 85.8 | 50.1 | 47.6 | 43.4 | 44.4 |
 | la (own image, argmax) | not re-run on this harness | 94.6 | 95.1 | 78.8 | 82.4 | 51.5 | 60.0 | 49.1 | 45.0 |
 
-`decode_probe.py` workload mix (mean of 3, `code/structured/counting/prose`):
-old 56/73/94/46, local16 58.1/71.7/87.2/45.9, la 53.5/72.3/89.6/45.5.
+Real-prompt concurrency lane (prompt set, temperature and thinking setting
+not recorded; 2026-09-17 journal entry only), per-stream/aggregate tok/s, old
+image only (not re-measured on the own image, `results/RESULTS.md`): x2 61.9/83.2, x4
+47.8/81.0, x6 37.7/112.6, x8 33.7/124.8.
 
-Real-prompt concurrency lane, per-stream/aggregate tok/s, old image only
-(2026-09-17, not re-measured on the own image): x2 61.9/83.2, x4 47.8/81.0,
-x6 37.7/112.6, x8 33.7/124.8.
+## Quality gates
 
-## Quality gates (`la`)
+Default recipe (probabilistic drafts), `results/arms/la-mtpprob/`:
 
-- **Fidelity probe** (`results/arms/la-lmq/fidelity.json`, `fidelity_probe.txt`):
-  100% exact retrieval at 8k/32k/64k/128k context (20/20 x4 depths), 0 typos,
-  thinking on.
-- **tool-eval-bench 2.6.1 `--hardmode`** (88 scenarios): 89/100 with the
-  MXFP8 lm_head default (la band across arms: 86-93/100). Two scenarios fail
-  consistently:
-  - **TC-45** (`tool_choice=required`): parser bug, see
-    [Known issues / fixes](#known-issues--fixes). Fixed by
-    `mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs
-    c1 throughput about -12% (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7).
-    Not enabled by default.
-  - **TC-68**: model wraps JSON in a code fence with commentary; the scenario
-    intentionally sends no `response_format`, so this is model compliance,
-    not a server bug — not fixable without defeating the test.
-- **Straggler probe**: batch 5-16 clean (was one request per round stalling
-  ~18 s at c5-7/9/12 on the prior fork revision; fixed by the own image).
-  Accepted/draft ratio ~3.9 of 4.
-- **MTP acceptance** on real prompts, per draft position: ~90/81/75/70%
-  (`results/arms/la/mtp_metrics.txt`: overall 76767/24344 draft-tokens*4
-  positions, per-position 21911/19751/18173/16932 accepted). On the counting
-  workload used for the throughput sweep, acceptance is far higher — 98.9%
-  overall, 99.9/99.1/98.6/97.9% by position
-  (`results/profiling/README.md`).
+- **tool-eval-bench 2.6.1 `--hardmode`** (88 scenarios, thinking on): 86/100
+  (`hardmode.log`), rerun 90/100 (`hardmode2.log`); historical band across
+  la-family arms 86-93.
+- **Fidelity probe** (`fidelity_probe.txt`, `fidelity_128k_rerun{1,2}.json`;
+  20 tool-call retrievals per depth, thinking on, temperature 0.6): 20/20 at
+  8k/32k/64k; 128k 19/20, then 20/20 and 20/20 on two reruns; 0 typos.
+- **Straggler probe** (`straggler.log`, bench_sweep counting prompt, batches
+  5/6/7/8/12/16): no preemptions, 3.96-4.00 accepted per draft, no
+  one-request stall. The c6 round took 13.7 s with all six requests equally
+  slow (other rounds 4.7-7.5 s).
+
+Previous default (old la + MXFP8 lm_head), `results/arms/la-lmq/`:
+
+- **Fidelity probe** (`fidelity.json`, `fidelity_probe.txt`): 20/20 exact
+  retrieval at 8k/32k/64k/128k, 0 typos, thinking on.
+- **tool-eval-bench `--hardmode`**: 89/100 (la band across arms: 86-93/100).
+- **Straggler probe**: batch 5-16 clean, 3.96-3.99 accepted/draft on the
+  counting prompt (was one request per round stalling ~18 s at c5-7/9/12 on
+  the prior fork revision; fixed by the own image).
+
+Two hardmode scenarios fail on every la-family boot:
+
+- **TC-45** (`tool_choice=required`): parser bug, see
+  [Known issues / fixes](#known-issues--fixes). Fixed by
+  `mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs
+  about -12% on the bench_sweep counting diagnostic at c1
+  (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7). Not enabled by default.
+- **TC-68**: model wraps JSON in a code fence with commentary; the scenario
+  intentionally sends no `response_format`, so this is model compliance, not
+  a server bug — not fixable without defeating the test.
+
+**MTP acceptance** on real prompts (old la), per draft position:
+~90/81/75/70% (`results/arms/la/mtp_metrics.txt`: overall 76767/24344
+draft-tokens*4 positions, per-position 21911/19751/18173/16932 accepted). On
+the bench_sweep counting prompt acceptance is far higher — 98.9% overall,
+99.9/99.1/98.6/97.9% by position (`results/profiling/README.md`).
 
 ## Profile (rank-local `torch.profiler`, `results/profiling/README.md`)
 
 Mod `mods/vllm-decode-profiler/`, recipe
 `eugr-agents-serve-local16-la-lprof.yaml`, summarized by
-`scripts/prof_summary.py`. ~4% profiler overhead.
+`scripts/prof_summary.py`. ~4% profiler overhead. Load: bench_sweep counting
+prompt (temp 0, thinking off) at c1 and c8, so the step mix reflects ~4
+accepted drafts per step.
 
 | | c1 (55 ms/step) | c8 (87 ms/step) |
 |---|---:|---:|
@@ -134,8 +334,9 @@ volume, not an unbatched-launch problem — that lead was traced and closed
 
 ## Rejected arms
 
-Screened against the `la` baseline; gate bar was +3% at c1 or +5% at c8 with
-nothing else worse than -2%. All from `results/kernel-pass/*.json`,
+Screened against the `la` baseline on the bench_sweep counting diagnostic
+(temp 0, thinking off, aggregate tok/s); gate bar was +3% at c1 or +5% at c8
+with nothing else worse than -2%. All from `results/kernel-pass/*.json`,
 `results/arms/fwd57f3572-fix/sweep.json`, `results/arms/dv/`.
 
 | label | change | c1 tok/s | c8 tok/s | verdict |
@@ -163,7 +364,8 @@ stack.
   projection path; fixed by the fork's scratch-isolation commits, baked into
   our own image. `mods/vllm-qwen-scratch-isolation/` documents the fix.
 - **`B12X_AUTOTUNE=0` in eugr's Dockerfile.** Truncates kernel-selection
-  tuning; a fresh boot serves single-stream at 81 tok/s instead of 96-98.
+  tuning; a fresh boot does 81 tok/s instead of 96-98 at c1 on the
+  bench_sweep counting diagnostic (`results/kernel-pass/arms.md`, noat).
   The recipe overrides it to `1`. The plan cache then persists across boots
   at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB).
 - **logind `RemoveIPC` kills shm.** vLLM died with `'ShmRingBuffer' object
@@ -219,8 +421,8 @@ image from those wheels:
   `exp/fwd-57f3572` for the rejected forward-port arm.
 - The recipe that serves this image, `eugr-agents-serve-local16-la-ghcr.yaml`,
   has been pulled and gated on the nodes (`ghcr2`, cache-mount fix applied):
-  TC-45 passes for the first time on this stack, but c1 is ~-10% vs `la`.
-  Kept as an alternate pull-based path, not promoted to default — see
+  TC-45 passes for the first time on this stack, but bench_sweep counting
+  c1 is ~-10% vs `la`. Kept as an alternate pull-based path, not promoted to default — see
   `results/README.md`.
 
 ## Repo map
@@ -231,6 +433,7 @@ image from those wheels:
 | `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route. See `recipes/README.md`. |
 | `mods/` | Engine patches, one directory per mod. `mods/README.md` has a one-line summary of every mod, current and SGLang-era. |
 | `scripts/` | `gate_arm.sh` (full quality gate, needs `--hardmode`), `fidelity_probe.py`, `prof_summary.py`, `needle_ladder.py`, `decode_probe.py`, `validate_recipes.py`, `run.sh`, and the arm-bisection scripts (`vllm_ladder.sh`, `qwen_ladder*.sh`, …). |
+| `results/benchy/` | llama-benchy agent-task and prose grids (`*-task16*.md`, `*-prose16.md`) and the multi-turn TTFT probe output behind the headline tables. |
 | `results/kernel-pass/`, `results/profiling/`, `results/arms/` | The 2026-09-18/21 arms, hang evidence, and per-kernel profile behind the tables above. Full index: `results/README.md`. |
 | `results/eugr-b12x/`, `results/fp8-gate/`, `results/sglang-*`, `results/vllm-cached-*` | Earlier (pre-09-18) SGLang/vLLM-nightly measurements, kept for history. |
 | `misc/` | Working notes not promoted into a result file. |
@@ -256,7 +459,10 @@ Exact pins:
   build-plumbing fixes in `~/GEN-AI/build/apply_submodule_fix.py`;
   [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 launches every recipe here and
   defines the recipe/mod format; [llama-benchy](https://github.com/eugr/llama-benchy)
-  at `e9be344` measured the concurrency sweeps; the `eugr-agents` recipe family
+  at `e9be344` is the base of our fork
+  [ursuciprian/llama-benchy](https://github.com/ursuciprian/llama-benchy)
+  (`0d4de42`, adds `--prompt-mode task`) that measures the agent-task grids, and
+  release 0.4.0 measures the prose grids; the `eugr-agents` recipe family
   started as his `eugr-agents.yaml`.
 - [local-inference-lab](https://github.com/local-inference-lab) (Luke Alonso):
   the vLLM fork [local-inference-lab/vllm](https://github.com/local-inference-lab/vllm)
@@ -278,7 +484,7 @@ Exact pins:
   recipes serve, and the day-0 SGLang engine work for this model.
 - [tonyd2wild](https://github.com/tonyd2wild): the vLLM SM121 overlays and the
   TP2 profile the first vLLM recipe grew from, and the 40-prompt category harness
-  (`tools/tony-bench`) behind every decode, TTFT and cold-prefill figure here.
+  (`tools/tony-bench`: `bench_sweep.py` counting diagnostic, `bench_categories.py`).
 - [Weschera](https://github.com/Weschera): spark-bench, the 76-scenario graded
   eval behind the fp8 quality gate.
 - [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench

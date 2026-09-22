@@ -1,5 +1,13 @@
 # Non-MoE decode GEMM: measured inventory, and why the fusion lead is dead
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+
 Date: 2026-09-21. No GPU runs. Every number below comes from the checkpoint
 safetensors headers, `hf_quant_config.json`, the vLLM fork at `8e1f1e58`
 (serving), b12x `a8333658`, or a direct re-analysis of the saved rank0 decode

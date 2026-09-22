@@ -1,5 +1,16 @@
 # TC-45 / TC-68 root-cause diagnosis (Phase A, read-only, 2026-09-19)
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+>
+> `bench_categories` / `decode_probe` figures are real-prompt single-stream
+> probes (temp 0), not bench_sweep.
+
 Repo: qwen3.8-flash-next-dgx-spark-tp-2
 vLLM fork: ~/GEN-AI/build/vllm (dev/jovian-judgement, 8e1f1e58)
 Serving recipe under test: recipes/eugr/eugr-agents-serve-local16-la.yaml

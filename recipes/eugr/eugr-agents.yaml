@@ -1,5 +1,7 @@
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
-# Measured here: structured 113, prose 53-55 tok/s at temp 0, tool-eval 100/100.
+# Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
+# 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
+# later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
 recipe_version: "1"
 name: eugr-agents

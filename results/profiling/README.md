@@ -1,5 +1,13 @@
 # Phase C: decode-step kernel profiling
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+
 Per-kernel decode-step timing for `recipes/eugr/eugr-agents-serve-local16-la.yaml`
 at c1 and c8, captured 2026-09-19 with the `vllm-decode-profiler` mod (a
 rank-local `torch.profiler` wrapper, no cross-rank RPC). Both nodes: dgx-01

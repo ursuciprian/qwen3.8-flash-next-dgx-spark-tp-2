@@ -1,5 +1,16 @@
 # Arm la-lmq: online MXFP8 lm_head (`VLLM_MXFP8_LM_HEAD=1`) — verdict (2026-09-21)
 
+> **Workload.** Unless a line says otherwise, every tok/s, c1/c8/c16 and
+> ms/step figure in this file is the `tools/tony-bench/bench_sweep.py`
+> counting diagnostic: "List the numbers from 1 to 300 separated by commas…",
+> temperature 0, thinking off, non-streaming, 320 max tokens, fresh context,
+> aggregate tok/s (c1 = per-stream). MTP accepts ~4 of 4 drafts on it, so it is
+> a speculative-decoding ceiling, not coding or chat speed. Agent-coding and
+> prose numbers: top-level `README.md`.
+>
+> The "bench_categories" table below is a different harness: 40 real prompts,
+> temp 0, thinking off, streaming, c1; its `coding` row is 5 coding prompts.
+
 **Verdict: PROMOTE.** Online MXFP8 quantization of the verify-head lm_head
 (W8A16, activations stay BF16) is now the default in
 `recipes/eugr/eugr-agents-serve-local16-la.yaml`.

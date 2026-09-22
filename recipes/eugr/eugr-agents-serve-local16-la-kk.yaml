@@ -99,7 +99,8 @@ env:
   VLLM_ROCE_ALLREDUCE_MAX_SIZE: "2MB"
   # Match the promoted default (la): online MXFP8 (W8A16) for the verify
   # lm_head. Without this the KK arm is not comparable with la, which gained
-  # c1 95.6 -> 99.5 median tok/s from it on 2026-09-21.
+  # c1 95.6 -> 99.5 median tok/s from it on 2026-09-21 (bench_sweep counting
+  # diagnostic, temp 0, thinking off).
   VLLM_MXFP8_LM_HEAD: "1"
 
 command: |
