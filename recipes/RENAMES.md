@@ -36,7 +36,7 @@ origin of the base recipe this project bisected from.
 | `recipes/eugr/prefill2.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-decode-aware-parallel-prefills-2.yaml` | Decode-aware scheduling + max-parallel-prefills 2 (was 4) | experimental |
 | `recipes/eugr/seqs16.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-decode-aware-seqs-16.yaml` | Decode-aware scheduling + max_num_seqs 16 | experimental |
 | `recipes/eugr/eugr-agents-serve-local.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build.yaml` | Serving default, but container points at build.sh's own local image | experimental |
-| `recipes/eugr/eugr-agents-serve-local16.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml` | Local build arm + max_num_seqs 16 | experimental |
+| `recipes/eugr/eugr-agents-serve-local16.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml` | Local build arm + max_num_seqs 16; serving fallback before la | fallback |
 | `recipes/eugr/eugr-agents-serve-local16-autotune.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16-autotune.yaml` | Local build arm, seqs 16, B12X_AUTOTUNE enabled, no runtime-cache mount | experimental |
 | `recipes/eugr/eugr-agents-serve-local-dv.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-draft-vocab-reduced.yaml` | Lever 1: reduced-vocab MTP draft head (MiaAI-Lab 47k table) | experimental |
 | `recipes/eugr/eugr-agents-serve-local-ep.yaml` | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-expert-parallel.yaml` | Lever 2: --enable-expert-parallel; not expected to work, b12x MoE EP is W4A16-only | historical-rejected |
