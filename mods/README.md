@@ -63,6 +63,21 @@ upstream PR #38355 onto the pinned nightly: the chunked insert is skipped and
 deferred to request completion. `SGLANG_DISABLE_CHUNKED_RADIX_INSERT=0`
 restores stock behaviour. Idempotent, fail-closed on the four anchors.
 
+## `vllm-gdn-meta-fuse`
+
+Not referenced by a shipped recipe yet; awaiting a GPU A/B. Cherry-pick of
+`local-inference-lab/vllm@a18246b06` (KK `integration/karmic-kraken-beta`,
+2026-09-22) onto `8e1f1e587f`: the cross-cache-group GDN metadata refresh in
+`GDNAttentionMetadataBuilder.update_block_table` goes from ~10 device launches
+plus a host-side `torch.where` to one Triton launch, with destination pointers
+kept stable so graph replay still holds. Applies with zero conflicts --
+`b12x_gdn_metadata.py` is byte-identical between our base and the commit's
+parent. KK measured 41.19 -> 40.16 ms verifier step on TP2 Qwen (-2.5%);
+against our 55.03 ms c1 / 87.11 ms c8 that ~1 ms lands as ~-1.9% / ~-1.2%, and
+it lands inside the busy 94% (idle is 5.4-5.6%). Fires only when a second GDN
+cache group reuses the captured sibling's metadata -- verify on the A/B, not
+from the commit message. See `mods/vllm-gdn-meta-fuse/README.md`.
+
 ## Experimental (not in the default recipe)
 
 Newer vLLM/b12x-era mods, tried against the `la` baseline 2026-09-20/21.
