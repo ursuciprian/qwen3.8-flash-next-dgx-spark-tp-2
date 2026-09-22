@@ -230,6 +230,11 @@ needs a follow-up pass to cover the rest:
 
 - `b12x-startup-boundedwait` — **in the default recipe.** Bounded-wait fix for
   the TP2 preparation deadlock (see Known issues).
+- `vllm-gdn-deferred` — **not bootable yet**, needs a b12x wheel built from
+  `feat/gdn-deferred-checkpoints`. Deferred GDN checkpoints: one base
+  checkpoint plus per-token records instead of five full state snapshots per
+  layer-step, 2.66x less GDN state traffic. Off unless
+  `VLLM_GDN_DEFERRED_CHECKPOINTS=1`.
 - `b12x-startup-trace` — diagnostic instrumentation for the same handshake,
   kept for future debugging, not in the served recipe.
 - `b12x-revert-06809d5` — reverse-applies a b12x commit to unblock the first
