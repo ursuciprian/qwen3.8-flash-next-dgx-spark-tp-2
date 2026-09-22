@@ -11,7 +11,7 @@ and source file.
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run recipes/eugr/eugr-agents-serve-local16-la.yaml --cluster <your-cluster> --tp 2 --trust
+sparkrun run recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml --cluster <your-cluster> --tp 2 --trust
 ```
 
 `--trust` accepts the mod hook that patches files inside the container before
@@ -24,12 +24,12 @@ answers on port 8000 with the OpenAI API, model name `qwen3.8-flash-next`.
 
 | Recipe | Image | Status |
 |---|---|---|
-| `recipes/eugr/eugr-agents-serve-local16-la.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
-| `recipes/eugr/eugr-agents-serve-local16-la-argmax.yaml` | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
-| `recipes/eugr/eugr-agents-serve-local16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
-| `recipes/eugr/eugr-agents-serve-local16-la-ghcr.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
+| `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
+| `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml` | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
+| `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted — see [Known issues / fixes](#known-issues--fixes) and `results/README.md`. |
 
-Every recipe in `recipes/eugr/`, including the rejected/experimental arms, is
+Every recipe in `recipes/qwen3.8-flash-next/`, including the rejected/experimental arms, is
 tabled with status and a verdict pointer in `recipes/README.md`.
 
 Image identity for the default: eugr `spark-vllm-docker` Dockerfile `798528a2`
@@ -77,7 +77,7 @@ not measured on this workload.
 ## Default recipe (la, probabilistic MTP drafts) — measured numbers
 
 All three tables are from the current default recipe
-(`eugr-agents-serve-local16-la.yaml`, `draft_sample_method: probabilistic`),
+(`qwen3.8-flash-next-nvfp4-tp2.yaml`, `draft_sample_method: probabilistic`),
 measured 2026-09-21/22. ± is the spread across runs as llama-benchy reports it.
 
 **Agent coding.** `results/benchy/la-mtpprob-task16.md`: llama-benchy fork
@@ -310,7 +310,7 @@ the bench_sweep counting prompt acceptance is far higher — 98.9% overall,
 ## Profile (rank-local `torch.profiler`, `results/profiling/README.md`)
 
 Mod `mods/vllm-decode-profiler/`, recipe
-`eugr-agents-serve-local16-la-lprof.yaml`, summarized by
+`qwen3.8-flash-next-nvfp4-tp2-profiler-local-rank.yaml`, summarized by
 `scripts/prof_summary.py`. ~4% profiler overhead. Load: bench_sweep counting
 prompt (temp 0, thinking off) at c1 and c8, so the step mix reflects ~4
 accepted drafts per step.
@@ -419,7 +419,7 @@ image from those wheels:
   the bounded-wait startup fix + an optional reduced-vocab draft head, not
   used by the default recipe), `ursuciprian/b12x@dgx-spark` (`a8333658`) with
   `exp/fwd-57f3572` for the rejected forward-port arm.
-- The recipe that serves this image, `eugr-agents-serve-local16-la-ghcr.yaml`,
+- The recipe that serves this image, `qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`,
   has been pulled and gated on the nodes (`ghcr2`, cache-mount fix applied):
   TC-45 passes for the first time on this stack, but bench_sweep counting
   c1 is ~-10% vs `la`. Kept as an alternate pull-based path, not promoted to default — see
@@ -429,7 +429,7 @@ image from those wheels:
 
 | Path | What |
 |---|---|
-| `recipes/eugr/` | The served recipe family. `eugr-agents-serve-local16-la.yaml` (default), `-local16.yaml` (fallback), `-la-ghcr.yaml` (alternate pull-based image, gated but not promoted). Full table with status and verdict pointers: `recipes/README.md`. |
+| `recipes/qwen3.8-flash-next/` | The served recipe family. `qwen3.8-flash-next-nvfp4-tp2.yaml` (default), `-local16.yaml` (fallback), `-la-ghcr.yaml` (alternate pull-based image, gated but not promoted). Full table with status and verdict pointers: `recipes/README.md`. |
 | `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route. See `recipes/README.md`. |
 | `mods/` | Engine patches, one directory per mod. `mods/README.md` has a one-line summary of every mod, current and SGLang-era. |
 | `scripts/` | `gate_arm.sh` (full quality gate, needs `--hardmode`), `fidelity_probe.py`, `prof_summary.py`, `needle_ladder.py`, `decode_probe.py`, `validate_recipes.py`, `run.sh`, and the arm-bisection scripts (`vllm_ladder.sh`, `qwen_ladder*.sh`, …). |
@@ -449,7 +449,7 @@ every measurement and verdict this repo has produced, see `results/README.md`.
 
 ## Credits
 
-The vLLM route now served by default (`recipes/eugr/eugr-agents-serve-local16-la.yaml`,
+The vLLM route now served by default (`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`,
 image `spark-vllm-b12x:local-20260918-a8333658`) is built on other people's work.
 Exact pins:
 

@@ -77,7 +77,7 @@ boot_with_fallbacks() {
     echo "$base" > "$OUT/$arm/final-recipe.txt"; return 0
   fi
   for mode in nolf nolb mmixed; do
-    var="$Q/recipes/eugr/${arm}-${mode}.yaml"
+    var="$Q/recipes/qwen3.8-flash-next/${arm}-${mode}.yaml"
     gen_variant "$base" "$var" "$mode"
     say "$arm: fallback attempt $mode -> $(basename "$var")"
     if boot "$var" "$arm"; then
@@ -116,7 +116,7 @@ battery() {
 
 ### A0 smoke test first ###
 say "A0: smoke test boot"
-if boot recipes/eugr/eugr-agents.yaml A0; then
+if boot recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-tuned-baseline.yaml A0; then
   say "A0: smoke fidelity depth 8000 trials 1"
   python3 $Q/scripts/fidelity_probe.py --base $BASE --model "$M" --depths 8000 \
     --k 5 --trials 1 --thinking on --temperature 0.6 --concurrency 4 \
@@ -133,8 +133,8 @@ else
 fi
 
 ### A1 ###
-if boot recipes/eugr/eugr-agents-kvbf16.yaml A1; then
-  echo recipes/eugr/eugr-agents-kvbf16.yaml > "$OUT/A1/final-recipe.txt"
+if boot recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-kv-bf16.yaml A1; then
+  echo recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-kv-bf16.yaml > "$OUT/A1/final-recipe.txt"
   battery A1 0
 else
   say "A1: boot FAILED, skipping battery"
@@ -142,7 +142,7 @@ fi
 
 ### R0 ###
 r0_ok=1
-if boot_with_fallbacks recipes/eugr/eugr-agents-radixark.yaml R0; then
+if boot_with_fallbacks recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-radixark-ckpt.yaml R0; then
   r0_ok=0
   battery R0 0
 else
@@ -151,7 +151,7 @@ fi
 
 ### R1 ###
 r1_ok=1
-if boot_with_fallbacks recipes/eugr/eugr-agents-radixark-kvbf16.yaml R1; then
+if boot_with_fallbacks recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-radixark-ckpt-kv-bf16.yaml R1; then
   r1_ok=0
   battery R1 0
 else
@@ -161,8 +161,8 @@ fi
 ### N1 (only if both R0 and R1 failed) ###
 if [ $r0_ok -ne 0 ] && [ $r1_ok -ne 0 ]; then
   say "N1: R0 and R1 both failed, trying nvidia checkpoint fallback"
-  if boot recipes/eugr/eugr-agents-nvidia-kvbf16.yaml N1; then
-    echo recipes/eugr/eugr-agents-nvidia-kvbf16.yaml > "$OUT/N1/final-recipe.txt"
+  if boot recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-nvidia-ckpt-kv-bf16.yaml N1; then
+    echo recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-nvidia-ckpt-kv-bf16.yaml > "$OUT/N1/final-recipe.txt"
     battery N1 0
   else
     say "N1: boot FAILED too"
