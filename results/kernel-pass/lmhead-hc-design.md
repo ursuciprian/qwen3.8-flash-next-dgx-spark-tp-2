@@ -509,8 +509,8 @@ M = 5, and whether the resulting logprobs stay inside 1e-3.
 ## B2-implementation: online MXFP8 for the HC mixers and the router gate
 
 Date: 2026-09-21. No GPU runs. Artifacts:
-`patches/vllm-qwen38-hc-mxfp8.patch` (git-format on `8e1f1e58`, two files,
-+187 lines) and `mods/vllm-qwen38-hc-mxfp8/{run.sh,vllm-qwen38-hc-mxfp8.patch}`
+`patches/vllm-qwen38-hc-mxfp8.patch` (git-format on `8e1f1e58`, three files,
++208 lines) and `mods/vllm-qwen38-hc-mxfp8/{run.sh,vllm-qwen38-hc-mxfp8.patch}`
 for image `spark-vllm-b12x:local-20260918-a8333658`.
 
 ### What the patch does
@@ -663,6 +663,84 @@ NaN) -- harmless because MXFP8 groups run along K with no cross-N reduction and
 And `mxfp8_e4m3_quantize` lifts each weight to fp32 during load, a transient
 4x spike on a 6.9 MB tensor, one layer at a time.
 
+### The `hc`-only crash, 2026-09-22, and what it says about plan handles
+
+The first GPU boot of `VLLM_QWEN38_HC_MXFP8=hc` (gate left BF16) died in
+`Worker_TP0` right after the three expected `qwen38 HC MXFP8: target=hc` lines
+(`/tmp/la-hcq-hconly_boot.log`, 13:55:55):
+
+```
+File ".../inductor_cache/7l/c7lwolq5id4zagoycemd2yvfhcjmf6vmnv4rhyfibjoinig6xnrk.py", line 165, in call
+  torch.ops.b12x.hyperconnection_grouped_rmsnorm.default(arg0_1, arg2_1, arg3_1, 1e-06, 459, zero_centered=True)
+File ".../b12x/norm/hyperconnection/_kernels.py", line 221, in _grouped_rmsnorm_op
+  prepared = require_prepared(plan_from_handle(plan_handle), "norm.hyperconnection", state.device)
+ValueError: plan belongs to gemm.blockscaled_precision, not norm.hyperconnection
+```
+
+`hc,gate` had booted and served fine the day before. The asymmetry is the tell.
+
+**Root cause.** `459` is a b12x **plan handle**, and `plan_from_handle`
+resolves it out of a process-local dict keyed by a monotonic counter
+(`handle = next(_HANDLES)`, `b12x/preparation/types.py`). Handles are
+therefore *positional*: their meaning depends on how many plans the boot
+created before them, and torch bakes them into the compiled graph as integer
+**constants**. vLLM's AOT compile cache
+(`VLLM_CACHE_ROOT/torch_compile_cache/torch_aot_compile/<hash>`) relies on the
+unstated invariant that an identical configuration replays an identical plan
+sequence.
+
+The first version of this patch read its gate with a bare
+`os.getenv("VLLM_QWEN38_HC_MXFP8", "hc,gate")` in `hyperconnection.py`.
+`envs.compile_factors()` builds the env half of that cache key by iterating
+**`vllm.envs.environment_variables`** -- every *declared* vLLM env var, minus a
+small ignore list. A variable read outside that dict is invisible to it. So:
+
+- `hc,gate` and `hc` produced the **same** `torch_aot_compile` hash
+  (`907927796a24…`, created 09-21 08:09 by the `hc,gate` boot);
+- the on-load guard that re-checks traced source files passed, because both
+  boots ran byte-identical `hyperconnection.py` / `model.py` -- only the env
+  differed. That guard is why the `hc,gate` boot itself was safe: the mod had
+  changed those files relative to stock, so it compiled fresh and was
+  self-consistent. Its measured numbers stand;
+- `hc` skips the 48 router-gate layers, so 48 blockscaled plans are never
+  created and every later handle shifts. Handle `459`, an HC-norm plan in the
+  `hc,gate` boot, is a `gemm.blockscaled_precision` plan in the `hc` boot.
+
+It was never an HC/GEMM plan-lookup collision inside the patch; the two
+providers are correctly separate. It was one cached graph shared by two
+different plan populations.
+
+**Fix.** Declare the gate in `vllm/envs.py` (`env_with_choices`, default
+`"hc,gate"`, choices `hc,gate | gate,hc | hc | gate | off`, case-insensitive)
+and read it through `envs.VLLM_QWEN38_HC_MXFP8`. That is the fork's own
+convention -- `VLLM_MXFP8_LM_HEAD`, `VLLM_MTP_NVFP4_LM_HEAD` and
+`VLLM_QWEN3_8_FLASH_NEXT_OVERLAP` are all declared there -- and it puts the
+gate into `compile_factors()`, giving each target set its own cache entry. The
+patch is now three files. A typo in the value now raises at boot instead of
+silently disabling the arm, which is worth as much as the fix: a silent no-op
+arm costs a whole boot to discover.
+
+The mod's smoke test asserts the regression directly, so it cannot come back:
+
+```
+compile-cache key ok; 4 distinct keys for hc,gate / hc / gate / off
+invalid gate value rejected at read time
+```
+
+**The same latent bug is in `mods/vllm-qwen38-bf16-gemv`.**
+`VLLM_QWEN38_BF16_GEMV` is also a bare `os.getenv` in `hyperconnection.py` and
+also changes plan population (`_SmallNBF16Provider` declares one GEMV plan per
+enabled target per M). Bisecting that arm with `=hc` / `=gate` / `=hcup`
+against a warm compile cache will hit the same class of crash. It has not been
+fixed here -- the two mods are mutually exclusive and that arm is not in use --
+but fix it the same way before running its bisect.
+
+**General rule, worth carrying to every future mod:** any env var that changes
+*which b12x plans a boot declares* must be declared in `vllm/envs.py`, not read
+with `os.getenv`. Changing the number of plans without changing the compile
+cache key is silent graph corruption, and it surfaces as an unrelated-looking
+component-mismatch `ValueError` deep inside a b12x kernel.
+
 ### Validation recipe for the GPU worker
 
 Mutually exclusive with `vllm-qwen38-bf16-gemv`: both rebind `quant_method` on
@@ -742,7 +820,9 @@ is not optional):
 | `straggler_probe` 5 6 7 8 12 16 | clean |
 | MTP acceptance | within noise; a rise is a warning sign |
 
-**Bisect without a rebuild**, all in the recipe env:
+**Bisect without a rebuild**, all in the recipe env. Each value now has its
+own `torch_aot_compile` entry (see the crash section above), so the first boot
+on each one recompiles rather than reusing a neighbour's graph:
 `VLLM_QWEN38_HC_MXFP8=hc` (HC only, 564 MB), `=gate` (router only, 61 MB),
 `=off` (mod applied, route disabled -- isolates the patch from the boot),
 `VLLM_B12X_MXFP8_ACTIVATION_MODE=a16` (pin W8A16 everywhere including prefill
@@ -755,10 +835,13 @@ Expect one slower first boot while `B12X_AUTOTUNE=1` races the A16 knobs
 Inside `spark-vllm-b12x:local-20260918-a8333658` (`docker run --rm`, no
 `--gpus`, nothing serving touched):
 
-- the installed `hyperconnection.py` (`34f9ff5d...`) and `model.py`
-  (`7485ac00...`) are byte-identical to `git show 8e1f1e58:`, and the patch's
-  pre-image blob hashes (`15e09288...`, `083c46f2...`) match, so it is cut
-  against the right pre-image;
+- the installed `envs.py` (`6b2122c8...`), `hyperconnection.py`
+  (`34f9ff5d...`) and `model.py` (`7485ac00...`) are byte-identical to
+  `git show 8e1f1e58:`, so the patch is cut against the right pre-image;
+  post-images are `e053d175...`, `f6c33fa7...`, `1e1b0f84...`;
+- `envs.compile_factors()` contains `VLLM_QWEN38_HC_MXFP8` and yields four
+  distinct compile-cache keys for `hc,gate` / `hc` / `gate` / `off`, and
+  `envs.VLLM_QWEN38_HC_MXFP8` raises on an invalid value;
 - `bash run.sh` -> `patching ... / ast ok / admits x4 / import smoke ok;
   targets = ['gate', 'hc'] / applied`, exit 0;
 - second run: `already applied, skipping`, exit 0 (idempotent);

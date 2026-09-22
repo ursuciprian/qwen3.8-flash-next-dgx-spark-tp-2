@@ -46,31 +46,65 @@ All three geometries clear b12x block-scaled contract: K % 32 == 0 and
 N % 8 == 0 for [336, 10240], [10240, 320] (K padded to 384 by pack_weight),
 [320, 10240] (the MTP mixer use_combine=False form) and [512, 2560].
 
+The VLLM_QWEN38_HC_MXFP8 gate is declared in vllm/envs.py rather than read
+through a bare os.getenv, because it changes how many b12x plans a boot
+creates. b12x plan handles are a process-local monotonic counter that torch
+bakes into AOT-compiled graphs as integer constants, and only
+environment_variables entries reach envs.compile_factors() and therefore the
+torch_aot_compile cache key. Read outside that dict, two target sets share one
+cache entry and dereference each other plans -- observed on 2026-09-22 as
+"ValueError: plan belongs to gemm.blockscaled_precision, not
+norm.hyperconnection" when an hc-only boot loaded an hc,gate artifact.
+
 NOT bit-identical: MXFP8 rounding is ~2^-8 relative per weight, so
-scripts/logits_equiv.py fails by construction. Gated by VLLM_QWEN38_HC_MXFP8
-(default "hc,gate"; "hc", "gate" or "off" to bisect) and judged on
+scripts/logits_equiv.py fails by construction. Judged on
 scripts/gate_arm.sh. Mutually exclusive with
 patches/vllm-qwen38-bf16-gemv.patch, which rebinds quant_method on the same
 modules.
 
 Applies on top of 8e1f1e587f.
 ---
+diff --git a/vllm/envs.py b/vllm/envs.py
+index ca4d7d78b52d3e39f11e1fe3b0e25beb829cff37..b56325844a1663c25d1cc880331b6160f42a5dc0 100644
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -202,6 +202,7 @@
+     VLLM_QWEN3_8_FLASH_NEXT_MTP_COMPACT: bool = True
+     VLLM_GDN_SPEC_DECODE_METADATA_FASTPATH: bool = True
+     VLLM_MTP_NVFP4_LM_HEAD: bool = True
++    VLLM_QWEN38_HC_MXFP8: str = "hc,gate"
+     VLLM_QWEN3_8_FLASH_NEXT_OVERLAP: bool = True
+     VLLM_B12X_MLA_CKV_GATHER: bool = False
+     VLLM_B12X_MLA_CKV_GATHER_MIN_TOKENS: int = 16
+@@ -1692,6 +1693,19 @@
+     "VLLM_MTP_NVFP4_LM_HEAD": lambda: bool(
+         int(os.getenv("VLLM_MTP_NVFP4_LM_HEAD", "1"))
+     ),
++    # Which Qwen3.8-Flash-Next BF16 projections are quantized to MXFP8 online.
++    # MUST live here rather than behind a bare os.getenv: it changes how many
++    # b12x plans a boot creates, and b12x plan handles are a process-local
++    # counter baked into AOT-compiled graphs as integer constants. Only
++    # environment_variables entries reach envs.compile_factors(), so a gate
++    # read outside this dict lets two different target sets share one AOT
++    # cache entry and dereference each other's plan handles.
++    "VLLM_QWEN38_HC_MXFP8": env_with_choices(
++        "VLLM_QWEN38_HC_MXFP8",
++        "hc,gate",
++        ["hc,gate", "gate,hc", "hc", "gate", "off"],
++        case_sensitive=False,
++    ),
+     # Overlap independent small-batch projections in Qwen3.8-Flash-Next graphs.
+     "VLLM_QWEN3_8_FLASH_NEXT_OVERLAP": lambda: bool(
+         int(os.getenv("VLLM_QWEN3_8_FLASH_NEXT_OVERLAP", "1"))
 diff --git a/vllm/models/qwen3_8_flash_next/hyperconnection.py b/vllm/models/qwen3_8_flash_next/hyperconnection.py
-index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc2c66cf41 100644
+index 15e09288951252b0bba933638d6b5f140ab0372c..2914996843ed45a246fc479d09175a1730620926 100644
 --- a/vllm/models/qwen3_8_flash_next/hyperconnection.py
 +++ b/vllm/models/qwen3_8_flash_next/hyperconnection.py
-@@ -4,6 +4,7 @@
- 
- from __future__ import annotations
- 
-+import os
- from collections.abc import Sequence
- from dataclasses import dataclass
- from typing import Any
-@@ -11,9 +12,11 @@
+@@ -11,9 +11,12 @@
  import torch
  from torch import nn
  
++import vllm.envs as envs
 +from vllm.logger import init_logger
  from vllm.model_executor.layers.linear import (
      MergedColumnParallelLinear,
@@ -88,7 +122,7 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
  
  def _hyperconnection_api() -> Any:
      api = get_b12x_hyperconnection()
-@@ -37,6 +42,177 @@
+@@ -37,6 +42,184 @@
      return api
  
  
@@ -128,14 +162,21 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
 +# behaviour. Gated by ``VLLM_QWEN38_HC_MXFP8`` (default "hc,gate"; "hc",
 +# "gate" or "off"). Mutually exclusive with mods/vllm-qwen38-bf16-gemv, which
 +# rebinds ``quant_method`` on the same modules.
++#
++# The gate is declared in ``vllm/envs.py`` and read through ``envs``, never
++# through a bare ``os.getenv``. Only ``environment_variables`` entries reach
++# ``envs.compile_factors()`` and therefore the AOT compile-cache key, and this
++# gate changes how many b12x plans a boot creates. b12x plan handles are a
++# process-local monotonic counter (``b12x/preparation/types.py``) that torch
++# bakes into the compiled graph as an integer constant, so two target sets
++# sharing one cache entry would dereference each other's plans -- which is
++# exactly the `plan belongs to gemm.blockscaled_precision, not
++# norm.hyperconnection` crash the "hc"-only arm hit on 2026-09-22.
 +# ---------------------------------------------------------------------------
 +
 +_HC_MXFP8_TARGETS = frozenset(
 +    part
-+    for part in os.getenv("VLLM_QWEN38_HC_MXFP8", "hc,gate")
-+    .lower()
-+    .replace(" ", "")
-+    .split(",")
++    for part in (envs.VLLM_QWEN38_HC_MXFP8 or "hc,gate").lower().replace(" ", "").split(",")
 +    if part and part != "off"
 +)
 +
@@ -266,7 +307,7 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
  @dataclass(frozen=True)
  class HyperConnectionConfig:
      hc_count: int
-@@ -166,6 +342,9 @@
+@@ -166,6 +349,9 @@
                  return_bias=False,
                  disable_tp=True,
              )
@@ -276,7 +317,7 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
          else:
              self.input_mix_weight_down = ReplicatedLinear(
                  self.hyper_hidden_size,
-@@ -176,6 +355,7 @@
+@@ -176,6 +362,7 @@
                  prefix=maybe_prefix(prefix, "input_mix_weight_down"),
                  return_bias=False,
              )
@@ -284,7 +325,7 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
          self.input_mix_weight_up = ReplicatedLinear(
              self.lora_rank,
              self.hyper_hidden_size,
-@@ -185,6 +365,7 @@
+@@ -185,6 +372,7 @@
              prefix=maybe_prefix(prefix, "input_mix_weight_up"),
              return_bias=False,
          )
@@ -292,7 +333,7 @@ index 15e09288951252b0bba933638d6b5f140ab0372c..d2db6151ee066987bb6b5f7670543ccc
          self._preparation_prefix = prefix or "qwen3_8_flash_next.hyperconnection"
          self._plans: dict[str, object] = {}
          if not getattr(self, "b12x_preparation_suppressed", False):
-@@ -408,6 +589,8 @@
+@@ -408,6 +596,8 @@
  
  __all__ = [
      "GatedResidual",
