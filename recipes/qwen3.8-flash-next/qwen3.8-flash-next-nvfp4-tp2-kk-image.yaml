@@ -51,6 +51,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-kk-image
 description: "Arm 2 (la), KK image: same as eugr-agents-serve-local16-la-ghcr, but container is built from local-inference-lab's integration/karmic-kraken-beta branch (vllm 57a80980 + b12x e9ce5477) via our fork+cherry-pick pipeline instead of the dev/jovian-judgement-based dgx-spark forks."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260920-kk-a229c7a-e9ce547
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -106,6 +107,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

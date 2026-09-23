@@ -51,6 +51,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-draft-vocab-reduced
 description: "LOCAL BUILD ARM + reduced-vocab MTP draft head (vllm-0001-mtp-draft-vocab.patch, LocalArgmaxMixin wiring). Update container: to the patched build's tag."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: spark-vllm-b12x:local-20260918-a8333658-dv
 
 build_args: []
@@ -90,6 +91,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

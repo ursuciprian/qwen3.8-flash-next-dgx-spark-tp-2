@@ -66,6 +66,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-expert-parallel
 description: "LOCAL BUILD ARM + --enable-expert-parallel. NOT EXPECTED TO WORK: b12x MoE backend's EP path is W4A16-only per docs/features/quantization/b12x.md; our checkpoint is NVFP4. Boot only to confirm the failure mode."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: spark-vllm-b12x:local-20260918-a8333658
 
 build_args: []
@@ -100,6 +101,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

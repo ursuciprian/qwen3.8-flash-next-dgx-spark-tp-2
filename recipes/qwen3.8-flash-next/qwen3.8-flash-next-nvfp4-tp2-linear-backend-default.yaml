@@ -9,6 +9,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-linear-backend-default
 description: "bisect: eugr stack without --linear-backend b12x"
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: vllm-node-b12x
 
 build_args:
@@ -44,6 +45,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

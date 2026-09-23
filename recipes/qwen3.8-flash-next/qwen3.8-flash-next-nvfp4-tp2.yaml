@@ -9,6 +9,11 @@ name: qwen3.8-flash-next-nvfp4-tp2
 description: "Default (la): local16 + probabilistic MTP draft sampling (draft_sample_method:probabilistic), promoted 2026-09-22 for default-temperature (1.0) clients -- fallback with the previous one-hot/use_local_argmax_reduction config is qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+# Pinned twice on purpose: model_revision drives sparkrun's download and cache
+# key, and --revision in the command pins what each rank loads (sparkrun runs
+# vLLM offline, so each node would otherwise follow its own refs/main;
+# docs/ENGINEERING.md known issues).
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: spark-vllm-b12x:local-20260918-a8333658
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -107,6 +112,7 @@ env:
 # Fallback (previous default): qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

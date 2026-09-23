@@ -11,6 +11,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-ghcr-image
 description: "Arm 2 (la), ghcr image: same as eugr-agents-serve-local16-la, but container is the published ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365 image (pull, not local build)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -63,6 +64,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

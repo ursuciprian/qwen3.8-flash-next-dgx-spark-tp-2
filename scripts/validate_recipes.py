@@ -154,6 +154,17 @@ def check(path: Path) -> None:
             warn(path, f"VLLM_CACHE_ROOT={root} sits in the model cache, which is often shared or "
                        "NFS-mounted; JIT caches must be node-local")
 
+    # --- checkpoint revision: sparkrun serves with HF_HUB_OFFLINE=1, so each node resolves
+    # refs/main locally, and its head->worker `rsync --size-only` never refreshes that 40-byte
+    # file. 2026-09-18..23 the two TP ranks loaded different revisions (7c4f1bc1 vs ada4da32).
+    if "vllm serve" in cmd:
+        rev = re.search(r"--revision\s+(\S+)", cmd)
+        pinned = str(r.get("model_revision") or "")
+        if not rev:
+            warn(path, "vllm serve without --revision: each node loads whatever its refs/main says")
+        elif pinned and rev.group(1) != pinned:
+            err(path, f"--revision {rev.group(1)} disagrees with model_revision {pinned}")
+
     # --- flags this stack rejects, learned the expensive way
     if "use_local_argmax_reduction" in cmd and '"use_local_argmax_reduction":true' in cmd.replace(" ", ""):
         err(path, "use_local_argmax_reduction: Qwen4ExpMTP has no get_top_tokens() on vLLM nightly "

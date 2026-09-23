@@ -31,6 +31,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-gdn-state-bf16
 description: "LOCAL BUILD ARM + --mamba-ssm-cache-dtype bfloat16 (GDN recurrent state in BF16). Flag-only, same container as qwen3.8-flash-next-nvfp4-tp2-local-build.yaml."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: spark-vllm-b12x:local-20260918-a8333658
 
 build_args: []
@@ -65,6 +66,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \
