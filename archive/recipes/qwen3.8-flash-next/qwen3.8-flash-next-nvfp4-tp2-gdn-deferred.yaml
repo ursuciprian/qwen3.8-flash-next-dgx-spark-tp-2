@@ -1,7 +1,7 @@
 # Derived from qwen3.8-flash-next-nvfp4-tp2.yaml at e2fb3b8 (pinned default).
 # Differences, and only these:
-#  - container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-a5071b2e, built by spark-vllm-b12x build.sh from
-#    b12x feat/gdn-deferred-p1-tests@b7fbaf96 + vLLM feat/gdn-deferred-dgx-spark@a5071b2e,
+#  - container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-99e996d2, built by spark-vllm-b12x build.sh from
+#    b12x feat/gdn-deferred-p1-tests@b7fbaf96 + vLLM feat/gdn-deferred-dgx-spark@99e996d2,
 #    then retagged on both nodes (no /opt/b12x-seed layer; the seed line below no-ops).
 #  - --recurrent-checkpoint-policy aligned: deferred GDN checkpoints refuse
 #    request-boundary checkpoints, which "auto" enables on this V2/align setup.
@@ -38,7 +38,7 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # no mods, no --trust and no host mounts. Base without the warm layer:
 # spark-vllm-b12x:local-20260918-a8333658 (use it with
 # archive/mods/b12x-startup-boundedwait).
-container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-a5071b2e
+container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-99e996d2
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
