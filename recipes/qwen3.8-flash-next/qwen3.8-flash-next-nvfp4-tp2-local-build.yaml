@@ -9,6 +9,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-local-build
 description: "LOCAL BUILD ARM. Same serving config as eugr-agents-serve, but container: points at build.sh's own image (kernel/spec-decode instrumentation patches applied) instead of eugr's pulled/rebuilt b12x runner. Update container: below to whatever tag build.sh printed after each build."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # Local tag (default, already present on both cluster nodes -- no registry needed):
 container: spark-vllm-b12x:local-20260918-a8333658
 # Registry alternative, once ~/GEN-AI/build/publish.sh has been run with your own
@@ -54,6 +55,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

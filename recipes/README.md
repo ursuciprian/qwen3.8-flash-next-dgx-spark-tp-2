@@ -15,7 +15,7 @@ prose numbers.
 
 | recipe | image | status | notes |
 |---|---|---|---|
-| `qwen3.8-flash-next-nvfp4-tp2.yaml` | `spark-vllm-b12x:local-20260918-a8333658` | **default, serving** | local16 + probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) + `VLLM_MXFP8_LM_HEAD: "1"` (probabilistic drafts promoted 2026-09-22, MXFP8 lm_head promoted 2026-09-21). See `results/arms/la-mtpprob/verdict.md`, `results/arms/la-lmq/verdict.md`. |
+| `qwen3.8-flash-next-nvfp4-tp2.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | **default, serving** | local16 + probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) + `VLLM_MXFP8_LM_HEAD: "1"` (probabilistic drafts promoted 2026-09-22, MXFP8 lm_head promoted 2026-09-21). See `results/arms/la-mtpprob/verdict.md`, `results/arms/la-lmq/verdict.md`. |
 | `qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` | same image | fallback | previous default: one-hot drafts + `use_local_argmax_reduction: true`, kept in case probabilistic drafts need to be rolled back. |
 | `qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml` | same image | fallback | same as the default minus `use_local_argmax_reduction`. |
 | `qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` | not promoted | pull-based build from published wheels instead of `build.sh`. `ghcr2` gate: TC-45 passes (first time on this stack) but c1 ~-10% vs `la`. See `results/RESULTS.md` §"Cache-mount fix and ghcr image gate". |

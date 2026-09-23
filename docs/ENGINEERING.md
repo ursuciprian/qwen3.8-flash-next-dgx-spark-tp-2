@@ -101,6 +101,20 @@ stack.
   `_supports_default_lm_head_quantization`), enabled here. Halves the bytes
   read for the verify-head lm_head matmul (previously BF16-only on b12x at
   M=1, cuBLAS fallback); see `results/arms/la-lmq/verdict.md`.
+- **The two TP ranks loaded different checkpoint revisions (fixed 2026-09-23).**
+  sparkrun 0.3.6 serves with `HF_HUB_OFFLINE=1`, so vLLM on each node resolves
+  `refs/main` from that node's own HF cache. sparkrun's head-to-worker copy
+  (`scripts/model_distribute.sh`) is `rsync -a --size-only`. `refs/main` holds
+  a 40-byte commit hash on both nodes, so it is never recopied: only its mtime
+  follows the head. `model_sync.sh` also skips the download when any
+  safetensors file is present, even when a revision is set. After the head
+  moved to the QAD revision `7c4f1bc1`, the worker kept `ada4da32` (the old
+  PTQ checkpoint). Worker plan caches and rank-1 serve logs show `ada4da32`
+  from at least 2026-09-18 19:31 to 2026-09-23. Fix: every recipe for this
+  checkpoint sets both `model_revision:` and `--revision 7c4f1bc1…`. sparkrun
+  does not pass `model_revision` through to vLLM, so the flag is what pins the
+  ranks. `scripts/validate_recipes.py` warns about any `vllm serve` without
+  `--revision`.
 
 ## Build provenance
 

@@ -9,6 +9,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-tc45-reasoning-fix
 description: "la + vllm-tc45-reasoning-structag-fix mod: tool_choice=required/named structural-tag enforcement now passes reasoning=True (was hardcoded False), so the forced-tool-call grammar admits the <think> prefix this recipe's --reasoning-parser qwen3 always emits. Fixes tool-eval-bench TC-45 ('tool_choice=required Compliance'). See results/arms/tooleval-fix/notes.md."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: spark-vllm-b12x:local-20260918-a8333658
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -51,6 +52,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \

@@ -6,14 +6,17 @@ RoCE, packaged for [sparkrun](https://sparkrun.dev). The served route is vLLM
 on a b12x-kernel fork, built as our own container image.
 
 **Default recipe:** [`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml)
-**Default image:** `spark-vllm-b12x:local-20260918-a8333658`
+**Default image:** `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (local build `spark-vllm-b12x:local-20260918-a8333658` + [warm layer](docker/b0-warm/Dockerfile))
 
-**Numbers:** from fresh boots measured 2026-09-18 to 2026-09-22; each one
-states its workload and source file. Every measurement and verdict:
+**Numbers:** the pinned-checkpoint gate below was measured 2026-09-23. Older
+numbers come from fresh boots between 2026-09-18 and 2026-09-22, when rank 1
+was loading the old checkpoint revision. They are marked **(hybrid)**; see
+[Checkpoint revision split](#checkpoint-revision-split-fixed-2026-09-23). Each
+number states its workload and source file. Every measurement and verdict:
 [results/README.md](results/README.md). Full tables:
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-**Contents:** [At a glance](#at-a-glance) ·
+**Contents:** [Winning recipe](#winning-recipe) · [At a glance](#at-a-glance) ·
 [Quick start](#quick-start) · [Configuration](#configuration) ·
 [Recipes](#recipes) · [Quality](#quality) ·
 [How to read the numbers](#how-to-read-the-numbers) ·
@@ -22,11 +25,66 @@ states its workload and source file. Every measurement and verdict:
 
 ---
 
+## Winning recipe
+
+[`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml)
+(`B0`). What sets it apart from the other arms:
+
+- **Checkpoint:** `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD revision
+  `7c4f1bc1`, pinned with `model_revision` plus `--revision` so both ranks load
+  exactly that revision.
+- **Speculative decoding:** MTP with 4 draft tokens and
+  `draft_sample_method: probabilistic`. Drafts are sampled from the draft
+  distribution, so acceptance holds up for clients at the default temperature
+  (agent coding c16 221.9 vs 186.3 agg tok/s for one-hot drafts, (hybrid)).
+- **lm_head:** the verify-head lm_head runs as online MXFP8
+  (`VLLM_MXFP8_LM_HEAD=1`); the MTP draft head is NVFP4.
+- **Image:** `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`.
+  It is vLLM fork `8e1f1e58` with b12x `a8333658`, plus a warm layer carrying the
+  b12x kernel-selection cache and the TP2 startup bounded-wait patch.
+
+### Sampling settings
+
+The server uses the checkpoint's generation defaults: **temperature 1.0,
+top-p 0.95, top-k 20**. Agent clients that send no temperature (omp, pi,
+hermes) get these defaults, and that is the setting the recipe is tuned for.
+Temperature 0.6 measured the same speed within noise. Temperature 0 is only
+used for the counting diagnostic, not for real work.
+
+### Quality gate on the pinned checkpoint (2026-09-23)
+
+Both ranks on `7c4f1bc1`. Files: `results/arms/pinned-7c4f1bc1/` (dgx-01).
+
+| Gate | Result |
+|---|---|
+| tool-eval-bench `--hardmode` (88 scenarios, thinking on) | **90/100**; fails TC-45, TC-49, TC-68, TC-74 |
+| Fidelity probe (20 tool-call retrievals per depth) | **20/20** exact at 8k, 32k, 64k and 128k; typo rate 0.00 |
+| Straggler probe (batches 5-16) | no stragglers |
+| Counting diagnostic (bench_sweep, temp 0, thinking off; not user throughput) | c1 102.0, c4 305.6, c8 443.3, c16 650.6 agg tok/s |
+| decode_probe c1, temp 0 | code 56.2, structured 93.4, counting 102.9, prose 49.8 tok/s |
+| decode_probe c1, temp 0, shipped warm image, cold boot (5 runs, mean / peak) | code 61.3 / 65.6, structured 88.9 / 96.1, counting 96.9 / 102.7, prose 49.0 / 51.2 tok/s |
+| Agent coding and prose grids (default temperature) on the shipped image | **PENDING**: to be measured on the warm image; not measured yet |
+
+### Checkpoint revision split (fixed 2026-09-23)
+
+sparkrun runs vLLM with `HF_HUB_OFFLINE=1`, so each node loads whatever its own
+`refs/main` points at. sparkrun copies the model head-to-worker with
+`rsync --size-only`, and a 40-byte commit hash always has the same size, so the
+worker's `refs/main` was never updated. From at least 2026-09-18 until
+2026-09-23 14:12 EEST, rank 0 loaded the QAD revision `7c4f1bc1` and rank 1
+loaded the old PTQ revision `ada4da32`. Every number measured in that window
+is labelled (hybrid) below: the agent coding and prose grids, the counting
+ceilings, the old-vs-new comparison, and the la-family quality gates. The
+09-17 numbers were probably affected too. The recipes now pin the revision;
+details are in [docs/ENGINEERING.md](docs/ENGINEERING.md#known-issues--fixes).
+
+---
+
 ## At a glance
 
-### Agent coding task, default temperature (primary number)
+### Agent coding task, default temperature (primary number) (hybrid)
 
-Default recipe (probabilistic MTP drafts), measured 2026-09-21/22.
+Default recipe (probabilistic MTP drafts), measured 2026-09-21/22 with rank 1 on `ada4da32` (hybrid).
 Source: [`results/benchy/la-mtpprob-task16.md`](results/benchy/la-mtpprob-task16.md).
 
 Workload: our llama-benchy fork
@@ -58,12 +116,12 @@ llama-benchy reports it.
 Aggregate = generated tokens per second summed over all concurrent streams;
 per-stream = one request's rate. At c1 they are the same.
 
-### Other workloads (not comparable with the table above)
+### Other workloads (not comparable with the table above) (hybrid)
 
 | Workload | Headline | Source |
 |---|---|---|
 | Agent coding, **temperature 0** (old argmax config only; not measured on the default recipe) | c1 55.3, c16 217.7 agg tok/s | [`results/benchy/la-task16-t0.md`](results/benchy/la-task16-t0.md) |
-| Agent coding, temperature 0.6 | pending (`la-task16-t06` still running on dgx-01) | — |
+| Agent coding, temperature 0.6 | same speed as temperature 1.0 within noise (2026-09-23, B0, (hybrid)) | `results/benchy/` task-t06 run on dgx-01 |
 | **Prose continuation**, default recipe, default temperature (1.0), 128 output tokens | c1 56.05 ± 2.56, c16 126.72 ± 1.56 agg tok/s; 64k-cached c16 36.78 ± 2.68 | [`results/benchy/la-mtpprob-prose16.md`](results/benchy/la-mtpprob-prose16.md) |
 | **Counting ceiling — not user throughput** (bench_sweep "List the numbers from 1 to 300", temp 0, thinking off) | c1 100.9 / 102.1 / 101.8, c8 439.4 / 434.6, c16 641.3 / 635.0 agg tok/s | `results/arms/la-mtpprob/decode_c*.json`, `sweep.json` (dgx-01) |
 
@@ -72,7 +130,7 @@ misses (~3.96-4.00 of 4 drafts accepted). It is a regression diagnostic,
 **not** the speed of coding, chat or agent work. Full prose grid, counting
 table and old-vs-new comparisons: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-### Default vs previous default (old la, one-hot argmax drafts)
+### Default vs previous default (old la, one-hot argmax drafts) (hybrid)
 
 | Workload (aggregate gen tok/s, temp 1.0) | old la | probabilistic (default) |
 |---|---:|---:|
@@ -92,13 +150,23 @@ Sources: `results/benchy/la-task16.md` vs `la-mtpprob-task16.md`,
 
 ## Quick start
 
+On a sparkrun cluster of two DGX Sparks (default cluster, or add `--cluster <name>`):
+
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml --cluster <your-cluster> --tp 2 --trust
+sparkrun run qwen3.8-flash-next-nvfp4-tp2
 ```
 
+Or from a clone: `sparkrun run recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`.
+
 The server answers on port **8000** with the OpenAI API, model name
-**`qwen3.8-flash-next`**.
+**`qwen3.8-flash-next`**. Image digest:
+`ghcr.io/ursuciprian/spark-vllm-b12x@sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d`. Nothing else to place by hand: sparkrun pulls the image
+(`ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`) and downloads the
+checkpoint pinned at revision `7c4f1bc1` on both nodes. The b12x kernel-selection
+cache ships in the image, and compile caches persist in
+`~/.cache/sparkrun/runtime-cache/vllm/`. The recipe has no hooks or mounts, so it
+needs no `--trust`.
 
 ### Prerequisites
 
@@ -106,17 +174,20 @@ The server answers on port **8000** with the OpenAI API, model name
 |---|---|
 | Hardware | 2x DGX Spark: GB10, SM121, 128 GB LPDDR5X unified memory |
 | Link | ConnectX-7 RoCE between the nodes |
-| Launcher | [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 |
-| Image | `spark-vllm-b12x:local-20260918-a8333658` present on both nodes (built locally, see [docs/ENGINEERING.md](docs/ENGINEERING.md#build-provenance)); the pull-based alternative is the `ghcr-image` recipe below |
-| Cache mount | Recipe mounts `~/.cache/sparkrun/runtime-cache/vllm/<model>/` into the container at `/tmp/.cache`, so the b12x plan cache and compile caches survive restarts |
-| Trust | `--trust` accepts the mod hook that patches files inside the container before serve (see [mods/README.md](mods/README.md)) |
+| Launcher | [sparkrun](https://github.com/eugr/sparkrun) 0.3.6, cluster of both nodes set up |
+| Disk | ~100 GB for the checkpoint and ~25 GB for the image, per node |
 | Hosts | `loginctl enable-linger nvidia` on both nodes (see [Known issues](#known-issues--limits)) |
 
 > [!IMPORTANT]
-> **First boot is slow.** Cold boot takes 20-30 minutes (kernel autotune from
-> an empty plan cache). Warm boot with a populated
-> `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` takes a few minutes.
-> Do not restart a cold boot that is still tuning.
+> **Boot times (measured 2026-09-23 on the pair, from a fresh clone).** Cold boot,
+> with no runtime cache and the image not yet on either node: **~9 min** from
+> `sparkrun run` to `/health` 200. That covers the ~108 s image pull and sync, then
+> about 7 min of serve start, of which the kernel compilation is most. The kernel
+> selection itself ships in the image, so no autotuning runs (0 measured).
+> A warm restart takes **~3.8 min** with 0 kernel compilations. The weights
+> (~100 GB) were already present in this test, so a truly fresh pair also pays
+> for the checkpoint download. `sparkrun run` may return before the server is
+> ready, so poll `http://<head>:8000/health`.
 
 ---
 
@@ -170,8 +241,9 @@ revision `7c4f1bc1`.
 | `SAFETENSORS_FAST_GPU` | `1` | Faster weight load |
 | `VLLM_WORKER_MULTIPROC_METHOD` | `spawn` | Worker start method |
 
-Mods applied: `b12x-startup-boundedwait` (bounded `Store.wait` in TP2
-preparation, fails fast instead of parking forever).
+No mods at run time. The `b12x-startup-boundedwait` patch (bounded `Store.wait` in
+TP2 preparation, fails fast instead of parking forever) is baked into the image
+([`docker/b0-warm/Dockerfile`](docker/b0-warm/Dockerfile)).
 
 ---
 
@@ -179,7 +251,7 @@ preparation, fails fast instead of parking forever).
 
 | Recipe | Image | Status |
 |---|---|---|
-| [`qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| [`qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness patch baked into the image, `B12X_AUTOTUNE=1`. |
 | [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
 | [`qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml) | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
 | [`qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Alternate pull-based image, gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted. |
@@ -193,7 +265,8 @@ ones in [recipes/RENAMES.md](recipes/RENAMES.md).
 
 ## Quality
 
-Default recipe (probabilistic drafts), files in `results/arms/la-mtpprob/`.
+Pinned-checkpoint gate: [Winning recipe](#quality-gate-on-the-pinned-checkpoint-2026-09-23).
+The tables below are older (hybrid) gates. Default recipe (probabilistic drafts), files in `results/arms/la-mtpprob/`.
 
 | Gate | Result | Setting | File |
 |---|---|---|---|
@@ -239,6 +312,7 @@ Details and raw acceptance counts: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#how-t
 
 | Issue | Status | Detail |
 |---|---|---|
+| Checkpoint revision split: rank 1 loaded `ada4da32` while rank 0 loaded `7c4f1bc1` (2026-09-18 to 09-23) | **Fixed**: recipes pin `model_revision` + `--revision` | sparkrun's `rsync --size-only` never refreshes the worker's `refs/main`; see [Checkpoint revision split](#checkpoint-revision-split-fixed-2026-09-23) |
 | Batch 5-7 straggler: one request per round stalled ~18 s at c5-7 (also 9, 12) | **Fixed** by our own image | Fork's QSA/GDN scratch-isolation commits; `mods/vllm-qwen-scratch-isolation/` documents the fix |
 | `B12X_AUTOTUNE=0` in eugr's Dockerfile: fresh boot 81 tok/s instead of 96-98 at c1 (counting diagnostic) | **Worked around**: recipe sets `1` | Plan cache persists at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB); [`results/kernel-pass/arms.md`](results/kernel-pass/arms.md) |
 | logind `RemoveIPC` kills shm (`'ShmRingBuffer' object has no attribute 'shared_memory'`) | **Host fix** | `loginctl enable-linger nvidia` on both nodes |

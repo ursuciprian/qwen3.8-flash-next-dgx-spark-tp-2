@@ -9,6 +9,7 @@ name: qwen3.8-flash-next-nvfp4-tp2-mtp-index-share-off
 description: "c5/c9/c12 straggler probe arm: max_num_seqs 16 (so c9/c12 do not queue) + --hf-overrides index_share_for_mtp_iteration=false, to test whether QSA top-k index reuse across MTP draft steps is the straggler root cause"
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 container: vllm-node-b12x
 
 build_args:
@@ -44,6 +45,7 @@ env:
 
 command: |
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
     --port {port} \
     --trust-remote-code \
