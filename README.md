@@ -249,17 +249,23 @@ TP2 preparation, fails fast instead of parking forever) is baked into the image
 
 ## Recipes
 
-| Recipe | Image | Status |
-|---|---|---|
-| [`qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness patch baked into the image, `B12X_AUTOTUNE=1`. |
-| [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
-| [`qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml) | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
-| [`qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Alternate pull-based image, gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted. |
+`sparkrun recipe list` / `sparkrun recipe search qwen3.8` against this registry
+shows exactly two recipes. Both are pinned (`--revision 7c4f1bc1…`), use the
+public warm image, and need no mods, no host mounts and no `--trust`.
 
-All recipes live in `recipes/qwen3.8-flash-next/`. Every one, including the
-rejected and experimental arms, is tabled with status and a verdict pointer in
-[recipes/README.md](recipes/README.md). Old `recipes/eugr/` names map to new
-ones in [recipes/RENAMES.md](recipes/RENAMES.md).
+| Recipe | Image | Use |
+|---|---|---|
+| [`qwen3.8-flash-next-nvfp4-tp2`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (`sha256:a3d5d90d…`) | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`), best for clients that send no temperature (checkpoint default 1.0). |
+| [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: the previous default, one-hot drafts + `use_local_argmax_reduction: true`. For temperature-0 clients or a rollback. Moved onto the warm image 2026-09-23; not boot-tested on it yet (same build, same baked-in fix as its old local image + mod). |
+
+Everything else (bisection arms, rejected experiments, other checkpoints, the
+SGLang-era route, the alternate `wheels-20260919` ghcr image) is in
+[`archive/recipes/`](archive/recipes/README.md) with its mods in
+[`archive/mods/`](archive/mods/README.md). sparkrun does not clone or scan
+`archive/`; run an archived recipe by path from a clone, e.g.
+`sparkrun run ./archive/recipes/qwen3.8-flash-next/<file>.yaml --hosts <head>,<worker>`
+(many need a local-only image or host paths from the pair; see the archive index).
+Where each file went: [recipes/RENAMES.md](recipes/RENAMES.md).
 
 ---
 
@@ -286,7 +292,7 @@ Previous default (old la + MXFP8 lm_head, `results/arms/la-lmq/`): fidelity
 
 | Scenario | Cause | Status |
 |---|---|---|
-| TC-45 (`tool_choice=required`) | Parser bug, see [Known issues](#known-issues--limits) | Fixed by `mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs about -12% on the bench_sweep counting diagnostic at c1 (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7). Not enabled by default. |
+| TC-45 (`tool_choice=required`) | Parser bug, see [Known issues](#known-issues--limits) | Fixed by `archive/mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs about -12% on the bench_sweep counting diagnostic at c1 (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7). Not enabled by default. |
 | TC-68 | Model wraps JSON in a code fence with commentary; the scenario intentionally sends no `response_format` | Model compliance, not a server bug — not fixable without defeating the test |
 
 ---
@@ -313,11 +319,11 @@ Details and raw acceptance counts: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#how-t
 | Issue | Status | Detail |
 |---|---|---|
 | Checkpoint revision split: rank 1 loaded `ada4da32` while rank 0 loaded `7c4f1bc1` (2026-09-18 to 09-23) | **Fixed**: recipes pin `model_revision` + `--revision` | sparkrun's `rsync --size-only` never refreshes the worker's `refs/main`; see [Checkpoint revision split](#checkpoint-revision-split-fixed-2026-09-23) |
-| Batch 5-7 straggler: one request per round stalled ~18 s at c5-7 (also 9, 12) | **Fixed** by our own image | Fork's QSA/GDN scratch-isolation commits; `mods/vllm-qwen-scratch-isolation/` documents the fix |
+| Batch 5-7 straggler: one request per round stalled ~18 s at c5-7 (also 9, 12) | **Fixed** by our own image | Fork's QSA/GDN scratch-isolation commits; `archive/mods/vllm-qwen-scratch-isolation/` documents the fix |
 | `B12X_AUTOTUNE=0` in eugr's Dockerfile: fresh boot 81 tok/s instead of 96-98 at c1 (counting diagnostic) | **Worked around**: recipe sets `1` | Plan cache persists at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB); [`results/kernel-pass/arms.md`](results/kernel-pass/arms.md) |
 | logind `RemoveIPC` kills shm (`'ShmRingBuffer' object has no attribute 'shared_memory'`) | **Host fix** | `loginctl enable-linger nvidia` on both nodes |
-| TP2 preparation hangs from an empty plan cache on b12x commits past `a8333658` | **Fixed in default recipe** | `B12X_ROCE_SPIN_LIMIT: "300000000"` + `mods/b12x-startup-boundedwait/`; [`results/kernel-pass/prep-deadlock/mechanism.md`](results/kernel-pass/prep-deadlock/mechanism.md) |
-| TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Open**, fix exists but off | `mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100, costs speed (see [Quality](#quality)) |
+| TP2 preparation hangs from an empty plan cache on b12x commits past `a8333658` | **Fixed in default recipe** | `B12X_ROCE_SPIN_LIMIT: "300000000"` + `archive/mods/b12x-startup-boundedwait/` (baked into the image); [`results/kernel-pass/prep-deadlock/mechanism.md`](results/kernel-pass/prep-deadlock/mechanism.md) |
+| TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Open**, fix exists but off | `archive/mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100, costs speed (see [Quality](#quality)) |
 | `scripts/gate_arm.sh` without `--hardmode` runs only 69 of 88 scenarios | **Usage** | Always pass `--hardmode` for a real promotion decision |
 | Prose 64k-cached c16 regresses vs old la (38.15 -> 36.78) | **Known** | See the comparison in [At a glance](#default-vs-previous-default-old-la-one-hot-argmax-drafts) |
 | Raw `results/arms/` files | **Not all mirrored** | Some live on dgx-01 only, see [results/README.md](results/README.md) |
@@ -333,9 +339,9 @@ Profiling, rejected arms and build provenance also live in
 
 | Path | What |
 |---|---|
-| [`recipes/qwen3.8-flash-next/`](recipes/qwen3.8-flash-next/) | The served recipe family: default, fallbacks, experimental and rejected arms. Status table: [recipes/README.md](recipes/README.md); old names: [recipes/RENAMES.md](recipes/RENAMES.md) |
-| `recipes/arms/`, `recipes/dflash2/`, `recipes/retired/`, `recipes/flashnext-*.yaml` | Earlier SGLang-era recipes and bisection arms, kept for history; not the served route |
-| [`mods/`](mods/) | Engine patches, one directory per mod; one-line summary of each in [mods/README.md](mods/README.md) |
+| [`recipes/qwen3.8-flash-next/`](recipes/qwen3.8-flash-next/) | The two registry-visible recipes: default and argmax-drafts fallback |
+| [`archive/recipes/`](archive/recipes/README.md), [`archive/mods/`](archive/mods/README.md) | Every other recipe (vLLM/b12x arms, other checkpoints, SGLang-era route) and every mod, with status and verdict pointers; not scanned by sparkrun. Moves: [recipes/RENAMES.md](recipes/RENAMES.md) |
+| [`docker/b0-warm/`](docker/b0-warm/) | Warm layer of the shipped image: b12x plan seed + bounded-wait fix |
 | [`scripts/`](scripts/) | `gate_arm.sh` (full quality gate, needs `--hardmode`), `fidelity_probe.py`, `prof_summary.py`, `needle_ladder.py`, `decode_probe.py`, `validate_recipes.py`, `run.sh`, arm-bisection scripts (`vllm_ladder.sh`, `qwen_ladder*.sh`, …) |
 | [`results/benchy/`](results/benchy/) | llama-benchy agent-task and prose grids and the multi-turn TTFT probe behind the headline tables |
 | `results/kernel-pass/`, `results/profiling/`, `results/arms/` | The 2026-09-18/21 arms, hang evidence and per-kernel profile |

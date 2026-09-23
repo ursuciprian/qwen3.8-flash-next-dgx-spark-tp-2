@@ -2,6 +2,7 @@
 """Recipe validator for this project's Qwen3.8-Flash-Next recipes.
 
   scripts/validate_recipes.py [PATH ...]        # default: recipes/ under the repo root
+  scripts/validate_recipes.py archive/recipes   # the archived arms (not registry-visible)
 
 Complements `sparkrun recipe validate`, which checks the schema. Every rule here comes from a
 failure this project actually hit, so a clean run means the recipe will not fail in one of the
@@ -166,7 +167,7 @@ def check(path: Path) -> None:
             err(path, f"--revision {rev.group(1)} disagrees with model_revision {pinned}")
 
     # --- flags this stack rejects, learned the expensive way
-    if "use_local_argmax_reduction" in cmd and '"use_local_argmax_reduction":true' in cmd.replace(" ", ""):
+    if '"use_local_argmax_reduction":true' in cmd.replace(" ", "") and "spark-vllm-b12x" not in container:
         err(path, "use_local_argmax_reduction: Qwen4ExpMTP has no get_top_tokens() on vLLM nightly "
                   "8a728663; the engine refuses to start")
     m = re.search(r"--speculative-num-draft-tokens\s+(\d+)", cmd)
@@ -180,6 +181,17 @@ def check(path: Path) -> None:
        and "--prefix-cache-retention-interval" not in cmd:
         warn(path, "MTP + prefix caching without disable_eagle_block_drop or a retention interval: "
                    "a prompt's first pass is not reusable before vLLM #53945")
+
+    # --- registry-visible recipes (everything under recipes/) are what `sparkrun run <name>` finds
+    # for any user: pinned checkpoint, a pullable image, nothing an untrusted registry drops
+    if (REPO / "recipes") in path.resolve().parents:
+        if "vllm serve" in cmd and "--revision" not in cmd:
+            err(path, "registry-visible recipe must pin the checkpoint with --revision")
+        if "." not in container.split("/")[0]:
+            err(path, f"registry-visible recipe uses `{container}`, which has no registry host; users cannot pull it")
+        if vols or mods:
+            err(path, "registry-visible recipe must not need volumes or mods (untrusted registries skip "
+                      "volumes, users would need --trust); archive it or bake the change into the image")
 
     # --- secrets
     for k, v in env.items():

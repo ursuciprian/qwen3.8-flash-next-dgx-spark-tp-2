@@ -1,18 +1,34 @@
 # formerly eugr-agents-serve-local16-la-argmax.yaml
-# Previous default (one-hot drafts + use_local_argmax_reduction), kept as fallback.
-# Superseded 2026-09-22 by probabilistic drafts in qwen3.8-flash-next-nvfp4-tp2.yaml.
-# eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
-# Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
-# 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
-# later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
+# Fallback: the previous default (one-hot MTP drafts + use_local_argmax_reduction),
+# superseded 2026-09-22 by probabilistic drafts in qwen3.8-flash-next-nvfp4-tp2.yaml.
+# Use it for clients that always send temperature 0 (greedy), or to roll back.
+# 2026-09-23: repackaged onto the default's warm ghcr image (same a8333658 build
+# with the bounded-wait fix and b12x plan seed baked in), so it needs no mods,
+# no --trust and no host mounts. Identical to the default except `name`,
+# `description` and the --speculative-config line. Served on the local
+# a8333658 image + b12x-startup-boundedwait mod until 2026-09-22 (arm la-lmq,
+# 2026-09-21, bench_sweep counting diagnostic, temp 0, thinking off: c1 median
+# 99.5 / max 101.8, c8 440.7 tok/s). Not boot-tested on the warm image yet.
+# The original local-image copy is archive/recipes/qwen3.8-flash-next/
+# qwen3.8-flash-next-nvfp4-tp2-argmax-drafts-local.yaml.
 
 recipe_version: "1"
 name: qwen3.8-flash-next-nvfp4-tp2-argmax-drafts
-description: "Arm 2 (la): local16 + use_local_argmax_reduction:true in the MTP speculative config (communication-only optimization, no rebuild -- same container as local16)."
+description: "Fallback: previous default, one-hot MTP drafts with use_local_argmax_reduction (best for temperature-0 clients); same warm ghcr image as qwen3.8-flash-next-nvfp4-tp2."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+# Pinned twice on purpose: model_revision drives sparkrun's download and cache
+# key, and --revision in the command pins what each rank loads (sparkrun runs
+# vLLM offline, so each node would otherwise follow its own refs/main;
+# docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: spark-vllm-b12x:local-20260918-a8333658
+# B0 image (a8333658 build of 2026-09-18) plus docker/b0-warm: the b12x plan
+# cache seed and the startup bounded-wait patch baked in, so this recipe needs
+# no mods, no --trust and no host mounts. Base without the warm layer:
+# spark-vllm-b12x:local-20260918-a8333658 (use it with archive/mods/
+# b12x-startup-boundedwait).
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm
+runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
 # eugr builder either substitute its own pullable nightly or try to build via
@@ -24,26 +40,12 @@ build_args: []
 
 cluster_only: true
 
-mods: [b12x-startup-boundedwait]
-
-# Root cause of "0 cached" / 9-min boots (2026-09-20): this recipe never
-# mounted a persistent cache dir. The container's HOME=/tmp (set by
-# sparkrun's docker executor), so b12x's SelectionCache and vllm/torch's
-# own compile caches (triton, inductor, flashinfer, torch_extensions) all
-# resolve under $HOME/.cache = /tmp/.cache -- ephemeral container overlay,
-# wiped on every `sparkrun stop`+`run`. Verified: the plan-cache JSON the
-# container writes fresh each boot
-# (/tmp/.cache/b12x/compile/preparation/8ccf47...json) has the IDENTICAL
-# identity hash as the one already sitting on the host under
-# runtime-cache/.../b12x/compile/preparation/, last written 2026-09-18 --
-# same device_name+namespace key, so mounting it back in satisfies real
-# cache hits immediately, no retune needed. Not a driver/firmware issue:
-# SelectionCache's identity (b12x/preparation/_cache.py:cache_identity)
-# only hashes device_name + namespace + version, none of which include
-# driver/firmware, and the driver (580.173.02) is identical on both nodes.
-executor_config:
-  volumes:
-    - "/home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-ca6f25af:/tmp/.cache"
+# Caches: sparkrun mounts ~/.cache/sparkrun/runtime-cache/vllm/<model>-<hash>
+# at /cache/runtime and sets XDG_CACHE_HOME there (core/runtime_cache.py).
+# b12x, triton, inductor, flashinfer and vLLM's compile cache all persist in
+# it, so the recipe needs no volumes (and sparkrun ignores `volumes` from an
+# untrusted registry recipe anyway). The first line of `command` seeds the
+# b12x plan-selection cache from the image; see docker/b0-warm/Dockerfile.
 
 defaults:
   port: 8000
@@ -85,7 +87,11 @@ env:
   # (VLLM_MTP_NVFP4_LM_HEAD default 1) -- both heads are now quantized.
   VLLM_MXFP8_LM_HEAD: "1"
 
+# --speculative-config: one-hot drafts + use_local_argmax_reduction (the
+# default before 2026-09-22). At temperature 1.0 one-hot drafts only get ~0.27
+# accepted per draft token; see the default recipe for the measurements.
 command: |
+  S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
