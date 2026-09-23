@@ -1,5 +1,13 @@
 # Benchmarks: full tables
 
+> [!WARNING]
+> **Hybrid checkpoint.** Every table here was measured before 2026-09-23 14:12
+> EEST. In that window rank 1 loaded checkpoint revision `ada4da32` while rank 0
+> loaded `7c4f1bc1` (at least 2026-09-18 onward, probably 2026-09-17 too). All
+> numbers below are therefore (hybrid). Pinned-checkpoint results are in the
+> README: [Winning recipe](../README.md#winning-recipe) and
+> [Checkpoint revision split](../README.md#checkpoint-revision-split-fixed-2026-09-23).
+
 Full measurement tables behind the [README](../README.md) headline numbers.
 Every figure names its workload and source file. Paths under `results/arms/`
 are partly on dgx-01 only; see [results/README.md](../results/README.md).
