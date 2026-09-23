@@ -1,10 +1,21 @@
 # Derived from qwen3.8-flash-next-nvfp4-tp2.yaml at e2fb3b8 (pinned default).
 # Differences, and only these:
-#  - container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-2de0a95d, built by spark-vllm-b12x build.sh from
-#    b12x feat/gdn-deferred-p1-tests@b7fbaf96 + vLLM feat/gdn-deferred-dgx-spark@2de0a95d,
+#  - container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-a5071b2e, built by spark-vllm-b12x build.sh from
+#    b12x feat/gdn-deferred-p1-tests@b7fbaf96 + vLLM feat/gdn-deferred-dgx-spark@a5071b2e,
 #    then retagged on both nodes (no /opt/b12x-seed layer; the seed line below no-ops).
 #  - --recurrent-checkpoint-policy aligned: deferred GDN checkpoints refuse
 #    request-boundary checkpoints, which "auto" enables on this V2/align setup.
+#    This is NOT a neutral change. It turns off the whole request-boundary
+#    checkpoint machinery (vllm/config/vllm.py use_request_boundary_checkpoints
+#    and its consumers): BoundaryCheckpointState / BoundaryCheckpointCache in the
+#    KV cache manager, capture_mamba in the V2 runner, logits_only boundary
+#    replay, and renderer/API-server checkpoints; and it turns on partial-tail
+#    copy-on-write publishing. Prefix reuse across turns therefore behaves
+#    differently from production.
+#    => Compare -gdn-deferred only with -gdn-deferred-off (same image, same
+#       policy). Do not compare either arm with production/B0 numbers. The OFF
+#       control needs its own full quality gate before it can serve as a
+#       baseline.
 #  - nothing else: this is the OFF control for the gdn-deferred A/B in the same image.
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
@@ -26,8 +37,8 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # cache seed and the startup bounded-wait patch baked in, so this recipe needs
 # no mods, no --trust and no host mounts. Base without the warm layer:
 # spark-vllm-b12x:local-20260918-a8333658 (use it with
-# mods: [b12x-startup-boundedwait]).
-container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-2de0a95d
+# archive/mods/b12x-startup-boundedwait).
+container: spark-vllm-b12x:gdn-deferred-b12x-b7fbaf96-vllm-a5071b2e
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -39,6 +50,8 @@ runtime: vllm
 build_args: []
 
 cluster_only: true
+min_nodes: 2
+max_nodes: 2
 
 # Caches: sparkrun mounts ~/.cache/sparkrun/runtime-cache/vllm/<model>-<hash>
 # at /cache/runtime and sets XDG_CACHE_HOME there (core/runtime_cache.py).
