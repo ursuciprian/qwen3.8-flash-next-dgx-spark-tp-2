@@ -1,4 +1,10 @@
-# Recipes index
+# Archived recipes index
+
+Archived 2026-09-23: none of these is registry-visible. The two recipes a
+user should run are in `recipes/qwen3.8-flash-next/` (see `recipes/README.md`).
+Paths below were written before the move; prefix `archive/` to find each file
+(the argmax-drafts row is now `-argmax-drafts-local.yaml`; the registry-visible
+argmax-drafts recipe was rebuilt on the warm image).
 
 Every sparkrun recipe in this repo. `recipes/qwen3.8-flash-next/` is the served vLLM/b12x
 family and the one that matters day to day; everything else is either an

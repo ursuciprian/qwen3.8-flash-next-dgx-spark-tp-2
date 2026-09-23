@@ -10,7 +10,7 @@ Contents: [Profile](#profile-rank-local-torchprofiler-resultsprofilingreadmemd) 
 
 ## Profile (rank-local `torch.profiler`, `results/profiling/README.md`)
 
-Mod `mods/vllm-decode-profiler/`, recipe
+Mod `archive/mods/vllm-decode-profiler/`, recipe
 `qwen3.8-flash-next-nvfp4-tp2-profiler-local-rank.yaml`, summarized by
 `scripts/prof_summary.py`. ~4% profiler overhead. Load: bench_sweep counting
 prompt (temp 0, thinking off) at c1 and c8, so the step mix reflects ~4
@@ -63,7 +63,7 @@ stack.
   its MTP drafts and stalled ~18 s at c5-7 (also 9, 12) on the fork revision
   eugr's image shipped. Traced to a shared-scratch collision in the QSA/GDN
   projection path; fixed by the fork's scratch-isolation commits, baked into
-  our own image. `mods/vllm-qwen-scratch-isolation/` documents the fix.
+  our own image. `archive/mods/vllm-qwen-scratch-isolation/` documents the fix.
 - **`B12X_AUTOTUNE=0` in eugr's Dockerfile.** Truncates kernel-selection
   tuning; a fresh boot does 81 tok/s instead of 96-98 at c1 on the
   bench_sweep counting diagnostic (`results/kernel-pass/arms.md`, noat).
@@ -80,7 +80,7 @@ stack.
   spin limit (`B12X_ROCE_SPIN_LIMIT`, ~20 s) expiring before the two ranks'
   MoE candidate racing converges, which poisons the runtime instead of just
   waiting longer. Fix: `B12X_ROCE_SPIN_LIMIT: "300000000"` (~300 s) in the
-  recipe env plus `mods/b12x-startup-boundedwait/` (bounded `Store.wait` in
+  recipe env plus `archive/mods/b12x-startup-boundedwait/` (bounded `Store.wait` in
   the fork's `B12xPreparationCoordinator._exchange()`, fails fast instead of
   parking forever). Both are in the default recipe. Full trace:
   `results/kernel-pass/prep-deadlock/mechanism.md`.
@@ -90,7 +90,7 @@ stack.
   grammar, so `tool_choice=required` is silently unconstrained. Same gap for
   every model on the shared engine (Kimi K2, GLM-4.7-MoE, DeepSeek variants,
   Gemma4, Mistral, SeedOss, NemotronV3, Minimax M2). Fix exists
-  (`mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100) but is not
+  (`archive/mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100) but is not
   enabled — see [Quality](../README.md#quality).
 - **`scripts/gate_arm.sh`** needs `--hardmode` to run all 88 scenarios; the
   first `la` gate accidentally ran the 69-scenario default set and gave a
@@ -104,7 +104,7 @@ stack.
 - **The two TP ranks loaded different checkpoint revisions (fixed 2026-09-23).**
   sparkrun 0.3.6 serves with `HF_HUB_OFFLINE=1`, so vLLM on each node resolves
   `refs/main` from that node's own HF cache. sparkrun's head-to-worker copy
-  (`scripts/model_distribute.sh`) is `rsync -a --size-only`. `refs/main` holds
+  (sparkrun's own `model_distribute.sh`) is `rsync -a --size-only`. `refs/main` holds
   a 40-byte commit hash on both nodes, so it is never recopied: only its mtime
   follows the head. `model_sync.sh` also skips the download when any
   safetensors file is present, even when a revision is set. After the head
