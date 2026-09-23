@@ -6,7 +6,7 @@ RoCE, packaged for [sparkrun](https://sparkrun.dev). The served route is vLLM
 on a b12x-kernel fork, built as our own container image.
 
 **Default recipe:** [`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml)
-**Default image:** `spark-vllm-b12x:local-20260918-a8333658`
+**Default image:** `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (local build `spark-vllm-b12x:local-20260918-a8333658` + [warm layer](docker/b0-warm/Dockerfile))
 
 **Numbers:** from fresh boots measured 2026-09-18 to 2026-09-22; each one
 states its workload and source file. Every measurement and verdict:
@@ -92,13 +92,22 @@ Sources: `results/benchy/la-task16.md` vs `la-mtpprob-task16.md`,
 
 ## Quick start
 
+On a sparkrun cluster of two DGX Sparks (default cluster, or add `--cluster <name>`):
+
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml --cluster <your-cluster> --tp 2 --trust
+sparkrun run qwen3.8-flash-next-nvfp4-tp2
 ```
 
+Or from a clone: `sparkrun run recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`.
+
 The server answers on port **8000** with the OpenAI API, model name
-**`qwen3.8-flash-next`**.
+**`qwen3.8-flash-next`**. Nothing else to place by hand: sparkrun pulls the image
+(`ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`) and downloads the
+checkpoint pinned at revision `7c4f1bc1` on both nodes. The b12x kernel-selection
+cache ships in the image, and compile caches persist in
+`~/.cache/sparkrun/runtime-cache/vllm/`. The recipe has no hooks or mounts, so it
+needs no `--trust`.
 
 ### Prerequisites
 
@@ -106,17 +115,15 @@ The server answers on port **8000** with the OpenAI API, model name
 |---|---|
 | Hardware | 2x DGX Spark: GB10, SM121, 128 GB LPDDR5X unified memory |
 | Link | ConnectX-7 RoCE between the nodes |
-| Launcher | [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 |
-| Image | `spark-vllm-b12x:local-20260918-a8333658` present on both nodes (built locally, see [docs/ENGINEERING.md](docs/ENGINEERING.md#build-provenance)); the pull-based alternative is the `ghcr-image` recipe below |
-| Cache mount | Recipe mounts `~/.cache/sparkrun/runtime-cache/vllm/<model>/` into the container at `/tmp/.cache`, so the b12x plan cache and compile caches survive restarts |
-| Trust | `--trust` accepts the mod hook that patches files inside the container before serve (see [mods/README.md](mods/README.md)) |
+| Launcher | [sparkrun](https://github.com/eugr/sparkrun) 0.3.6, cluster of both nodes set up |
+| Disk | ~100 GB for the checkpoint and ~25 GB for the image, per node |
 | Hosts | `loginctl enable-linger nvidia` on both nodes (see [Known issues](#known-issues--limits)) |
 
 > [!IMPORTANT]
-> **First boot is slow.** Cold boot takes 20-30 minutes (kernel autotune from
-> an empty plan cache). Warm boot with a populated
-> `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` takes a few minutes.
-> Do not restart a cold boot that is still tuning.
+> **First boot is slow.** It downloads the checkpoint and image, then compiles
+> the kernels for these GPUs. The kernel selection itself is shipped, so the
+> first boot does not autotune. Later boots reuse the compile caches. `sparkrun run`
+> may return before the server is ready, so poll `http://<head>:8000/health`.
 
 ---
 
@@ -179,7 +186,7 @@ preparation, fails fast instead of parking forever).
 
 | Recipe | Image | Status |
 |---|---|---|
-| [`qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `spark-vllm-b12x:local-20260918-a8333658` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness mod, `B12X_AUTOTUNE=1`. |
+| [`qwen3.8-flash-next-nvfp4-tp2.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) in the speculative config, startup robustness patch baked into the image, `B12X_AUTOTUNE=1`. |
 | [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: previous default — one-hot drafts + `use_local_argmax_reduction: true` instead of probabilistic sampling. |
 | [`qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml) | same image | Fallback: same recipe without `use_local_argmax_reduction`. |
 | [`qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` (`sha256:c0314d7c…`) | Alternate pull-based image, gated (`ghcr2`, 272 cached): TC-45 passes for the first time on this stack, but bench_sweep counting diagnostic c1 is ~-10% vs `la` (87.7 vs 97.4). Not promoted. |

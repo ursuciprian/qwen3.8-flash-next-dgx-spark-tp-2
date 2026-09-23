@@ -14,7 +14,13 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: spark-vllm-b12x:local-20260918-a8333658
+# B0 image (a8333658 build of 2026-09-18) plus docker/b0-warm: the b12x plan
+# cache seed and the startup bounded-wait patch baked in, so this recipe needs
+# no mods, no --trust and no host mounts. Base without the warm layer:
+# spark-vllm-b12x:local-20260918-a8333658 (use it with
+# mods: [b12x-startup-boundedwait]).
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm
+runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
 # eugr builder either substitute its own pullable nightly or try to build via
@@ -26,26 +32,12 @@ build_args: []
 
 cluster_only: true
 
-mods: [b12x-startup-boundedwait]
-
-# Root cause of "0 cached" / 9-min boots (2026-09-20): this recipe never
-# mounted a persistent cache dir. The container's HOME=/tmp (set by
-# sparkrun's docker executor), so b12x's SelectionCache and vllm/torch's
-# own compile caches (triton, inductor, flashinfer, torch_extensions) all
-# resolve under $HOME/.cache = /tmp/.cache -- ephemeral container overlay,
-# wiped on every `sparkrun stop`+`run`. Verified: the plan-cache JSON the
-# container writes fresh each boot
-# (/tmp/.cache/b12x/compile/preparation/8ccf47...json) has the IDENTICAL
-# identity hash as the one already sitting on the host under
-# runtime-cache/.../b12x/compile/preparation/, last written 2026-09-18 --
-# same device_name+namespace key, so mounting it back in satisfies real
-# cache hits immediately, no retune needed. Not a driver/firmware issue:
-# SelectionCache's identity (b12x/preparation/_cache.py:cache_identity)
-# only hashes device_name + namespace + version, none of which include
-# driver/firmware, and the driver (580.173.02) is identical on both nodes.
-executor_config:
-  volumes:
-    - "/home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-ca6f25af:/tmp/.cache"
+# Caches: sparkrun mounts ~/.cache/sparkrun/runtime-cache/vllm/<model>-<hash>
+# at /cache/runtime and sets XDG_CACHE_HOME there (core/runtime_cache.py).
+# b12x, triton, inductor, flashinfer and vLLM's compile cache all persist in
+# it, so the recipe needs no volumes (and sparkrun ignores `volumes` from an
+# untrusted registry recipe anyway). The first line of `command` seeds the
+# b12x plan-selection cache from the image; see docker/b0-warm/Dockerfile.
 
 defaults:
   port: 8000
@@ -111,6 +103,7 @@ env:
 # c5-16 clean, hardmode 86 -> 90 on rerun (la band 86-93).
 # Fallback (previous default): qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
+  S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
