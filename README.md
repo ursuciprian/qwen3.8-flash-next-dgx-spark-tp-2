@@ -150,7 +150,7 @@ Sources: `results/benchy/la-task16.md` vs `la-mtpprob-task16.md`,
 
 ## Quick start
 
-On a sparkrun cluster of two DGX Sparks (default cluster, or add `--cluster <name>`):
+On two DGX Sparks set up for sparkrun (uses the default cluster; otherwise add `--cluster <name>` or `--hosts <head-ip>,<worker-ip>`):
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
