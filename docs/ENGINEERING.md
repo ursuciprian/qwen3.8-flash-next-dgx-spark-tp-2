@@ -181,3 +181,152 @@ image from those wheels:
   TC-45 passes for the first time on this stack, but bench_sweep counting
   c1 is ~-10% vs `la`. Kept as an alternate pull-based path, not promoted to default — see
   `results/README.md`.
+
+
+## Moved from the README (2026-09-23)
+
+Configuration detail, recipe/archive notes, the known-issues table and the full
+credits, kept here when the README became a short guide.
+
+### Configuration
+
+Key serving flags and env of the default recipe, from
+[`qwen3.8-flash-next-nvfp4-tp2.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml).
+
+Image identity: eugr `spark-vllm-docker` Dockerfile `798528a2` + fork
+`local-inference-lab/vllm` `dev/jovian-judgement` `8e1f1e58` + b12x
+`a8333658`. Checkpoint `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD
+revision `7c4f1bc1`.
+
+#### Serving flags
+
+| Flag | Value | Why |
+|---|---|---|
+| `--tensor-parallel-size` | `2` | One rank per Spark |
+| `--speculative-config` | `method: mtp`, `num_speculative_tokens: 4`, `draft_sample_method: probabilistic` | MTP width 4; probabilistic drafts keep acceptance up for default-temperature (1.0) clients |
+| `--kv-cache-dtype` | `fp8` | fp8 KV |
+| `--quantization` | `modelopt_mixed` | NVFP4 checkpoint |
+| `--load-format` | `b12x` | b12x weight loader |
+| `--gdn-decode-kernel` / `--linear-backend` / `--moe-backend` | `b12x` | b12x kernels for GDN, linear and MoE |
+| `--enable-prefix-caching` | on | Reuses cached context across turns |
+| `--mamba-cache-mode` | `align` | GDN (mamba) state cache mode |
+| `--enable-chunked-prefill`, `--max-parallel-prefills` | on, `4` | Bounded concurrent prefills |
+| `--prefill-policy` / `--decode-refill-target` | `decode-aware` / `auto` | Keeps a decode lane instead of letting long prefills starve decode |
+| `--max-model-len` | `262144` | Per-request context ceiling |
+| `--max-num-seqs` | `16` | Concurrent sequences |
+| `--max-num-batched-tokens` | `8192` | Prefill tokens per step |
+| `--block-size` | `16` | KV block size |
+| `--gpu-memory-utilization` | `0.80` | Share of unified memory for weights + KV |
+| `--reasoning-parser` / `--tool-call-parser` | `qwen3` / `qwen3_xml`, `--enable-auto-tool-choice` | Thinking and tool calls |
+| `--compilation-config` | `fuse_act_quant: true` | Fused activation quant pass |
+| `--no-enable-flashinfer-autotune` | set | FlashInfer autotune off; b12x kernel tuning is `B12X_AUTOTUNE` |
+| `--served-model-name` | `qwen3.8-flash-next` (+ HF id) | Model name clients send |
+
+#### Environment
+
+| Variable | Value | Why |
+|---|---|---|
+| `B12X_AUTOTUNE` | `1` | eugr's Dockerfile sets `0`, which truncates kernel selection (81 vs 96-98 tok/s at c1 on the counting diagnostic) |
+| `B12X_ROCE_SPIN_LIMIT` | `300000000` | ~300 s instead of ~20 s, so the TP2 MoE retune from an empty cache does not deadlock |
+| `VLLM_MXFP8_LM_HEAD` | `1` | lm_head online MXFP8 (W8A16), halves bytes read by the verify-head lm_head matmul |
+| `VLLM_ENABLE_ROCE_ALLREDUCE` / `VLLM_ROCE_ALLREDUCE_MAX_SIZE` | `1` / `2MB` | RoCE all-reduce between the two ranks |
+| `B12X_POLICY_MODE` | `auto` | b12x kernel policy |
+| `CUTE_DSL_ARCH` | `sm_121a` | GB10 target |
+| `VLLM_USE_V2_MODEL_RUNNER` | `1` | V2 model runner |
+| `VLLM_USE_AOT_COMPILE`, `VLLM_USE_MEGA_AOT_ARTIFACT` | `1` | AOT compile cache, warm boots |
+| `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | GDN conv state layout |
+| `SAFETENSORS_FAST_GPU` | `1` | Faster weight load |
+| `VLLM_WORKER_MULTIPROC_METHOD` | `spawn` | Worker start method |
+
+No mods at run time. The `b12x-startup-boundedwait` patch (bounded `Store.wait` in
+TP2 preparation, fails fast instead of parking forever) is baked into the image
+([`docker/b0-warm/Dockerfile`](../docker/b0-warm/Dockerfile)).
+
+### Recipes
+
+`sparkrun recipe list` / `sparkrun recipe search qwen3.8` against this registry
+shows exactly two recipes. Both are pinned (`--revision 7c4f1bc1…`), use the
+public warm image, and need no mods, no host mounts and no `--trust`.
+
+| Recipe | Image | Use |
+|---|---|---|
+| [`qwen3.8-flash-next-nvfp4-tp2`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (`sha256:a3d5d90d…`) | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`), best for clients that send no temperature (checkpoint default 1.0). |
+| [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: the previous default, one-hot drafts + `use_local_argmax_reduction: true`. For temperature-0 clients or a rollback. Moved onto the warm image 2026-09-23; not boot-tested on it yet (same build, same baked-in fix as its old local image + mod). |
+
+Everything else (bisection arms, rejected experiments, other checkpoints, the
+SGLang-era route, the alternate `wheels-20260919` ghcr image) is in
+[`archive/recipes/`](../archive/recipes/README.md) with its mods in
+[`archive/mods/`](../archive/mods/README.md). sparkrun does not clone or scan
+`archive/`; run an archived recipe by path from a clone, e.g.
+`sparkrun run ./archive/recipes/qwen3.8-flash-next/<file>.yaml --hosts <head>,<worker>`
+(many need a local-only image or host paths from the pair; see the archive index).
+Where each file went: [recipes/RENAMES.md](../recipes/RENAMES.md).
+
+### Known issues / limits
+
+| Issue | Status | Detail |
+|---|---|---|
+| Checkpoint revision split: rank 1 loaded `ada4da32` while rank 0 loaded `7c4f1bc1` (2026-09-18 to 09-23) | **Fixed**: recipes pin `model_revision` + `--revision` | sparkrun's `rsync --size-only` never refreshes the worker's `refs/main`; see [Checkpoint revision split](BENCHMARKS.md#checkpoint-revision-split-fixed-2026-09-23) |
+| Batch 5-7 straggler: one request per round stalled ~18 s at c5-7 (also 9, 12) | **Fixed** by our own image | Fork's QSA/GDN scratch-isolation commits; `archive/mods/vllm-qwen-scratch-isolation/` documents the fix |
+| `B12X_AUTOTUNE=0` in eugr's Dockerfile: fresh boot 81 tok/s instead of 96-98 at c1 (counting diagnostic) | **Worked around**: recipe sets `1` | Plan cache persists at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB); [`results/kernel-pass/arms.md`](../results/kernel-pass/arms.md) |
+| logind `RemoveIPC` kills shm (`'ShmRingBuffer' object has no attribute 'shared_memory'`) | **Host fix** | `loginctl enable-linger nvidia` on both nodes |
+| TP2 preparation hangs from an empty plan cache on b12x commits past `a8333658` | **Fixed in default recipe** | `B12X_ROCE_SPIN_LIMIT: "300000000"` + `archive/mods/b12x-startup-boundedwait/` (baked into the image); [`results/kernel-pass/prep-deadlock/mechanism.md`](../results/kernel-pass/prep-deadlock/mechanism.md) |
+| TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Open**, fix exists but off | `archive/mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100, costs speed (see [Quality](BENCHMARKS.md#quality)) |
+| `scripts/gate_arm.sh` without `--hardmode` runs only 69 of 88 scenarios | **Usage** | Always pass `--hardmode` for a real promotion decision |
+| Prose 64k-cached c16 regresses vs old la (38.15 -> 36.78) | **Known** | See the comparison in [At a glance](BENCHMARKS.md#default-vs-previous-default-old-la-one-hot-argmax-drafts) |
+| Raw `results/arms/` files | **Not all mirrored** | Some live on dgx-01 only, see [results/README.md](../results/README.md) |
+
+Full write-ups (deadlock mechanism, parser detail, lm_head MXFP8):
+[docs/ENGINEERING.md](ENGINEERING.md#known-issues--fixes).
+Profiling, rejected arms and build provenance also live in
+[docs/ENGINEERING.md](ENGINEERING.md).
+
+### Credits
+
+The vLLM route served by default (`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`,
+image `spark-vllm-b12x:local-20260918-a8333658`) is built on other people's work.
+Exact pins:
+
+- [eugr](https://github.com/eugr) (Eugene Rakhmatulin):
+  [spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) at `798528a2`
+  (2026-09-16) is the Dockerfile our image is built from, unchanged except for the
+  build-plumbing fixes in `~/GEN-AI/build/apply_submodule_fix.py`;
+  [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 launches every recipe here and
+  defines the recipe/mod format; [llama-benchy](https://github.com/eugr/llama-benchy)
+  at `e9be344` is the base of our fork
+  [ursuciprian/llama-benchy](https://github.com/ursuciprian/llama-benchy)
+  (`0d4de42`, adds `--prompt-mode task`) that measures the agent-task grids, and
+  release 0.4.0 measures the prose grids; the recipe family (formerly
+  `eugr-agents`) started as his `eugr-agents.yaml`.
+- [local-inference-lab](https://github.com/local-inference-lab) (Luke Alonso):
+  the vLLM fork [local-inference-lab/vllm](https://github.com/local-inference-lab/vllm)
+  branch `dev/jovian-judgement` at `8e1f1e58` (2026-09-16), which carries the
+  Qwen3.8-Flash-Next model code, MTP drafter and the QSA scratch-isolation fix that
+  removed our batch 5-7 straggler; the [b12x](https://github.com/local-inference-lab/b12x)
+  kernels at `a8333658` (2026-09-17): GDN prefill/decode, NVFP4 GEMM, kernel
+  autotune and plan cache; the checkpoint
+  [local-inference-lab/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
+  QAD revision `7c4f1bc1` (2026-09-16).
+- [MiaAI-Lab](https://github.com/MiaAI-Lab): the fast sparse-attention SGLang
+  profile the SGLang recipes grew from, the llama-benchy measurement spec, the
+  expert-parallel launch shape, and the 47,149-id draft-vocab table
+  `files/draft_vocab_en_code_47k.txt` from
+  [Qwen3.8-Flash-Next-Dual-DGX-Sparks](https://github.com/MiaAI-Lab/Qwen3.8-Flash-Next-Dual-DGX-Sparks)
+  at `3f99abc2` (2026-09-16), used to test the reduced-vocab MTP head (AGPL-3.0;
+  used locally, not redistributed in this repo or in our image tags).
+- [RadixArk](https://huggingface.co/RadixArk): the NVFP4 checkpoint the SGLang
+  recipes serve, and the day-0 SGLang engine work for this model.
+- [tonyd2wild](https://github.com/tonyd2wild): the vLLM SM121 overlays and the
+  TP2 profile the first vLLM recipe grew from, and the 40-prompt category harness
+  (`tools/tony-bench`: `bench_sweep.py` counting diagnostic, `bench_categories.py`).
+- [Weschera](https://github.com/Weschera): spark-bench, the 76-scenario graded
+  eval behind the fp8 quality gate.
+- [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench
+  2.6.1 (`--hardmode`, 88 scenarios), the tool-calling gate.
+- Upstream: sgl-project/sglang#36845 and #38855, vllm-project/vllm#53945 and
+  #55557, whose authors fixed the kernels these recipes depend on.
+
+Their work made this run faster on my hardware. The measurements, the
+cache-reuse diagnosis, the SM121 fp8 KV fix, the straggler root-cause and own
+image build, the `B12X_AUTOTUNE=1` finding, the quality gates and the
+draft-vocab experiments are mine, and so are any mistakes.
