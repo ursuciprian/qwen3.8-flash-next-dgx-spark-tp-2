@@ -118,6 +118,48 @@ stack.
 
 ## Build provenance
 
+### Shipped image (default recipe)
+
+`ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`
+(`sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d`,
+arm64, public) is `spark-vllm-b12x:local-20260918-a8333658` plus the
+`docker/b0-warm/` layer (b12x plan seed, bounded-wait fix). Its vLLM reports
+`0.1.dev187+g8e1f1e587.d20260918`: built on dgx-01 by `build.sh` from a clean
+local clone at `local-inference-lab/vllm@8e1f1e587f`, then marked dirty
+because eugr's Dockerfile runs its `docker/patch_vllm_*.py` scripts over the
+source tree before building the wheel (build metadata: `vllm_repo:
+local-source`, `vllm_ref: 8e1f1e587f`, b12x `a83336581a`, build date
+2026-09-18T15:09Z; eugr/spark-vllm-docker was a fresh `--depth 1` clone,
+most likely `53bd8e034a`).
+
+Exact source, recovered 2026-09-23 from the image itself (no rebuild):
+[`ursuciprian/vllm` tag `shipped-b0-20260918`](https://github.com/ursuciprian/vllm/tree/shipped-b0-20260918)
+(commit `557deb55b`, branch `shipped/b0-20260918`):
+
+1. `8e1f1e587f` (upstream `dev/jovian-judgement`).
+2. `63f265599`: the six files eugr's scripts patch, copied from the image:
+   `flashinfer_b12x_swigluoai` (`fused_moe/experts/flashinfer_b12x_moe.py`,
+   `fused_moe/oracle/nvfp4.py`, `utils/flashinfer.py`),
+   `disable_minimax_qk_rmsnorm_ipc` (`minimax_rms_norm/rms_norm_tp.py`),
+   `wsl_cuda_uma` (`utils/mem_utils.py`), `spark_kv_cache_cleanup`
+   (`v1/worker/gpu_worker.py`).
+3. `557deb55b`: cherry-pick of the bounded-wait fix `8b0934c73`
+   (`v1/worker/b12x_startup.py`), the only file the warm layer changes.
+
+Check: all 2350 tracked `vllm/*.py` files at the tag are byte-identical
+to the warm image's installed package. The other 200 `.py` files in the image
+are generated at build time (`vllm_flash_attn/`, `third_party/`,
+`_version.py`). Compiled extensions (`csrc/`) cannot be compared from the image;
+they were built from `8e1f1e587f` with eugr's build-stage patches.
+
+Relation to `ursuciprian/vllm@dgx-spark` (`77bdd1070`): both branch from
+`8e1f1e587f`. `dgx-spark` adds the TC-45 parser fix (`5d1df69f4`, not
+shipped), the bounded-wait fix (`8b0934c73`, shipped as commit 3 above) and
+the optional reduced-vocab draft head (`77bdd1070`, not shipped). It does not
+carry eugr's build-time patches, which the tag does.
+
+### Pull-based wheels image (archived alternate)
+
 Own image `spark-vllm-b12x:local-20260918-a8333658` was built locally from
 eugr's Dockerfile plus the fork pins above. To make the build reproducible
 off this hardware, wheels for vLLM, FlashInfer and b12x were built on the
@@ -134,7 +176,7 @@ image from those wheels:
   the bounded-wait startup fix + an optional reduced-vocab draft head, not
   used by the default recipe), `ursuciprian/b12x@dgx-spark` (`a8333658`) with
   `exp/fwd-57f3572` for the rejected forward-port arm.
-- The recipe that serves this image, `qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`,
+- The recipe that serves this image, `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml`,
   has been pulled and gated on the nodes (`ghcr2`, cache-mount fix applied):
   TC-45 passes for the first time on this stack, but bench_sweep counting
   c1 is ~-10% vs `la`. Kept as an alternate pull-based path, not promoted to default — see
