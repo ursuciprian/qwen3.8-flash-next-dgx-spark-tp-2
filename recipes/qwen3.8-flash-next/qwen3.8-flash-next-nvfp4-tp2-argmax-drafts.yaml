@@ -27,6 +27,12 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # no mods, no --trust and no host mounts. Base without the warm layer:
 # spark-vllm-b12x:local-20260918-a8333658 (use it with archive/mods/
 # b12x-startup-boundedwait).
+# Digest of this tag: sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d
+# (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
+# head->worker with `docker save | docker load`, which drops RepoDigests, so a
+# repo@sha256 reference never matches on the worker (containers/distribute.py
+# identity check). Every run would re-transfer the image and then pull it again
+# from ghcr on the worker.
 container: ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm
 runtime: vllm
 
@@ -39,6 +45,8 @@ runtime: vllm
 build_args: []
 
 cluster_only: true
+min_nodes: 2
+max_nodes: 2
 
 # Caches: sparkrun mounts ~/.cache/sparkrun/runtime-cache/vllm/<model>-<hash>
 # at /cache/runtime and sets XDG_CACHE_HOME there (core/runtime_cache.py).
