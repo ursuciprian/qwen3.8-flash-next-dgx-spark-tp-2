@@ -316,15 +316,17 @@ def parse_straggler_v2(path):
 
 
 def straggler_violations(straggler_by_c, label):
-    rounds = {c: d for c, d in straggler_by_c.items() if STRAGGLER_LO_C <= c <= STRAGGLER_HI_C}
-    if not rounds:
-        return []
-    median_wall = statistics.median(d["wall_s"] for d in rounds.values())
+    """Per round: a request is a straggler if it exceeds 1.5x the median REQUEST time
+    within its own round (same c), not the median round wall across different c's --
+    a c16 round is legitimately slower wall-clock than a c5 round; that is not a straggler."""
     out = []
-    for c, d in rounds.items():
+    for c, d in straggler_by_c.items():
+        if not (STRAGGLER_LO_C <= c <= STRAGGLER_HI_C) or len(d["reqs_s"]) < 2:
+            continue
+        round_median = statistics.median(d["reqs_s"])
         for i, req_s in enumerate(d["reqs_s"]):
-            if req_s > STRAGGLER_MULT * median_wall:
-                out.append(f"{label} c={c} req#{i} {req_s}s > {STRAGGLER_MULT}x median round wall {median_wall}s")
+            if req_s > STRAGGLER_MULT * round_median:
+                out.append(f"{label} c={c} req#{i} {req_s}s > {STRAGGLER_MULT}x round median {round_median}s")
     return out
 
 
@@ -356,12 +358,21 @@ def find_arms_root(root):
     return os.path.join(root, "arms")
 
 
-def collect_repeats(root, name, arms_root):
+def collect_repeats(root, name, arms_root, gate_prefix=""):
+    """Gate outputs (hardmode.log/fidelity_probe.txt/straggler.log) are written once per
+    ARM, not once per repeat boot: the candidate-ab driver puts them under
+    results/arms/<gate_prefix><name> (e.g. cand-shipped, cand-off), shared across every
+    shipped1/shipped2/... boot of that arm. Fall back to a dedicated per-boot-label dir
+    (results/arms/<boot label>, v1/gdndef-ab style), then to the boot dir itself (the
+    driver sometimes writes gate outputs alongside task.csv, or someone copied them there
+    as a stopgap)."""
     dirs = sorted(glob.glob(os.path.join(root, f"{name}[0-9]*")))
+    shared_gate_dir = os.path.join(arms_root, f"{gate_prefix}{name}")
+    shared_gate = os.path.isdir(shared_gate_dir)
     boots = []
     for d in dirs:
         label = os.path.basename(d)
-        gate_dir = gate_dir_for(arms_root, label) or d  # fall back to the boot dir itself
+        gate_dir = shared_gate_dir if shared_gate else (gate_dir_for(arms_root, label) or d)
         boot = collect_boot(d)
         if gate_dir != d:
             boot["hardmode"] = parse_hardmode(gate_dir)
@@ -369,6 +380,7 @@ def collect_repeats(root, name, arms_root):
             boot["straggler"] = parse_straggler_v2(os.path.join(gate_dir, "straggler.log")) or boot["straggler"]
         elif boot["hardmode"] is None:
             boot["hardmode"] = {"quality_scores": [], "fail_counts": []}
+        boot["gate_dir"] = gate_dir
         boots.append(boot)
     return boots
 
@@ -378,9 +390,11 @@ def is_remote(root):
     return ":" in head
 
 
-def fetch_v2(root, baseline, arm, scratch):
+def fetch_v2(root, baseline, arm, scratch, gate_prefix=""):
     """rsync (read-only) a candidate-ab dir + its sibling results/arms gate dirs from
-    dgx-01, in v1's DGX_ROOT style: `host:path`."""
+    dgx-01, in v1's DGX_ROOT style: `host:path`. Gate dirs may be named plainly
+    (results/arms/<name>*) or with --gate-prefix (results/arms/<gate_prefix><name>*,
+    e.g. cand-shipped); fetch both patterns, a non-matching one is just a no-op rsync."""
     host, path = root.split(":", 1)
     local_root = os.path.join(scratch, "candidate-ab")
     local_arms = os.path.join(scratch, "arms")
@@ -390,6 +404,8 @@ def fetch_v2(root, baseline, arm, scratch):
     for label_prefix in (baseline, arm):
         subprocess.run(["rsync", "-az", "-e", "ssh", f"{host}:{path.rstrip('/')}/{label_prefix}*", local_root + "/"], check=False)
         subprocess.run(["rsync", "-az", "-e", "ssh", f"{host}:{remote_arms}/{label_prefix}*", local_arms + "/"], check=False)
+        if gate_prefix:
+            subprocess.run(["rsync", "-az", "-e", "ssh", f"{host}:{remote_arms}/{gate_prefix}{label_prefix}*", local_arms + "/"], check=False)
     return local_root
 
 
@@ -470,15 +486,16 @@ def quality_gate(boots, label):
     exact_by_depth = {}
     for b in boots:
         for d, v in b["fidelity"].items():
+            d = int(d)  # normalize: keys are always ints here, but never trust it silently
             exact_by_depth[d] = max(exact_by_depth.get(d, 0), v["exact"])
     missing = [d for d in FIDELITY_DEPTHS if d not in exact_by_depth]
-    misses = [d for d in FIDELITY_DEPTHS if exact_by_depth.get(d, 0) < 20]
+    low = [d for d in FIDELITY_DEPTHS if d in exact_by_depth and exact_by_depth[d] < 20]
     if missing:
         ok = False
         reasons.append(f"{label}: fidelity missing depths {missing}")
-    if misses:
+    if low:
         ok = False
-        reasons.append(f"{label}: fidelity {[f'{d}:{exact_by_depth[d]}/20' for d in misses]}")
+        reasons.append(f"{label}: fidelity {[f'{d}:{exact_by_depth[d]}/20' for d in low]}")
 
     stragglers = []
     for b in boots:
@@ -510,6 +527,7 @@ def fact_sheet_v2(baseline, arm, base_boots, cand_boots):
     return {
         "baseline": baseline, "arm": arm,
         "baseline_boots": len(base_boots), "arm_boots": len(cand_boots),
+        "boots": {baseline: [os.path.basename(b["dir"]) for b in base_boots], arm: [os.path.basename(b["dir"]) for b in cand_boots]},
         "quality_gate": qgate,
         "coding_grid_pct_diff": coding, "counting_pct_diff": counting,
         "wins_beyond_noise": wins, "losses_beyond_noise_low_c": low_c_losses, "losses_beyond_noise_mid_high_c": mid_high_losses,
@@ -557,6 +575,14 @@ def cap_verdict(verdict, sheet):
     return verdict, None
 
 
+def _prelim_note(sheet):
+    """A single repeat boot means noise is just the 3% floor, not a measured boot-to-boot
+    spread -- the win/loss calls are provisional until a second boot confirms them."""
+    if sheet["arm_boots"] == 1 or sheet["baseline_boots"] == 1:
+        return "PRELIMINARY: single boot per arm, noise = 3% floor"
+    return None
+
+
 def reason_for_v2(sheet, verdict):
     qg = sheet["quality_gate"]
     bits = [
@@ -564,6 +590,9 @@ def reason_for_v2(sheet, verdict):
         f"wins={len(sheet['wins_beyond_noise'])}", f"low_c_losses={len(sheet['losses_beyond_noise_low_c'])}",
         f"mid_high_losses={len(sheet['losses_beyond_noise_mid_high_c'])}", f"noisy_cells={len(sheet['noisy_cells'])}",
     ]
+    prelim = _prelim_note(sheet)
+    if prelim:
+        bits.insert(0, prelim)
     return f"Jev verdict={verdict} from: " + "; ".join(bits)
 
 
@@ -575,6 +604,9 @@ def run_v2(sheet, offline=False, root=None, json_path=None):
     else:
         raw_verdict, confidence = ask_jev_v2(sheet)
         verdict, cap_note = cap_verdict(raw_verdict, sheet)
+    prelim = _prelim_note(sheet)
+    if prelim:
+        cap_note = f"{prelim}; {cap_note}" if cap_note else prelim
     # Merged fact sheet + verdict, one JSON object, matching the shape the Jev dashboard's
     # verdicts view (jev/public/app.js armCard) and jev/examples/verdicts/*.json expect.
     result = {
@@ -597,8 +629,60 @@ def run_v2(sheet, offline=False, root=None, json_path=None):
 
 
 # ---------------------------------------------------------------------------
-# v2 selftest: clean win, c1 regression, quality fail, noisy case
+# v2 selftest: clean win, c1 regression, quality fail, noisy case, per-round straggler,
+# fidelity missing-depth (no crash)
 # ---------------------------------------------------------------------------
+def _write_straggler_log(dirpath, rounds):
+    """rounds: {c: [per-request wall_s, ...]}."""
+    os.makedirs(dirpath, exist_ok=True)
+    lines = []
+    for c, reqs in rounds.items():
+        reqs_text = " ".join(f"#{i}:{t}s/320t" for i, t in enumerate(reqs))
+        lines.append(f"c={c} round wall {max(reqs)}s | per request (submit order): {reqs_text}")
+        lines.append(f"      preemptions +0 | queue time total 0.00s over {len(reqs)} req | prefill total 1.0s | decode total 1.0s | accept 4.0/draft")
+    path = os.path.join(dirpath, "straggler.log")
+    open(path, "w").write("\n".join(lines) + "\n")
+    return path
+
+
+def selftest_straggler_per_round():
+    import tempfile
+    with tempfile.TemporaryDirectory() as t:
+        # Real shape (results/candidate-ab-20260924/{shipped1,off1}/straggler.log): round
+        # wall legitimately grows with concurrency (c5 ~4.6s, c16 ~7.5s), every request
+        # tight within its own round (<=0.3s spread). The old cross-round-median logic
+        # flagged every c16 request against a median dominated by c5-c8; must not anymore.
+        clean = _write_straggler_log(os.path.join(t, "clean"), {
+            5: [4.39, 4.52, 4.52, 4.52, 4.58],
+            8: [5.20, 5.28, 5.29, 5.35, 5.20, 5.28, 5.28, 5.28],
+            16: [7.12, 7.23, 7.23, 7.12, 7.23, 7.33, 7.23, 7.23, 7.33, 7.33, 7.33, 7.32, 7.41, 7.47, 7.47, 7.41],
+        })
+        viol = straggler_violations(parse_straggler_v2(clean), "clean")
+        assert not viol, viol
+
+        # Genuine within-round straggler: one c=8 request takes 3x its round-mates.
+        dirty = _write_straggler_log(os.path.join(t, "dirty"), {
+            8: [5.0, 5.1, 5.0, 5.0, 5.1, 5.0, 5.0, 16.0],
+        })
+        viol2 = straggler_violations(parse_straggler_v2(dirty), "dirty")
+        assert viol2 and "c=8" in viol2[0] and "req#7" in viol2[0], viol2
+    print("selftest_straggler_per_round OK: real-shape c5/c8/c16 clean, within-round straggler flagged")
+
+
+def selftest_fidelity_missing_depth():
+    """A missing depth (not just a low exact count) must not crash quality_gate with a
+    KeyError, and must show up as a fail reason."""
+    boots = [{
+        "dir": "x", "hardmode": {"quality_scores": [90], "fail_counts": [0]},
+        "fidelity": {8000: {"exact": 20, "wrong": 0}, 32000: {"exact": 20, "wrong": 0}},  # 64000, 128000 missing
+        "straggler": {},
+    }]
+    qg = quality_gate(boots, "test")
+    assert not qg["pass"], qg
+    assert any("missing depths" in r for r in qg["reasons"]), qg["reasons"]
+    print("selftest_fidelity_missing_depth OK: no crash, reason reports missing depths")
+
+
 def _synthetic_boot(scratch, name, task_rows, count_rows, count_c1, hardmode_score, fidelity_ok=True, straggler_ok=True):
     d = os.path.join(scratch, name)
     os.makedirs(d, exist_ok=True)
@@ -710,10 +794,16 @@ def main():
     ap.add_argument("--json", metavar="PATH", help="[v2] write the merged fact sheet + verdict as one JSON object to PATH "
                                                      "(jev dashboard --verdicts <dir> format); with --selftest, writes the "
                                                      "clean_win scenario")
+    ap.add_argument("--gate-prefix", default="", metavar="PREFIX",
+                     help="[v2] gate outputs (hardmode.log/fidelity_probe.txt/straggler.log) live under "
+                          "results/arms/<PREFIX><baseline|arm>, e.g. --gate-prefix cand- for cand-shipped/cand-off/cand-on; "
+                          "falls back to a per-boot-label dir, then the boot dir itself")
     args = ap.parse_args()
 
     if args.selftest:
         selftest_parse_benchy()
+        selftest_straggler_per_round()
+        selftest_fidelity_missing_depth()
         selftest_v2(offline=args.offline, json_path=args.json)
         if not args.offline:
             run_v1(SELFTEST_SHEET, "selftest")
@@ -722,10 +812,10 @@ def main():
     if args.arm2:
         root = args.root
         if is_remote(root):
-            root = fetch_v2(root, args.baseline, args.arm2, "/tmp/arm_verdict_fetch")
+            root = fetch_v2(root, args.baseline, args.arm2, "/tmp/arm_verdict_fetch", gate_prefix=args.gate_prefix)
         arms_root = find_arms_root(root)
-        base_boots = collect_repeats(root, args.baseline, arms_root)
-        cand_boots = collect_repeats(root, args.arm2, arms_root)
+        base_boots = collect_repeats(root, args.baseline, arms_root, gate_prefix=args.gate_prefix)
+        cand_boots = collect_repeats(root, args.arm2, arms_root, gate_prefix=args.gate_prefix)
         if not base_boots or not cand_boots:
             sys.exit(f"no repeat boots found for baseline={args.baseline!r} or arm={args.arm2!r} under {root}")
         sheet = fact_sheet_v2(args.baseline, args.arm2, base_boots, cand_boots)
