@@ -12,7 +12,7 @@ old verdicts byte-for-byte.
 v1 (legacy, positional `arm`): parses results/{arms,benchy}/<arm>* artifacts into a
 numbers-only fact sheet vs the `la` baseline, asks Jev one Choice question.
 """
-import argparse, glob, json, os, re, statistics, subprocess, sys
+import argparse, glob, json, os, re, statistics, subprocess, sys, time
 
 DGX_ROOT = "dgx-01:~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/"
 LA_BAND = (86, 93)
@@ -557,7 +557,17 @@ def cap_verdict(verdict, sheet):
     return verdict, None
 
 
-def run_v2(sheet, offline=False):
+def reason_for_v2(sheet, verdict):
+    qg = sheet["quality_gate"]
+    bits = [
+        f"quality_gate={'pass' if qg['pass'] else 'fail'}", f"hardmode={qg['hardmode_scores'] or 'missing'}",
+        f"wins={len(sheet['wins_beyond_noise'])}", f"low_c_losses={len(sheet['losses_beyond_noise_low_c'])}",
+        f"mid_high_losses={len(sheet['losses_beyond_noise_mid_high_c'])}", f"noisy_cells={len(sheet['noisy_cells'])}",
+    ]
+    return f"Jev verdict={verdict} from: " + "; ".join(bits)
+
+
+def run_v2(sheet, offline=False, root=None, json_path=None):
     if not sheet["quality_gate"]["pass"]:
         verdict, confidence, cap_note = "reject", 1.0, "quality gate failed (forced, no Jev call)"
     elif offline:
@@ -565,15 +575,24 @@ def run_v2(sheet, offline=False):
     else:
         raw_verdict, confidence = ask_jev_v2(sheet)
         verdict, cap_note = cap_verdict(raw_verdict, sheet)
+    # Merged fact sheet + verdict, one JSON object, matching the shape the Jev dashboard's
+    # verdicts view (jev/public/app.js armCard) and jev/examples/verdicts/*.json expect.
     result = {
+        **sheet,
         "verdict": verdict, "confidence": confidence, "cap_note": cap_note,
-        "quality_gate": sheet["quality_gate"], "wins_beyond_noise": sheet["wins_beyond_noise"],
-        "losses_beyond_noise_low_c": sheet["losses_beyond_noise_low_c"],
-        "losses_beyond_noise_mid_high_c": sheet["losses_beyond_noise_mid_high_c"],
+        "reason": reason_for_v2(sheet, verdict),
+        "noise_suspects": [],  # v1 field kept for schema parity; v2 signals this via noisy_cells instead
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "root": root,
     }
     print(json.dumps(result, indent=2))
     print(f"[{sheet['arm']} vs {sheet['baseline']}] {verdict} (confidence={confidence:.2f})"
           + (f" -- {cap_note}" if cap_note else ""))
+    if json_path:
+        os.makedirs(os.path.dirname(json_path) or ".", exist_ok=True)
+        with open(json_path, "w") as f:
+            json.dump(result, f, indent=1)
+        print(f"wrote {json_path}")
     return result
 
 
@@ -655,7 +674,7 @@ def _v2_scenario_noisy(scratch):
     return sheet
 
 
-def selftest_v2(offline=False):
+def selftest_v2(offline=False, json_path=None):
     import tempfile
     with tempfile.TemporaryDirectory() as t:
         scenarios = {
@@ -665,9 +684,15 @@ def selftest_v2(offline=False):
             "noisy": _v2_scenario_noisy(os.path.join(t, "noisy")),
         }
     print("selftest_v2 deterministic checks OK: clean_win/c1_regression/quality_fail/noisy")
+    if json_path:
+        # clean_win has the richest grid (multiple depths/concurrencies), best for exercising
+        # the dashboard heatmap; --offline keeps this call API-free.
+        run_v2(scenarios["clean_win"], offline=offline, root="selftest", json_path=json_path)
     if offline:
         return
     for name, sheet in scenarios.items():
+        if json_path and name == "clean_win":
+            continue  # already written above
         print(f"--- v2 selftest scenario: {name} ---")
         run_v2(sheet, offline=False)
 
@@ -682,11 +707,14 @@ def main():
     ap.add_argument("--arm", dest="arm2", metavar="ARM", help="[v2] candidate label prefix, e.g. off | on (repeats off1, off2, ...)")
     ap.add_argument("--selftest", action="store_true", help="run v1 + v2 selftests against embedded/synthetic fact sheets")
     ap.add_argument("--offline", action="store_true", help="--selftest: skip Jev API calls, check deterministic parts only")
+    ap.add_argument("--json", metavar="PATH", help="[v2] write the merged fact sheet + verdict as one JSON object to PATH "
+                                                     "(jev dashboard --verdicts <dir> format); with --selftest, writes the "
+                                                     "clean_win scenario")
     args = ap.parse_args()
 
     if args.selftest:
         selftest_parse_benchy()
-        selftest_v2(offline=args.offline)
+        selftest_v2(offline=args.offline, json_path=args.json)
         if not args.offline:
             run_v1(SELFTEST_SHEET, "selftest")
         return
@@ -701,7 +729,7 @@ def main():
         if not base_boots or not cand_boots:
             sys.exit(f"no repeat boots found for baseline={args.baseline!r} or arm={args.arm2!r} under {root}")
         sheet = fact_sheet_v2(args.baseline, args.arm2, base_boots, cand_boots)
-        run_v2(sheet)
+        run_v2(sheet, root=root, json_path=args.json)
         return
 
     if not args.legacy_arm:
