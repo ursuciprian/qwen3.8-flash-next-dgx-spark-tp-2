@@ -77,6 +77,9 @@ defaults:
 
 env:
   B12X_AUTOTUNE: "1"
+  # b12x master autotunes from a cold schema-6 cache; 8 compile workers (~1.2 GB each)
+  # drove MemAvailable to ~1 GB on both nodes on 2026-09-24. Compile parallelism only.
+  B12X_COMPILE_WORKERS: "2"
   B12X_ROCE_SPIN_LIMIT: "300000000"
   CUTE_DSL_ARCH: "sm_121a"
   SAFETENSORS_FAST_GPU: "1"
