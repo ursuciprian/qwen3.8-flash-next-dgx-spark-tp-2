@@ -1,11 +1,13 @@
 # Derived from recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml
 # (shipped default, main 873f9cf). Differences, and only these:
-#  - container: spark-vllm-b12x:candidate-b12x-d718aa99-vllm-bc046220,
+#  - container: spark-vllm-b12x:candidate-b12x-e6b6b93e-vllm-869138f2,
 #    built by spark-vllm-b12x build.sh from
-#    b12x ursuciprian/b12x feat/gdn-deferred-on-master@d718aa99 (upstream master
-#    2fca4df8 + deferred GDN checkpoints, shipped loader kept) and vLLM
-#    ursuciprian/vllm feat/candidate-20260924@bc046220 (shipped 99e996d2 line +
-#    request-boundary export for deferred, TC-45 parser fix, b12x-master
+#    b12x ursuciprian/b12x feat/gdn-deferred-on-master@e6b6b93e (upstream master
+#    2fca4df8 + deferred GDN checkpoints, io_uring bounce loader fully reverted
+#    to the shipped loader) and vLLM
+#    ursuciprian/vllm feat/candidate-20260924@869138f2 (shipped 99e996d2 line +
+#    request-boundary export for deferred, TC-45 parser fix with reasoning=False
+#    for the collapsed Qwen3 structural tag, b12x-master
 #    startup cache exchange). No /opt/b12x-seed layer: the seed line below
 #    no-ops and the first boot autotunes (b12x master invalidates every
 #    persisted selection: cache schema 5 -> 6).
@@ -39,7 +41,7 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-container: spark-vllm-b12x:candidate-b12x-d718aa99-vllm-bc046220
+container: spark-vllm-b12x:candidate-b12x-e6b6b93e-vllm-869138f2
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
