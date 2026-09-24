@@ -139,6 +139,6 @@ for thinking in (False, True):
             tps, ttft, acc = (statistics.median(x) for x in zip(*res[strict]))
             arm = "grammar" if strict else "plain"
             print(
-                f"{str(thinking):<6}{c:>3} {arm:<7}{tps:>11.1f}{ttft:>8.2f}{acc:>10.2f}",
+                f"{thinking!s:<6}{c:>3} {arm:<7}{tps:>11.1f}{ttft:>8.2f}{acc:>10.2f}",
                 flush=True,
             )
