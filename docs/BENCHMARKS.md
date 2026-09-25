@@ -1,11 +1,60 @@
 # Benchmarks: full tables
 
+## b0 shipped image (2026-09-23)
+
+Previous default, superseded 2026-09-25 by b1 (README). Pinned checkpoint on both ranks; not hybrid.
+Image `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`
+(`sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d`), checkpoint revision `7c4f1bc1`,
+measured 2026-09-23. Raw files: [`results/shipped-20260923/`](../results/shipped-20260923/).
+Cells are **total tok/s / per-request tok/s** (decode). Depth = cached context before the new prompt.
+
+**Coding** ([llama-benchy fork](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task`: agent coding turn,
+2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 / top-p 0.95 / top-k 20, prefix caching, 3 runs)
+
+| depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| 0 | 59.2 | 91.6 / 47.5 | 135.3 / 36.2 | 138.7 / 31.2 | 175.7 / 25.0 | 179.2 / 21.6 | 224.1 / 17.2 |
+| 16k | 56.8 | 81.5 / 45.0 | 100.4 / 31.9 | 106.6 / 28.7 | 115.1 / 20.7 | 120.2 / 17.9 | 132.8 / 13.1 |
+| 64k | 56.8 | 73.3 / 41.1 | 88.9 / 31.1 | 93.1 / 27.8 | 99.9 / 19.1 | 102.2 / 16.0 | 110.5 / 11.6 |
+
+**Prose** (llama-benchy default continue mode, book text, 2048 in, 128 out, server-default sampling).
+Only 128 tokens per request, so at depth the prefills of other requests fill most of the window and totals stay flat or fall as concurrency rises.
+
+| depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| 0 | 51.0 | 92.9 / 48.7 | 97.9 / 31.8 | 98.9 / 25.9 | 123.1 / 21.0 | 112.2 / 16.9 | 126.1 / 12.8 |
+| 16k | 56.8 | 55.8 / 38.0 | 54.9 / 25.7 | 52.5 / 21.9 | 50.8 / 14.9 | 49.8 / 11.9 | 49.9 / 8.3 |
+| 64k | 53.6 | 49.6 / 35.6 | 45.9 / 23.7 | 43.5 / 21.0 | 40.7 / 13.3 | 39.8 / 10.5 | 39.0 / 7.1 |
+
+**Time to first token, coding** (mean seconds; under concurrency requests queue behind each other's prefill)
+
+| depth | c1 | c4 | c16 |
+|---|---|---|---|
+| 0 | 0.69 | 2.0 | 6.1 |
+| 16k | 2.6 | 7.7 | 22.3 |
+| 64k | 3.5 | 10.1 | 29.4 |
+
+Prefill: ~3,000-3,200 tok/s at depth 0.
+
+**Counting: a speculative-decoding ceiling, not coding speed.** bench_sweep "list the numbers from 1 to 300",
+temperature 0, thinking off, 300 tokens. Nearly every draft is accepted, so this shows the stack's upper bound and catches regressions.
+
+| | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| total tok/s | 100.2 | 183.9 | 304.2 | 340.6 | 456.1 | 500.7 | 634.9 |
+| per request | 100.2 | 92.0 | 76.3 | 68.7 | 57.3 | 50.5 | 41.1 |
+
+Five extra c1 runs: 100.3-102.1 tok/s.
+
+**Single request by workload** (`scripts/decode_probe.py`, temperature 0, 512 tokens, 5 runs, mean tok/s):
+code 61.3, structured 88.9, counting 96.9, prose 49.0.
+
 > [!WARNING]
 > **Hybrid checkpoint.** Every table here was measured before 2026-09-23 14:12
 > EEST. In that window rank 1 loaded checkpoint revision `ada4da32` while rank 0
 > loaded `7c4f1bc1` (at least 2026-09-18 onward, probably 2026-09-17 too). All
 > numbers below are therefore (hybrid). Pinned-checkpoint results are in the
-> README: [Results](../README.md#results-shipped-image) and
+> [b0 shipped image](#b0-shipped-image-2026-09-23) and the README: [Results](../README.md#results-default-b1-image) and
 > [Checkpoint revision split](#checkpoint-revision-split-fixed-2026-09-23).
 
 Full measurement tables behind the [README](../README.md) headline numbers.
@@ -263,11 +312,11 @@ the bench_sweep counting prompt acceptance is far higher — 98.9% overall,
 The README became a short guide on 2026-09-23. These sections were in it before;
 they are kept here unchanged apart from link paths. Numbers marked (hybrid) had
 rank 1 on the old checkpoint revision and are superseded by the shipped-image
-results in the [README](../README.md#results-shipped-image).
+results in the [README](../README.md#results-default-b1-image) and [b0 shipped image](#b0-shipped-image-2026-09-23).
 
 ### Winning recipe
 
-[`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml)
+[`recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml)
 (`B0`). What sets it apart from the other arms:
 
 - **Checkpoint:** `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD revision

@@ -1,3 +1,7 @@
+# Fallback: the shipped default from 2026-09-22 to 2026-09-25 (b0 image), unchanged
+# apart from name/description (file was qwen3.8-flash-next-nvfp4-tp2.yaml, then
+# -b0). Superseded by qwen3.8-flash-next-2x-dgx-spark.yaml (b1 image + deferred
+# GDN checkpoints). Use it to roll back.
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
@@ -5,8 +9,8 @@
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
 recipe_version: "1"
-name: qwen3.8-flash-next-nvfp4-tp2
-description: "Default (b1, 2026-09-25): probabilistic MTP drafts + deferred GDN checkpoints + TC-45 tool_choice fix on the b1 image. Fallbacks: qwen3.8-flash-next-nvfp4-tp2-b0.yaml (previous default, b0 image) and -argmax-drafts (one-hot drafts)."
+name: qwen3.8-flash-next-2x-dgx-spark-previous
+description: "Fallback. The previous build (2026-09-23), about 10% slower with many users; pick it only if the recommended recipe misbehaves."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -14,21 +18,18 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-# B1 image, promoted 2026-09-25: build.sh image candidate-b12x-b7fbaf96-vllm-14077fb3
-# (vLLM ursuciprian/vllm feat/candidate-old-b12x@14077fb35 = the b0 source +
-# TC-45 tool_choice fix + deferred GDN checkpoints + request-boundary export +
-# PLE per-state fix; b12x ursuciprian/b12x feat/gdn-deferred-p1-tests@b7fbaf96 =
-# the b0 a8333658 + deferred GDN kernels, same schema-5 selection cache) plus
-# docker/b0-warm (b12x plan-cache seed; the bounded-wait fix is already in this
-# vLLM). No mods, no --trust, no host mounts.
-# Digest of this tag: sha256:57c2fbd8cd811a5d22a7f2e547453f97b875f1fb4c7de60a0c3ff9fba3a79e5c
+# B0 image (a8333658 build of 2026-09-18) plus docker/b0-warm: the b12x plan
+# cache seed and the startup bounded-wait patch baked in, so this recipe needs
+# no mods, no --trust and no host mounts. Base without the warm layer:
+# spark-vllm-b12x:local-20260918-a8333658 (use it with archive/mods/
+# b12x-startup-boundedwait).
+# Digest of this tag: sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d
 # (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
 # head->worker with `docker save | docker load`, which drops RepoDigests, so a
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Previous default (b0 image): qwen3.8-flash-next-nvfp4-tp2-b0.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -89,17 +90,6 @@ env:
   # at 3.98-3.99 accepted/draft. MTP draft head is already NVFP4
   # (VLLM_MTP_NVFP4_LM_HEAD default 1) -- both heads are now quantized.
   VLLM_MXFP8_LM_HEAD: "1"
-  # Caps b12x kernel compile parallelism (~1.2 GB host RAM per worker) so a
-  # cold compile cache cannot push unified memory into earlyoom. The warm
-  # schema-5 selections mean no autotune; this only affects the first boot.
-  B12X_COMPILE_WORKERS: "2"
-  # Deferred GDN checkpoints (promoted 2026-09-25): b12x GDN decode writes one
-  # base checkpoint + per-token records and replays the accepted prefix
-  # instead of checkpointing every draft position. A/B vs b0, 2 boots each
-  # (results/oldb12x-ab-20260925*): coding c8 +11.9%, c16 +10.3%; 16k c2
-  # +12.8%, c16 +6.0%; counting c10 +13.0%, c16 +12.0%; c1 within noise;
-  # hardmode 89/89, fidelity 20/20 at every depth, no stragglers.
-  VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
 
 # --speculative-config: promoted 2026-09-22 (was use_local_argmax_reduction:
 # true, one-hot drafts). Clients that send no temperature run at the
@@ -123,7 +113,8 @@ env:
 #   c16 635.0-641.3
 # Quality gate: fidelity 8k-64k 20/20, 128k 19/20 then 20/20 x2, straggler
 # c5-16 clean, hardmode 86 -> 90 on rerun (la band 86-93).
-# Fallback (previous default): qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
+# One-hot draft variant (archived 2026-09-25): archive/recipes/qwen3.8-flash-next/
+# qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \

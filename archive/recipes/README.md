@@ -4,7 +4,11 @@ Archived 2026-09-23: none of these is registry-visible. The two recipes a
 user should run are in `recipes/qwen3.8-flash-next/` (see `recipes/README.md`).
 Paths below were written before the move; prefix `archive/` to find each file
 (the argmax-drafts row is now `-argmax-drafts-local.yaml`; the registry-visible
-argmax-drafts recipe was rebuilt on the warm image).
+argmax-drafts recipe was rebuilt on the warm image). 2026-09-25: the visible
+recipes were renamed `qwen3.8-flash-next-2x-dgx-spark` (recommended, was
+`qwen3.8-flash-next-nvfp4-tp2`) and `qwen3.8-flash-next-2x-dgx-spark-previous`
+(fallback, the b0 build); `qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml`
+moved here (see `recipes/RENAMES.md`).
 
 Every sparkrun recipe in this repo. `recipes/qwen3.8-flash-next/` is the served vLLM/b12x
 family and the one that matters day to day; everything else is either an
@@ -21,8 +25,8 @@ prose numbers.
 
 | recipe | image | status | notes |
 |---|---|---|---|
-| `qwen3.8-flash-next-nvfp4-tp2.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | **default, serving** | local16 + probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) + `VLLM_MXFP8_LM_HEAD: "1"` (probabilistic drafts promoted 2026-09-22, MXFP8 lm_head promoted 2026-09-21). See `results/arms/la-mtpprob/verdict.md`, `results/arms/la-lmq/verdict.md`. |
-| `qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` | same image | fallback | previous default: one-hot drafts + `use_local_argmax_reduction: true`, kept in case probabilistic drafts need to be rolled back. |
+| `qwen3.8-flash-next-nvfp4-tp2.yaml` (now `recipes/.../qwen3.8-flash-next-2x-dgx-spark-previous.yaml`) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` | default until 2026-09-25, now the fallback | local16 + probabilistic MTP draft sampling (`draft_sample_method: probabilistic`) + `VLLM_MXFP8_LM_HEAD: "1"` (probabilistic drafts promoted 2026-09-22, MXFP8 lm_head promoted 2026-09-21). See `results/arms/la-mtpprob/verdict.md`, `results/arms/la-lmq/verdict.md`. |
+| `qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` | same image | archived 2026-09-25 | previous default: one-hot drafts + `use_local_argmax_reduction: true`, kept in case probabilistic drafts need to be rolled back. |
 | `qwen3.8-flash-next-nvfp4-tp2-local-build-seqs-16.yaml` | same image | fallback | same as the default minus `use_local_argmax_reduction`. |
 | `qwen3.8-flash-next-nvfp4-tp2-ghcr-image.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260919-77bdd10-a833365` | not promoted | pull-based build from published wheels instead of `build.sh`. `ghcr2` gate: TC-45 passes (first time on this stack) but c1 ~-10% vs `la`. See `results/RESULTS.md` §"Cache-mount fix and ghcr image gate". |
 | `qwen3.8-flash-next-nvfp4-tp2-kk-image.yaml` | `ghcr.io/ursuciprian/spark-vllm-b12x:wheels-20260920-kk-a229c7a-e9ce547` | in progress | karmic-kraken-beta build (vllm `57a80980` + b12x `e9ce5477`) instead of dev/jovian-judgement; not yet gated against `la`. See `results/README.md`. |
