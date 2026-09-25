@@ -23,6 +23,7 @@ WORKER_IP=192.168.100.53
 RCDIR=$HOME/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-2d9615ab
 SHIPPED_RECIPE_REL=recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml
 OFF_RECIPE_REL=archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-candidate-off.yaml
+SHIPPED_IMAGE_EXPECT="b0-20260918-a8333658-warm"
 PROF_STEPS=60
 OUT=$REPO/results/regress16k-$(TZ=Europe/Bucharest date +%Y%m%d-%H%M)
 mkdir -p "$OUT"
@@ -40,16 +41,42 @@ wait_health() {
 
 stop_all() { sparkrun stop --all >>"$LOG" 2>&1; sleep 20; }
 
+# Set right before the first action that actually touches the pair (first
+# stop_all in boot()). If this driver is killed before that (e.g. still
+# waiting on something else), the EXIT trap below must not stop/restore
+# serving it does not own -- see 2026-09-24 oldb12x-driver incident.
+OWNS_PAIR=0
+
 boot() {  # boot <dir> <recipe_rel>
+  OWNS_PAIR=1
   stop_all
   log "boot $2 (dir=$1)"
   ( cd "$1" && sparkrun run "$2" --no-follow >>"$LOG" 2>&1 )
   wait_health 5400 || { log "FATAL: health timeout for $2"; exit 1; }
 }
 
+verify_shipped() {
+  local n0 n1 img0 img1
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health)" = 200 ] || return 1
+  n0=$(docker ps --format '{{.Names}}' | grep node_0 | head -1)
+  n1=$(ssh "$WORKER_IP" "docker ps --format '{{.Names}}'" 2>/dev/null | grep node_1 | head -1)
+  img0=$(docker inspect --format '{{.Config.Image}}' "$n0" 2>/dev/null)
+  img1=$(ssh "$WORKER_IP" "docker inspect --format '{{.Config.Image}}' $n1" 2>/dev/null)
+  log "verify_shipped: image head=$img0 worker=$img1 (expect substring $SHIPPED_IMAGE_EXPECT)"
+  case "$img0" in *"$SHIPPED_IMAGE_EXPECT"*) : ;; *) return 1 ;; esac
+  case "$img1" in *"$SHIPPED_IMAGE_EXPECT"*) : ;; *) return 1 ;; esac
+  return 0
+}
+
 restore_shipped() {
+  if [ "$OWNS_PAIR" != "1" ]; then
+    log "restore: skipped, this driver never touched the pair"
+    return
+  fi
   log "restore: shipped"
-  boot "$PORTABLE" "$SHIPPED_RECIPE_REL" && log "restore: shipped healthy"
+  boot "$PORTABLE" "$SHIPPED_RECIPE_REL"
+  verify_shipped && log "restore: shipped verified healthy (health 200 + $SHIPPED_IMAGE_EXPECT) on both nodes" \
+    || log "FAILED FAILED FAILED: shipped restore/verify failed -- MANUAL INTERVENTION NEEDED on dgx-01/dgx-02"
 }
 trap restore_shipped EXIT
 
@@ -110,8 +137,8 @@ run_arm() {  # run_arm <arm> <dir> <recipe_rel>
   collect "$arm-d2k-c1"
   probe "$arm" d16k-c1 --depth 16384 --new 2048 --repeats 8 --trigger-cmd "$(trigger_cmd "$arm-d16k-c1")"
   collect "$arm-d16k-c1"
-  probe "$arm" d16k-c2 --depth 16384 --new 2048 --repeats 4 --concurrency 2
-  probe "$arm" d64k-c1 --depth 65536 --new 2048 --repeats 3 --trigger-cmd "$(trigger_cmd "$arm-d64k-c1")"
+  probe "$arm" d16k-c2 --depth 16384 --new 2048 --repeats 4 --concurrency 2 --offset 700000
+  probe "$arm" d64k-c1 --depth 65536 --new 2048 --repeats 3 --offset 1400000 --trigger-cmd "$(trigger_cmd "$arm-d64k-c1")"
   collect "$arm-d64k-c1"
 }
 

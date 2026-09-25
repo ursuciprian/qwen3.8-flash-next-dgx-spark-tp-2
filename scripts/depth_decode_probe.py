@@ -106,7 +106,7 @@ def stream(base, model, content, args, on_chunk=None):
 
 def one_pair(base, model, corpus, args, index, trigger):
     stride = len(corpus) // 3 // max(1, args.repeats * args.concurrency + 1)
-    start = index * stride
+    start = args.offset + index * stride
     ctx = trim(base, model, corpus[start:start + 8 * args.depth], args.depth)
     new = trim(base, model, corpus[start + len(ctx):start + len(ctx) + 8 * args.new], args.new)
     out = {"index": index}
@@ -156,6 +156,8 @@ def main():
     ap.add_argument("--trigger-cmd", default="")
     ap.add_argument("--trigger-repeat", type=int, default=2)
     ap.add_argument("--trigger-after-chunks", type=int, default=20)
+    ap.add_argument("--offset", type=int, default=0,
+                    help="corpus char offset; give each probe in one boot its own so they share no prefix")
     ap.add_argument("--label", default="")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
