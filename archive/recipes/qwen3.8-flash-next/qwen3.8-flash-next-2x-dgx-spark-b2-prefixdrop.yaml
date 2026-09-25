@@ -1,8 +1,8 @@
-# Candidate b2-prefixdrop (A/B arm, not a default). b1 recipe + local image spark-vllm-b12x:b2-20260925-c57b2466-31eaa52a:
+# Candidate b2-prefixdrop (A/B arm, not a default). b1 recipe + local image spark-vllm-b12x:b2-20260925-c57b2466-2dbd9d5b:
 # b12x ursuciprian/b12x feat/b2-upstream-sync@c57b2466 (deferred GDN on local-inference-lab/b12x
-# master a7d7d29b + PR #417 + PR #421), vLLM ursuciprian/vllm feat/b2-upstream-sync@31eaa52a
+# master a7d7d29b + PR #417 + PR #421), vLLM ursuciprian/vllm feat/b2-upstream-sync@2dbd9d5b
 # (b1 14077fb35 + #887 NULL_BLOCK_ID padding + #880 opt-in uncap + opt-in prefix-drop flags +
-# restored b12x-master startup exchange). Schema-6 selection cache: first boot autotunes cold.
+# restored b12x-master startup exchange + B12X_COMPILE_WORKERS honoured). Schema-6 selection cache: first boot autotunes cold.
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
@@ -34,7 +34,7 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # from ghcr on the worker.
 # Previous default (b0 image): qwen3.8-flash-next-2x-dgx-spark-previous.yaml
 # (formerly qwen3.8-flash-next-nvfp4-tp2-b0; this file was qwen3.8-flash-next-nvfp4-tp2).
-container: spark-vllm-b12x:b2-20260925-c57b2466-31eaa52a
+container: spark-vllm-b12x:b2-20260925-c57b2466-2dbd9d5b
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
