@@ -2,7 +2,8 @@
 
 Every measurement, arm and verdict in this repo, newest ideas first within
 each group. Ground truth for the current serving numbers is the top-level
-`README.md` ("Results (shipped image)"), backed by `results/shipped-20260923/`
+`README.md` ("Results (default, b1 image)"), backed by `results/b1-20260925/`
+(b0, 2026-09-23: `results/shipped-20260923/`)
 — this file is the index, not a second source of numbers.
 
 Workload key used below — every number carries one of these tags:
@@ -21,10 +22,11 @@ Workload key used below — every number carries one of these tags:
 doc for that entry; most arms also have raw JSON/logs alongside it that
 aren't summarized here.
 
-## Current default recipe: la (probabilistic MTP drafts + MXFP8 lm_head)
+## Current default recipe: b1 (la + deferred GDN checkpoints + TC-45 fix)
 
 | date | recipe / arm | key numbers | verdict | file |
 |---|---|---|---|---|
+| 2026-09-25 | b1 (`oldb12x-on`) vs b0, 2 boots each | [task] temp 1.0 d0: c1 54.1 (b0 53.2), c8 186.6 (166.8), c16 241.1 (218.6); 16k c2 81.6 (72.3), c16 138.8 (130.9); [count] c1 101.0 (100.9), c16 720.4 (643.0); hardmode 89/89, fidelity 20/20 x4, no stragglers | **promoted, now default** (Jev ship 0.99) | `results/b1-20260925/` |
 | 2026-09-23 | shipped warm image, both ranks on `7c4f1bc1` | [task] temp 1.0: c1 59.2, c16 224.1, 64k c1 56.8, 64k c16 110.5; [prose]: c1 51.0, c16 126.1, 64k c16 39.0; [count]: c1 100.2 (100.3-102.1 x5), c8 456.1, c16 634.9 | **shipped**; supersedes every (hybrid) number below | `results/shipped-20260923/` |
 | 2026-09-22 | `la-mtpprob` — `draft_sample_method: probabilistic` | [task] temp 1.0: c1 45.6 ± 13.7 (old la 46.1, tie), c16 221.9 (186.3), 64k c1 58.4 (42.4), 16k c16 115.4 ± 24.3 (120.3); [prose]: c1 56.1 (41.1), c16 126.7 (117.8), 64k c16 36.78 (38.15, regression); [count]: c1 100.9-102.1, c8 434.6-439.4, c16 635.0-641.3; hardmode 86 then 90, fidelity 8k-64k 20/20, 128k 19/20 then 20/20 x2, straggler clean | **promoted, now default** (PR #25) | `results/arms/la-mtpprob/verdict.md`, `results/benchy/la-mtpprob-{task16,prose16}.md` vs `la-{task16,prose16}.md` |
 | 2026-09-22 | old la (argmax) at temp 0, [task] | c1 55.3, c16 217.7; 16k c1 55.3; 64k c1 55.9; temp 0.6 grid pending | reference for temperature effect | `results/benchy/la-task16-t0.md` |

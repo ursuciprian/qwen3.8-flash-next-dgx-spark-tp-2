@@ -118,7 +118,30 @@ stack.
 
 ## Build provenance
 
-### Shipped image (default recipe)
+### Default image (b1, since 2026-09-25)
+
+`ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm`
+(`sha256:57c2fbd8cd811a5d22a7f2e547453f97b875f1fb4c7de60a0c3ff9fba3a79e5c`,
+arm64, public) is `spark-vllm-b12x:candidate-b12x-b7fbaf96-vllm-14077fb3`
+(built on dgx-01 by `build.sh`, empty `draft_vocab` context) plus the
+`docker/b0-warm/` layer (b12x plan seed `8ccf4799…json`; the bounded-wait
+patch skips itself because this vLLM already has it). Pushed by
+spark-vllm-b12x workflow `build-b0-warm` (run 36098908444).
+
+Sources, tagged `shipped-b1-20260925` in both forks:
+
+- vLLM [`ursuciprian/vllm@14077fb35`](https://github.com/ursuciprian/vllm/tree/shipped-b1-20260925)
+  (branch `feat/candidate-old-b12x`): the b0 source plus the TC-45
+  `tool_choice` parser fix (cheap variant, gates on `required`/named only),
+  deferred GDN checkpoints wiring (`VLLM_GDN_DEFERRED_CHECKPOINTS`),
+  request-boundary export for deferred, and the PLE per-state fix; the
+  b12x-master startup cache exchange is reverted.
+- b12x [`ursuciprian/b12x@b7fbaf96`](https://github.com/ursuciprian/b12x/tree/shipped-b1-20260925)
+  (branch `feat/gdn-deferred-p1-tests`): b0's `a8333658` plus the deferred
+  GDN decode kernels. Same io_uring-free loader and schema-5 selection cache
+  as b0, so the b0 plan seed still hits.
+
+### b0 image (default 2026-09-22 to 2026-09-25, recipe `qwen3.8-flash-next-2x-dgx-spark-previous`)
 
 `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`
 (`sha256:a3d5d90d1312edc9a79c86add6fdf72d50b2a73558e295fdf4ea110488fb615d`,
@@ -191,7 +214,7 @@ credits, kept here when the README became a short guide.
 ### Configuration
 
 Key serving flags and env of the default recipe, from
-[`qwen3.8-flash-next-nvfp4-tp2.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml).
+[`qwen3.8-flash-next-2x-dgx-spark.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) (written for the b0 image; the b1 recipe adds `VLLM_GDN_DEFERRED_CHECKPOINTS` and `B12X_COMPILE_WORKERS`, see the README).
 
 Image identity: eugr `spark-vllm-docker` Dockerfile `798528a2` + fork
 `local-inference-lab/vllm` `dev/jovian-judgement` `8e1f1e58` + b12x
@@ -245,13 +268,14 @@ TP2 preparation, fails fast instead of parking forever) is baked into the image
 ### Recipes
 
 `sparkrun recipe list` / `sparkrun recipe search qwen3.8` against this registry
-shows exactly two recipes. Both are pinned (`--revision 7c4f1bc1…`), use the
-public warm image, and need no mods, no host mounts and no `--trust`.
+shows two recipes (renamed 2026-09-25, see [RENAMES.md](../recipes/RENAMES.md); the one-hot draft fallback moved to the archive). Both are pinned (`--revision 7c4f1bc1…`), use a public
+warm image, and need no mods, no host mounts and no `--trust`.
 
 | Recipe | Image | Use |
 |---|---|---|
-| [`qwen3.8-flash-next-nvfp4-tp2`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (`sha256:a3d5d90d…`) | **Default, serving.** Probabilistic MTP draft sampling (`draft_sample_method: probabilistic`), best for clients that send no temperature (checkpoint default 1.0). |
-| [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | same image | Fallback: the previous default, one-hot drafts + `use_local_argmax_reduction: true`. For temperature-0 clients or a rollback. Moved onto the warm image 2026-09-23; not boot-tested on it yet (same build, same baked-in fix as its old local image + mod). |
+| [`qwen3.8-flash-next-2x-dgx-spark`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm` (`sha256:57c2fbd8…`) | **Default, serving.** Probabilistic MTP drafts, deferred GDN checkpoints (`VLLM_GDN_DEFERRED_CHECKPOINTS=1`), TC-45 fix. Cold boot ~9.4 min, warm restart ~3.8 min (2026-09-25). |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm` (`sha256:a3d5d90d…`) | Fallback: the default from 2026-09-22 to 2026-09-25, unchanged. Roll back here. |
+| [`qwen3.8-flash-next-nvfp4-tp2-argmax-drafts`](../archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml) | b0 image | Archived 2026-09-25 (`archive/recipes/`). The default before 2026-09-22, one-hot drafts + `use_local_argmax_reduction: true`. For temperature-0 clients or a rollback. Moved onto the warm image 2026-09-23; not boot-tested on it yet (same build, same baked-in fix as its old local image + mod). |
 
 Everything else (bisection arms, rejected experiments, other checkpoints, the
 SGLang-era route, the alternate `wheels-20260919` ghcr image) is in
@@ -271,7 +295,7 @@ Where each file went: [recipes/RENAMES.md](../recipes/RENAMES.md).
 | `B12X_AUTOTUNE=0` in eugr's Dockerfile: fresh boot 81 tok/s instead of 96-98 at c1 (counting diagnostic) | **Worked around**: recipe sets `1` | Plan cache persists at `~/.cache/sparkrun/runtime-cache/vllm/<model>/b12x/` (168-169 MB); [`results/kernel-pass/arms.md`](../results/kernel-pass/arms.md) |
 | logind `RemoveIPC` kills shm (`'ShmRingBuffer' object has no attribute 'shared_memory'`) | **Host fix** | `loginctl enable-linger nvidia` on both nodes |
 | TP2 preparation hangs from an empty plan cache on b12x commits past `a8333658` | **Fixed in default recipe** | `B12X_ROCE_SPIN_LIMIT: "300000000"` + `archive/mods/b12x-startup-boundedwait/` (baked into the image); [`results/kernel-pass/prep-deadlock/mechanism.md`](../results/kernel-pass/prep-deadlock/mechanism.md) |
-| TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Open**, fix exists but off | `archive/mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100, costs speed (see [Quality](BENCHMARKS.md#quality)) |
+| TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Fixed in b1** (default since 2026-09-25); still open on `-b0` / `-argmax-drafts` | Cheap variant in vLLM `14077fb35` gates only `required`/named, no measured speed cost; hardmode TC-45 passes, targeted re-runs 5/5. History: `archive/mods/vllm-tc45-reasoning-structag-fix/` |
 | `scripts/gate_arm.sh` without `--hardmode` runs only 69 of 88 scenarios | **Usage** | Always pass `--hardmode` for a real promotion decision |
 | Prose 64k-cached c16 regresses vs old la (38.15 -> 36.78) | **Known** | See the comparison in [At a glance](BENCHMARKS.md#default-vs-previous-default-old-la-one-hot-argmax-drafts) |
 | Raw `results/arms/` files | **Not all mirrored** | Some live on dgx-01 only, see [results/README.md](../results/README.md) |
@@ -283,7 +307,7 @@ Profiling, rejected arms and build provenance also live in
 
 ### Credits
 
-The vLLM route served by default (`recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`,
+The vLLM route served by default (`recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml`,
 image `spark-vllm-b12x:local-20260918-a8333658`) is built on other people's work.
 Exact pins:
 

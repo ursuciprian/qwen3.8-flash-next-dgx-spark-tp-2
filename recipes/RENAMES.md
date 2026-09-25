@@ -1,4 +1,18 @@
-# Archive move (2026-09-23)
+# Renames
+
+## 2026-09-25: plain names
+
+sparkrun 0.3.6 has no per-recipe aliases (lookup is by file stem), so the old
+names no longer resolve; run the new ones.
+
+| old name | new name |
+|---|---|
+| `qwen3.8-flash-next-nvfp4-tp2` (default until 2026-09-25) | `qwen3.8-flash-next-2x-dgx-spark-previous` (same file content, now the fallback) |
+| `qwen3.8-flash-next-nvfp4-tp2-b0` (for a few hours on 2026-09-25) | `qwen3.8-flash-next-2x-dgx-spark-previous` |
+| `qwen3.8-flash-next-nvfp4-tp2` after PR #45 (b1 image) | `qwen3.8-flash-next-2x-dgx-spark` (recommended) |
+| `qwen3.8-flash-next-nvfp4-tp2-argmax-drafts` | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` (not listed; run by path) |
+
+## Archive move (2026-09-23)
 
 sparkrun lists every `*.yaml` under this registry's `recipes/` subpath
 (recursive `rglob`, sparkrun 0.3.6 `core/registry.py`) and sparse-checks-out only
@@ -9,10 +23,10 @@ so `git log --follow <new path>` shows each file's full history. Archived recipe
 still resolve their mods through the relative `mods` symlinks, now pointing at
 `archive/mods/`.
 
-Still registry-visible: `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml`
-(default) and `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml`
-(fallback, rebuilt on the default's warm ghcr image; its previous local-image
-version is the `-argmax-drafts-local.yaml` row below).
+Registry-visible after the 2026-09-25 rename (below): only
+`recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml` (recommended)
+and `recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml`
+(fallback).
 
 | old path | moved to |
 |---|---|
@@ -175,7 +189,7 @@ origin of the base recipe this project bisected from.
 | recipes/eugr/eugr-agents-serve-scratchfix16.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-scratch-isolation.yaml` | Straggler probe: seqs 16 + disjoint GDN/QSA projection scratch mod | experimental |
 | recipes/eugr/eugr-agents-serve-spectrace.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-spec-trace-debug.yaml` | Debug arm: vllm-spec-trace mod, logs drafts-proposed/accepted counts | experimental |
 | recipes/eugr/eugr-agents-serve-spectrace16.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-spec-trace-debug-seqs-16.yaml` | Debug arm: spec-trace + max_num_seqs 16 | experimental |
-| recipes/eugr/eugr-agents-serve-local16-la-argmax.yaml | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` | Previous default: one-hot MTP drafts + use_local_argmax_reduction, kept as fallback | fallback |
+| recipes/eugr/eugr-agents-serve-local16-la-argmax.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml` (archived 2026-09-25) | Previous default: one-hot MTP drafts + use_local_argmax_reduction | archived |
 | recipes/eugr/eugr-agents-serve-local16-la-b12x0f3a8cb.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-b12x-0f3a8cb.yaml` | Bisect arm: b12x build tag 0f3a8cb | experimental |
 | recipes/eugr/eugr-agents-serve-local16-la-b12x0f3a8cb-noat.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-b12x-0f3a8cb-no-autotune.yaml` | Bisect arm: b12x 0f3a8cb build with B12X_AUTOTUNE off | experimental |
 | recipes/eugr/eugr-agents-serve-local16-la-b12x0f3a8cb-rev06809d5.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-b12x-0f3a8cb-revert-06809d5.yaml` | Bisect arm: b12x 0f3a8cb build with commit 06809d5 reverted | experimental |
@@ -195,4 +209,4 @@ origin of the base recipe this project bisected from.
 | recipes/eugr/eugr-agents-serve-local16-la-prof.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-profiler-config.yaml` | Profiling only: built-in --profiler-config for Phase C decode-step profiling | experimental |
 | recipes/eugr/eugr-agents-serve-local16-la-spec3.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-argmax-mtp3.yaml` | Argmax-reduction arm with num_speculative_tokens 3 (was 4) | experimental |
 | recipes/eugr/eugr-agents-serve-local16-la-tc.yaml | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2-tc45-reasoning-fix.yaml` | tool_choice=required structural-tag fix so forced grammar admits the <think> prefix | experimental |
-| recipes/eugr/eugr-agents-serve-local16-la.yaml | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-nvfp4-tp2.yaml` | Default: local16 + probabilistic MTP draft sampling | default |
+| recipes/eugr/eugr-agents-serve-local16-la.yaml | `recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml` (renamed 2026-09-25) | Default until 2026-09-25: local16 + probabilistic MTP draft sampling | fallback |
