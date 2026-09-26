@@ -1,12 +1,11 @@
-# formerly eugr-agents-serve-local16-la.yaml
-# eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
-# Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
-# 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
-# later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
+# Bisect arm b2rev (2026-09-26, rejected b2 investigation): b2 with b12x b294e69d
+# (NVFP4 decode register layout) reverted. b12x ursuciprian/b12x exp/b2-revert-b294e69d@dada571f,
+# vLLM feat/b2-upstream-sync@2dbd9d5b. Result: MTP tokens/step still -7% vs b1, so b294e69d is
+# not the cause of b2's acceptance drop. Local image, not published.
 
 recipe_version: "1"
-name: qwen3.8-flash-next-2x-dgx-spark-previous
-description: "Fallback. The previous build (2026-09-25); pick it only if the recommended recipe misbehaves. Same decode speed, slower follow-up turns on long chats."
+name: qwen3.8-flash-next-2x-dgx-spark-b2rev
+description: "Candidate b2: b1 flags on the b2 image."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -27,10 +26,9 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Fallback since 2026-09-26: the recommended recipe from 2026-09-25 to 2026-09-26 (b1 image),
-# unchanged apart from name/description. The b0 fallback it replaced is archived as
-# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b0-20260923.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm
+# Previous default (b0 image): qwen3.8-flash-next-2x-dgx-spark-previous.yaml
+# (formerly qwen3.8-flash-next-nvfp4-tp2-b0; this file was qwen3.8-flash-next-nvfp4-tp2).
+container: spark-vllm-b12x:exp-b2rev-dada571f-2dbd9d5b
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's

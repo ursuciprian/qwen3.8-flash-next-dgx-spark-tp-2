@@ -1,3 +1,8 @@
+# Candidate b2-prefixdrop (A/B arm, not a default). b1 recipe + local image spark-vllm-b12x:b2-20260925-c57b2466-2dbd9d5b:
+# b12x ursuciprian/b12x feat/b2-upstream-sync@c57b2466 (deferred GDN on local-inference-lab/b12x
+# master a7d7d29b + PR #417 + PR #421), vLLM ursuciprian/vllm feat/b2-upstream-sync@2dbd9d5b
+# (b1 14077fb35 + #887 NULL_BLOCK_ID padding + #880 opt-in uncap + opt-in prefix-drop flags +
+# restored b12x-master startup exchange + B12X_COMPILE_WORKERS honoured). Schema-6 selection cache: first boot autotunes cold.
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
@@ -5,8 +10,8 @@
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
 recipe_version: "1"
-name: qwen3.8-flash-next-2x-dgx-spark-previous
-description: "Fallback. The previous build (2026-09-25); pick it only if the recommended recipe misbehaves. Same decode speed, slower follow-up turns on long chats."
+name: qwen3.8-flash-next-2x-dgx-spark-b2-prefixdrop
+description: "Candidate b2 + VLLM_PREFIX_DROP_EXACT=1."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -27,10 +32,9 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Fallback since 2026-09-26: the recommended recipe from 2026-09-25 to 2026-09-26 (b1 image),
-# unchanged apart from name/description. The b0 fallback it replaced is archived as
-# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b0-20260923.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm
+# Previous default (b0 image): qwen3.8-flash-next-2x-dgx-spark-previous.yaml
+# (formerly qwen3.8-flash-next-nvfp4-tp2-b0; this file was qwen3.8-flash-next-nvfp4-tp2).
+container: spark-vllm-b12x:b2-20260925-c57b2466-2dbd9d5b
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -102,6 +106,7 @@ env:
   # +12.8%, c16 +6.0%; counting c10 +13.0%, c16 +12.0%; c1 within noise;
   # hardmode 89/89, fidelity 20/20 at every depth, no stragglers.
   VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
+  VLLM_PREFIX_DROP_EXACT: "1"
 
 # --speculative-config: promoted 2026-09-22 (was use_local_argmax_reduction:
 # true, one-hot drafts). Clients that send no temperature run at the
