@@ -35,6 +35,13 @@ sparkrun downloads the container image and the model on both Sparks. The first s
 curl -s -o /dev/null -w '%{http_code}\n' http://<head>:8000/health
 ```
 
+sparkrun keeps its own copy of this registry and does not refresh it on `run`. After a new release, update it
+first, or `sparkrun run` still starts the recipe you had before:
+
+```sh
+sparkrun registry update qwen38-flashnext   # use the name `sparkrun registry list` shows for this repo
+```
+
 Then send a request (`<head>` is the first Spark's address):
 
 ```sh
