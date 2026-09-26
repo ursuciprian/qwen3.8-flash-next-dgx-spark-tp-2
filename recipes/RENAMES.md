@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-09-26: b1.1 promoted (names unchanged)
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | b1.1 image + `VLLM_PREFIX_DROP_EXACT=1` (recommended) |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | the b1 recipe that was recommended on 2026-09-25 |
+| (was `-previous`, b0 image) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b0-20260923.yaml` (not listed; run by path) |
+
 ## 2026-09-25: plain names
 
 sparkrun 0.3.6 has no per-recipe aliases (lookup is by file stem), so the old
