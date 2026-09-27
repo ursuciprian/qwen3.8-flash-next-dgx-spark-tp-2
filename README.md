@@ -242,15 +242,14 @@ Full provenance, including the previous image: [docs/ENGINEERING.md](docs/ENGINE
 
 ## Credits
 
-- [eugr](https://github.com/eugr): spark-vllm-docker (image base), sparkrun, llama-benchy (base of our fork).
-- [local-inference-lab](https://github.com/local-inference-lab): the vLLM fork, the b12x kernels and the NVFP4 checkpoint.
-- [MiaAI-Lab](https://github.com/MiaAI-Lab): early SGLang profile, benchmark spec and draft-vocab table.
-- [RadixArk](https://huggingface.co/RadixArk): NVFP4 checkpoint and day-0 SGLang work.
-- [tonyd2wild](https://github.com/tonyd2wild): vLLM SM121 overlays and the bench_sweep counting harness.
-- [Weschera](https://github.com/Weschera): spark-bench graded eval.
-- [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench.
+This build stands on these projects:
 
-Exact pins and contributions: [docs/ENGINEERING.md](docs/ENGINEERING.md#credits).
+- [local-inference-lab](https://github.com/local-inference-lab): the vLLM fork our branches start from, the b12x kernels (NVFP4 MoE, GDN, QSA) and the NVFP4 checkpoint.
+- [eugr](https://github.com/eugr): spark-vllm-docker (our image base), sparkrun (the launcher), and llama-benchy (the base of our benchmark fork).
+- [tonyd2wild](https://github.com/tonyd2wild): the bench_sweep counting harness behind the counting numbers.
+- [SeraphimSerapis](https://github.com/SeraphimSerapis): tool-eval-bench, which runs the hardmode and TC-45 quality gate.
+
+Earlier experiments drew on other projects too, and [docs/ENGINEERING.md](docs/ENGINEERING.md#credits) keeps that full history with exact pins.
 
 ## License
 
