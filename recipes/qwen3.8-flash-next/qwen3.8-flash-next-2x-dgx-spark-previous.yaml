@@ -4,9 +4,13 @@
 # 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
+# Fallback since 2026-09-27: was the recommended recipe from 2026-09-26 to
+# 2026-09-27 (b1.1 image, HC mixers still BF16). Superseded by b1.2 (HC mixers
+# MXFP8, router gate BF16). The b1 recipe it replaced as fallback is archived as
+# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1-20260925.yaml.
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark-previous
-description: "Fallback. The previous build (2026-09-25); pick it only if the recommended recipe misbehaves. Same decode speed, slower follow-up turns on long chats."
+description: "Fallback. The previous build (2026-09-26, b1.1); pick it only if the recommended recipe misbehaves."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -14,23 +18,19 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-# B1 image, promoted 2026-09-25: build.sh image candidate-b12x-b7fbaf96-vllm-14077fb3
-# (vLLM ursuciprian/vllm feat/candidate-old-b12x@14077fb35 = the b0 source +
-# TC-45 tool_choice fix + deferred GDN checkpoints + request-boundary export +
-# PLE per-state fix; b12x ursuciprian/b12x feat/gdn-deferred-p1-tests@b7fbaf96 =
-# the b0 a8333658 + deferred GDN kernels, same schema-5 selection cache) plus
-# docker/b0-warm (b12x plan-cache seed; the bounded-wait fix is already in this
-# vLLM). No mods, no --trust, no host mounts.
-# Digest of this tag: sha256:57c2fbd8cd811a5d22a7f2e547453f97b875f1fb4c7de60a0c3ff9fba3a79e5c
+# B1.1 image, promoted 2026-09-26: build.sh image spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16
+# (vLLM ursuciprian/vllm feat/b1.1@6d232f16f, tag shipped-b1.1-20260926 = b1 14077fb35 +
+# vllm#887 NULL_BLOCK_ID padding + prefix-drop flags (VLLM_PREFIX_DROP_EXACT) +
+# B12X_COMPILE_WORKERS honoured by the startup compile pool; b12x b7fbaf96, same kernels as b1)
+# plus docker/b0-warm (b12x plan-cache seed). No mods, no --trust, no host mounts.
+# Digest of this tag: sha256:91a60ebce422db8a80f58ce998a3e9bd847814c8579ac33fa4df99e62351b3a8
 # (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
 # head->worker with `docker save | docker load`, which drops RepoDigests, so a
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Fallback since 2026-09-26: the recommended recipe from 2026-09-25 to 2026-09-26 (b1 image),
-# unchanged apart from name/description. The b0 fallback it replaced is archived as
-# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b0-20260923.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm
+# Previous recommended (b1 image, 2026-09-25): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -102,6 +102,13 @@ env:
   # +12.8%, c16 +6.0%; counting c10 +13.0%, c16 +12.0%; c1 within noise;
   # hardmode 89/89, fidelity 20/20 at every depth, no stragglers.
   VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
+  # Prefix-drop exact (promoted 2026-09-26): with MTP the aligned prefix-cache hit
+  # stopped one 2864-token block short (16k hit 11456 -> 14320, 64k 60144 -> 63008
+  # with the flag). A/B vs b1, 2 boots each (results/b1.1-20260926): cached-prefix
+  # TTFT -37% at 16k, -34% at 64k; coding task at 16k depth c4 +7.7%, c8 +16.7%,
+  # c16 +26.6%; fresh-context coding and counting within noise; hardmode 91/89,
+  # fidelity 20/20 at every depth (128k seeds 7/11/13), TC-45 5/5, no stragglers.
+  VLLM_PREFIX_DROP_EXACT: "1"
 
 # --speculative-config: promoted 2026-09-22 (was use_local_argmax_reduction:
 # true, one-hot drafts). Clients that send no temperature run at the
