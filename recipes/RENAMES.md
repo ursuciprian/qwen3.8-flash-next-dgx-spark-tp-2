@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-09-27: b1.2 promoted (names unchanged)
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | b1.2 image (b1.1 + HC mixers MXFP8, router gate BF16) (recommended) |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | the b1.1 recipe that was recommended on 2026-09-26 |
+| (was `-previous`, b1 image) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1-20260925.yaml` (not listed; run by path) |
+
 ## 2026-09-26: b1.1 promoted (names unchanged)
 
 | name | content now |

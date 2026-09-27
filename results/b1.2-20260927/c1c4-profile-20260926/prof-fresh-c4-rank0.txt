@@ -1,0 +1,79 @@
+trace prof-fresh-c4/rank0.json.gz
+wall/step 75.88 ms  busy(union)/step 72.92 ms  GPU idle/launch gaps 3.9%  kernel-sum/step 75.51 ms
+graphs: target=62.30ms, draft=6.54ms, draft=3.03ms, eager=2.97ms, draft=0.67ms
+group    category                   us/step % kernel-sum
+target   NVFP4 MoE                  33084.5        43.8%
+target   dense GEMM (NVFP4/FP8)     10202.9        13.5%
+target   BF16 GEMM                  10156.6        13.5%
+draft    BF16 GEMM                   3221.2         4.3%
+draft    MTP lm_head                 3217.5         4.3%
+target   GDN                         2433.6         3.2%
+target   all-reduce (RoCE)           2275.0         3.0%
+draft    NVFP4 MoE                   1733.6         2.3%
+eager    main lm_head                1488.4         2.0%
+target   attention                   1006.7         1.3%
+target   norm/hyperconn               974.7         1.3%
+eager    memcpy/fill/meta             740.0         1.0%
+draft    all-reduce (RoCE)            679.1         0.9%
+draft    GDN                          666.3         0.9%
+target   sampling/rejection           533.0         0.7%
+eager    all-reduce (RoCE)            532.9         0.7%
+target   memcpy/fill/meta             499.8         0.7%
+target   other                        440.5         0.6%
+target   main lm_head                 367.9         0.5%
+target   QSA select                   320.0         0.4%
+draft    memcpy/fill/meta             253.7         0.3%
+draft    attention                    187.6         0.2%
+draft    norm/hyperconn               103.7         0.1%
+eager    sampling/rejection            84.6         0.1%
+eager    dense GEMM (NVFP4/FP8)        79.4         0.1%
+draft    sampling/rejection            77.1         0.1%
+draft    other                         66.6         0.1%
+eager    other                         39.9         0.1%
+draft    QSA select                    32.3         0.0%
+eager    GDN                            8.1         0.0%
+eager    QSA select                     1.4         0.0%
+
+summary categories (% of step wall; overlap between streams makes the sum exceed busy):
+  NVFP4 MoE                          33.08 ms   43.6%
+  dense GEMM (NVFP4/FP8)             10.28 ms   13.6%
+  BF16 GEMM                          10.16 ms   13.4%
+  MTP draft passes (ex lm_head)       7.02 ms    9.3%
+  MTP lm_head                         3.22 ms    4.2%
+  GPU idle/launch gaps                2.96 ms    3.9%
+  all-reduce (RoCE)                   2.81 ms    3.7%
+  GDN                                 2.44 ms    3.2%
+  main lm_head                        1.86 ms    2.4%
+  memcpy/fill/meta                    1.24 ms    1.6%
+  attention                           1.01 ms    1.3%
+  norm/hyperconn                      0.97 ms    1.3%
+  sampling/rejection                  0.62 ms    0.8%
+  other                               0.48 ms    0.6%
+  QSA select                          0.32 ms    0.4%
+
+top kernels:
+  target  32705.5 us/step x 48.0  [NVFP4 MoE] kernel_cutlass_kernel_b12xmoe_sharedkernelssiluMoEDynamicKernelSilu_object_at__tensorptrbf16gmemalig
+  target   8927.7 us/step x228.0  [dense GEMM (NVFP4/FP8)] kernel_cutlass_kernel_b12x_libdense_gemmDenseGemmKernel_object_at__CopyAtom_ThrID10_TVLayoutSrc11024
+  target   4361.3 us/step x 97.0  [BF16 GEMM] nvjet_sm121_tst_mma_128x64x64_4_32x64x64_tmaAB_bz_TNNN
+  target   4175.7 us/step x 96.0  [BF16 GEMM] nvjet_sm121_tst_mma_64x32x64_8_32x16x64_tmaAB_splitK_TNNN
+  draft    3210.0 us/step x  4.0  [dense GEMM (NVFP4/FP8)] kernel_cutlass_kernel_b12x_libdense_gemmDenseGemmKernel_object_at__CopyAtom_ThrID10_TVLayoutSrc11024
+  target   2275.0 us/step x 97.0  [all-reduce (RoCE)] kernel_cutlass_kernel_b12xcommroce_oneshot_cute_RoceOneshotLaunch_object_at__ptri32gmemalign16_ptri3
+  target   2172.6 us/step x 36.0  [GDN] kernel_cutlass_kernel_b12xsequencegdn_decode_cute_kernels_PackedRecurrentQwenKernel_object_at__ptrbf
+  draft    1694.4 us/step x  4.0  [NVFP4 MoE] kernel_cutlass_kernel_b12xmoe_sharedkernelsw4a16kernelW4A16FusedMoeKernel_object_at__tensorptrbf16gm
+  eager    1488.4 us/step x  1.0  [dense GEMM (NVFP4/FP8)] kernel_cutlass_kernel_b12x_libdense_gemmDenseGemmKernel_object_at__CopyAtom_ThrID10_TVLayoutSrc11024
+  target   1125.0 us/step x 12.0  [dense GEMM (NVFP4/FP8)] kernel_cutlass_kernel_b12x_libdense_gemmDenseGemmKernel_object_at__CopyAtom_ThrID10_TVLayoutSrc14096
+  target   1082.4 us/step x 48.0  [BF16 GEMM] nvjet_sm121_tst_mma_32x32x64_12_32x8x64_tmaAB_bz_TNNN
+  draft     921.9 us/step x 12.0  [BF16 GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x1_tn_align8>(cutlass_
+  draft     829.9 us/step x 21.0  [BF16 GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_
+  target    812.8 us/step x 12.0  [attention] kernel_cutlass_kernel_b12xattentionpaged_selected_forward_SelectedPositionPagedForwardKernel_object_
+  draft     775.6 us/step x  8.0  [BF16 GEMM] kernel_cutlass_kernel_b12xsequencemtp_feedback_cute_prefillMTPPrefillBf16GemmKernel_object_at__tenso
+  draft     561.2 us/step x 72.0  [GDN] kernel_cutlass_kernel_b12xsequencegdn_decode_cute_kernels_CommitDeferredQwenKernel_object_at__ptrf32
+  eager     461.1 us/step x  1.0  [all-reduce (RoCE)] kernel_cutlass_kernel_b12xcommroce_allgather_cute_RoceAllGatherLaunch_object_at__ptri32gmemalign16_p
+  target    383.9 us/step x 95.0  [norm/hyperconn] kernel_cutlass_kernel_b12xnormhyperconnection_cute_PackedCombineNorm_object_at__ptrbf16gmem_ptrbf16g
+  draft     374.5 us/step x 12.0  [all-reduce (RoCE)] kernel_cutlass_kernel_b12xcommroce_oneshot_cute_RoceOneshotLaunch_object_at__ptri32gmemalign16_ptri3
+  target    370.5 us/step x 97.0  [norm/hyperconn] _gate_mean_kernel
+  target    367.9 us/step x  1.0  [BF16 GEMM] nvjet_sm121_tst_mma_64x128x64_4_64x32x64_tmaAB_bz_TNNN
+  target    344.1 us/step x 12.0  [sampling/rejection] _emit_stable_topk_kernel
+  draft     304.6 us/step x  4.0  [all-reduce (RoCE)] kernel_cutlass_kernel_b12xcommroce_allgather_cute_RoceAllGatherLaunch_object_at__ptri32gmemalign16_p
+  target    302.7 us/step x 12.0  [QSA select] kernel_cutlass_kernel_b12xattentionqsa_score_cute_RepresentativeScoreKernel_object_at__cutlasscuteco
+  target    261.1 us/step x 48.0  [BF16 GEMM] std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, __nv_bfloat16, __nv_bfloat16,

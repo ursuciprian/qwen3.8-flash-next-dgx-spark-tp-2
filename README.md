@@ -71,8 +71,8 @@ the others' prompts to be read. Exact tables: [Benchmark results](#benchmark-res
 
 | Recipe | Pick it when |
 |---|---|
-| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | **Always, by default.** The current build (2026-09-26). |
-| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | Only if the recommended one misbehaves for you. The previous build (2026-09-25): same model and settings, same speed on fresh prompts, slower on follow-up turns of long chats. |
+| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | **Always, by default.** The current build (2026-09-27). |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | Only if the recommended one misbehaves for you. The previous build (2026-09-26): same model and settings, slightly slower decode (no MXFP8 on the hyper-connection mixers). |
 
 Renamed on 2026-09-25: `qwen3.8-flash-next-nvfp4-tp2` is now `qwen3.8-flash-next-2x-dgx-spark` ([all renames](recipes/RENAMES.md)).
 
@@ -95,10 +95,10 @@ Everything below is for experienced users. Terms used: **concurrency (c)** = req
 **depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
 model drafts up to 4 next tokens that are checked in one step, which is what makes single-user speed high.
 
-Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16-warm`
-(`sha256:91a60ebce422db8a80f58ce998a3e9bd847814c8579ac33fa4df99e62351b3a8`), checkpoint revision `7c4f1bc1`.
-A/B against the previous build (2026-09-25) on 2026-09-26, two separate boots per build, means of both boots.
-Raw files and verdict: [`results/b1.1-20260926/`](results/b1.1-20260926/). The 2026-09-25 build's tables are in
+Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`
+(`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb`), checkpoint revision `7c4f1bc1`.
+A/B against the previous build (2026-09-26) on 2026-09-27, two separate boots per build, means of both boots.
+Raw files and verdict: [`results/b1.2-20260927/`](results/b1.2-20260927/). The 2026-09-26 build's tables are in
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 **Coding**: [llama-benchy fork](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task` (agent coding turn,
@@ -107,43 +107,42 @@ Total tok/s; `*` = beyond run-to-run noise.
 
 | depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
 |---|---|---|---|---|---|---|---|
-| 0 | 55.1 | 88.7 | 136.2 | 143.6 | 188.1 | 191.4 | 237.6 |
-| 0, previous | 54.2 | 90.6 | 137.3 | 147.8 | 183.5 | 197.2 | 236.3 |
-| 16k | 56.1 * | 82.8 | 108.8 * | 121.1 * | 139.5 * | 151.6 * | 176.5 * |
-| 16k, previous | 52.7 | 80.8 | 101.0 | 111.6 | 119.6 | 125.8 | 139.4 |
+| 0 | 61.8 * | 96.3 * | 142.2 * | 151.7 | 187.4 | 198.2 | 239.5 |
+| 0, previous | 53.4 | 87.5 | 135.6 | 147.3 | 183.1 | 195.0 | 242.2 |
+| 16k | 57.6 * | 87.2 * | 114.1 * | 127.4 | 142.9 | 152.9 | 173.3 |
+| 16k, previous | 55.0 | 82.6 | 109.8 | 120.2 | 141.4 | 151.5 | 175.9 |
 
-At 16k depth: c1 +6.5%, c4 +7.7%, c5 +8.5%, c8 +16.7%, c10 +20.5%, c16 +26.6%. Depth 0 is within noise (-2.9% to +2.5%); no cell is worse.
-The gain comes from the prefix cache: with MTP it used to stop one 2864-token block short, so every follow-up turn re-read
-~2.9K extra tokens and that prefill held up decoding for everyone. Decode step time itself is unchanged (paired probe, ±3% in all cells).
-
-**Time to first token on a follow-up turn** (same conversation, cached context + 2048 new tokens, single request, mean seconds):
-16k 2.58 -> 1.63 (-37%), 64k 3.43 -> 2.27 (-34%); at 16k with c1-c16 running, -29% to -53%. A cold first prompt is unchanged
-(16k 5.4 s, 64k 23.7 s). Prefix-cache hit at 16k: 11,456 -> 14,320 tokens; at 64k: 60,144 -> 63,008.
+Depth 0: c1 +15.7%, c2 +9.9%, c4 +4.9% beyond noise; c5-c16 within noise (no cell worse).
+16k: c1 +4.9%, c2 +5.6%, c4 +3.9% beyond noise; c5-c16 within noise (no cell worse).
+Paired temperature-0 decode-step probe (same prompt, pooled 2 boots): step time -9.9% at c1 (fresh), -10.0% at c1 (16k),
+-7.6/-7.4% at c2, -4.4/-5.7% at c4, -2..-5% at c8/c16 (every CI excludes 0); MTP acceptance per position unchanged.
+The gain is from online MXFP8 on the hyper-connection mixers (router gate stays BF16): half the bytes read per mixer per step.
 
 **Counting** (`tools/tony-bench/bench_sweep.py`: "list the numbers from 1 to 300", temperature 0, thinking off, 300 tokens).
 Nearly every draft token is accepted, so this is the stack's upper bound, not coding speed. Aggregate tok/s:
 
 | | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
 |---|---|---|---|---|---|---|---|
-| current | 101.5 | 180.7 | 302.5 | 359.1 | 483.5 | 546.6 | 728.3 |
-| previous | 100.1 | 181.4 | 308.6 | 359.8 | 478.7 | 546.9 | 724.2 |
+| current | 111.9 | 199.9 | 329.1 | 386.1 | 503.3 | 572.9 | 751.5 |
+| previous | 100.7 | 176.4 | 305.9 | 349.7 | 487.3 | 533.5 | 737.4 |
 
-All within noise. c1 is the median of 5 single runs per boot (c1 is bimodal on this pair). c2/c4/c5 are the mean of 4 boots
-(two with 10-round sweeps): the 3-round c4 cell swings ±5%; a paired temperature-0 probe on the same prompt measured c4 step time
-+0.4% (CI -0.3..+1.0) and tokens per step +0.3%.
+c1 +11.1%, c2 +13.3%, c5 +10.4%, c8 +3.3%, c10 +7.4% beyond noise; c4 +7.6% and c16 +1.9% within noise (no cell worse).
+c1 is the median of 5 single runs per boot (c1 is bimodal on this pair).
 
 **Single request by workload** (`scripts/decode_probe.py` after the cold-boot test, temperature 0, 512 tokens, 5 runs, mean tok/s):
-code 56.5, structured 81.6, counting 102.5, prose 48.2 on the 2026-09-25 build; not re-run for this build (decode step time is unchanged).
+code 56.5, structured 81.6, counting 102.5, prose 48.2 on the 2026-09-25 build; not re-run for this build (decode step time
+change is already captured by the paired probe above).
 
 ## Quality
 
 | Check | Result |
 |---|---|
-| tool-eval-bench `--hardmode` (88 tool-use scenarios, thinking on, temperature 0) | 91 and 89/100 on the two A/B boots (previous build: 88-91; run-to-run band 86-93). TC-45 (`tool_choice=required`) 5/5 |
+| tool-eval-bench `--hardmode` (88 tool-use scenarios, thinking on, temperature 0) | 90 and 92/100 on the two A/B boots (previous build: 91-89; run-to-run band 86-93). TC-45 (`tool_choice=required`) 5/5 |
 | Long-context recall (`scripts/fidelity_probe.py`, 20 tool-call retrievals per depth) | 20/20 exact at 8k, 32k, 64k and 128k; 128k also on two more seeds (11, 13): 20/20 each |
-| Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none; 3.97-4.00 tokens accepted per 4-token draft |
+| Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none |
 
 Gate run on the A/B boots of the same build (`scripts/gate_arm.sh`); the published image adds only the plan-seed layer.
+Verdict: `arm_verdict.py` v2 + Jev, **ship** (confidence 0.97); [`jev/verdicts-candidate/b12-hcq.json`](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2).
 
 ## Configuration
 
@@ -188,26 +187,25 @@ sparkrun's runtime cache when it is missing, so even a first boot does no kernel
 
 ## What is in the image
 
-`ghcr.io/ursuciprian/spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16-warm`, digest
-`sha256:91a60ebce422db8a80f58ce998a3e9bd847814c8579ac33fa4df99e62351b3a8` (arm64, public). The recipe keeps the tag, not the
+`ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`, digest
+`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb` (arm64, public). The recipe keeps the tag, not the
 digest, because sparkrun 0.3.6 copies the image to the worker with `docker save | docker load`, which drops digests.
 
 | Part | Source |
 |---|---|
 | Dockerfile | [eugr/spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) `798528a2`, built by [spark-vllm-b12x](https://github.com/ursuciprian/spark-vllm-b12x) `build.sh` |
-| vLLM | [`ursuciprian/vllm` tag `shipped-b1.1-20260926`](https://github.com/ursuciprian/vllm/tree/shipped-b1.1-20260926) (`6d232f16f`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
+| vLLM | [`ursuciprian/vllm` tag `shipped-b1.2-20260927`](https://github.com/ursuciprian/vllm/tree/shipped-b1.2-20260927) (`a9aa81b23`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
 | b12x kernels | [`ursuciprian/b12x` tag `shipped-b1-20260925`](https://github.com/ursuciprian/b12x/tree/shipped-b1-20260925) (`b7fbaf96`, unchanged), on local-inference-lab `a8333658` |
-| Warm layer | [`docker/b0-warm/`](docker/b0-warm/Dockerfile): b12x plan seed; pushed by the `build-b0-warm` workflow (run 36247635045) |
+| Warm layer | [`docker/b0-warm/`](docker/b0-warm/Dockerfile): b12x plan seed; pushed by the `build-b0-warm` workflow (run 36318273332) |
 
-Changes against the previous build (`b1-20260925-b7fbaf96-14077fb3-warm`), all in vLLM:
+Changes against the previous build (`b1.1-20260926-b7fbaf96-6d232f16-warm`), all in vLLM:
 
-- **Exact prefix-cache hits with MTP** (`VLLM_PREFIX_DROP_EXACT=1`). The aligned GDN checkpoint lookup dropped the last
-  cached block to leave room for the MTP drafter, one 2864-token block more than needed. Follow-up turns now reuse it.
-- **Mamba/GDN padding fix** (vllm#887): padded block-table slots use `NULL_BLOCK_ID`.
-- **Compile-worker cap honoured.** vLLM's startup compile pool ignored `B12X_COMPILE_WORKERS` and always used 16 workers;
-  a cold boot now stays at 2 (cold boot 14 min, lowest free memory 4 GB head / 6 GB worker).
+- **HC (hyper-connection) mixers in online MXFP8** (`VLLM_QWEN38_HC_MXFP8=hc`). The router gate stays BF16. Halves the
+  bytes read per mixer per decode step (a step-time profile found the BF16 HC mixers were 13-19% of the c1/c4 step).
 
-Earlier changes (2026-09-25 build): deferred GDN checkpoints and the TC-45 `tool_choice=required` fix.
+Earlier changes (2026-09-26 build): exact prefix-cache hits with MTP (`VLLM_PREFIX_DROP_EXACT`), the Mamba/GDN
+`NULL_BLOCK_ID` padding fix (vllm#887), and the compile-worker cap. Earlier still (2026-09-25 build): deferred GDN
+checkpoints and the TC-45 `tool_choice=required` fix.
 
 Full provenance, including the previous image: [docs/ENGINEERING.md](docs/ENGINEERING.md#build-provenance).
 

@@ -6,7 +6,7 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark
-description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-09-26 build)."
+description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-09-27 build)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -14,19 +14,26 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-# B1.1 image, promoted 2026-09-26: build.sh image spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16
-# (vLLM ursuciprian/vllm feat/b1.1@6d232f16f, tag shipped-b1.1-20260926 = b1 14077fb35 +
-# vllm#887 NULL_BLOCK_ID padding + prefix-drop flags (VLLM_PREFIX_DROP_EXACT) +
-# B12X_COMPILE_WORKERS honoured by the startup compile pool; b12x b7fbaf96, same kernels as b1)
-# plus docker/b0-warm (b12x plan-cache seed). No mods, no --trust, no host mounts.
-# Digest of this tag: sha256:91a60ebce422db8a80f58ce998a3e9bd847814c8579ac33fa4df99e62351b3a8
+# B1.2 image, promoted 2026-09-27: build.sh image spark-vllm-b12x:r3-hcq-b7fbaf96-a9aa81b2
+# (vLLM ursuciprian/vllm feat/hc-mxfp8-on-b1.1@a9aa81b23, tag shipped-b1.2-20260927 =
+# b1.1 6d232f16f + HC (hyper-connection) mixers online MXFP8, router gate stays BF16
+# (VLLM_QWEN38_HC_MXFP8=hc); b12x b7fbaf96, unchanged from b1.1) plus docker/b0-warm
+# (b12x plan-cache seed). No mods, no --trust, no host mounts.
+# A/B vs b1.1 (2 boots each, dgx-01 results/r3ab-hcq-20260927, arm_verdict v2 + Jev
+# ship 0.97): step time -9.9% fresh c1 / -10.0% 16k c1, -7.6/-7.4% c2, -4.4/-5.7% c4,
+# -2..-5% c8/c16 (every CI excludes 0), acceptance per position unchanged; paired
+# tok/s fresh c1 +10.4%, 16k c1 +13.3%, fresh c2 +16.2%, c4 +7.3/+5.6%, counting
+# c1 +10.3, c2 +18.8, c4 +10.6, c16 +6.8; no cell negative. Gate: hardmode 90/92,
+# TC-45 5/5, stragglers clean, fidelity 20/20 at every depth, 128k seeds 7/11/13.
+# Full tables: docs/BENCHMARKS.md, results/b1.2-20260927/.
+# Digest of this tag: sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb
 # (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
 # head->worker with `docker save | docker load`, which drops RepoDigests, so a
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Previous recommended (b1 image, 2026-09-25): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16-warm
+# Previous recommended (b1.1 image, 2026-09-26): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -61,6 +68,10 @@ defaults:
   gpu_memory_utilization: 0.80
 
 env:
+  # HC (hyper-connection) mixers online MXFP8, router gate stays BF16 (promoted
+  # 2026-09-27, vLLM feat/hc-mxfp8-on-b1.1 a9aa81b23). See the comment block above
+  # container: for the A/B numbers.
+  VLLM_QWEN38_HC_MXFP8: "hc"
   B12X_AUTOTUNE: "1"
   B12X_ROCE_SPIN_LIMIT: "300000000"
   CUTE_DSL_ARCH: "sm_121a"
