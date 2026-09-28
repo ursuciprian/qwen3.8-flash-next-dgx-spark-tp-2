@@ -1,0 +1,94 @@
+{
+ "tag": "evals-20260928-final",
+ "ts": "2026-09-28T10:20:33+0300",
+ "model": "jev-latest",
+ "state": {
+  "build": "b1.2 (recommended recipe), Qwen3.8-Flash-Next NVFP4 QAD checkpoint, thinking on, xhigh effort default, card sampling temp 1.0/top_p 0.95/top_k 20",
+  "completed": {
+   "devops_b1.2": "14 realistic DevOps prompts x 3 repeats at c1, max_tokens 16384, graded by real validators (terraform, kubeconform, actionlint, shellcheck+functional test, helm, hadolint, promtool) + rubric; grader validated 14/14 on references, 0/6 on broken inputs. Result: 17/42 clean runs, mean check score 42.5%. Runaway thinking (hit 16384 inside <think>, no answer) 23/42 = 55%, plus 2 truncated answers. Of the 19 runs that produced an answer: 17 clean, 94% of checks passed. Tasks 3/3 clean: k8s deployment fix, k8s OOM diagnosis, NetworkPolicy, Helm values, incident triage. Tasks 0/3 (all runaways): Terraform module, Terraform fix, GHA fix, GHA OIDC, bash script, Dockerfile. Runaways are not repetition loops: the model drafts the answer repeatedly in thinking, re-verifying against the validator the prompt names. An earlier 32k-budget pass also ran away on the first two tasks. Median wall-clock 246 s per prompt (answered runs 160 s).",
+   "mmlu_pro_b1.2": "stopped by the user at 770/2000; no score recoverable; <=3.4% of completed requests hit 32k; smoke 42 questions 88.1% +- 4.8",
+   "not_run": "GSM8K, IFEval, LiveCodeBench, all b1 comparisons (deferred by the user); Aider skipped by the user"
+  },
+  "published_full_precision": "no directly comparable published numbers: MMLU-Pro 73.23 / GSM8K 93.29 are BASE-model few-shot; LCB v6 91.9 post-trained BF16; GPQA 91.7 BF16 vs 89.9 NVFP4 QAD (vendor of the quant); IFEval and Aider not published. Earlier gates on b1.2 vs b1.1: tool-eval hardmode 90/92 (band 86-93), fidelity 20/20 at 8k-128k."
+ },
+ "questions": {
+  "equal_to_b1": {
+   "type": "choice",
+   "instructions": "Based only on this round's evidence, is b1.2 quality equal to b1?",
+   "criteria": {
+    "equal": "yes, equal",
+    "worse": "b1.2 is worse",
+    "undetermined": "cannot be determined from this round (no b1 runs); rely on the earlier gate that showed parity"
+   }
+  },
+  "vs_full_precision": {
+   "type": "choice",
+   "instructions": "Is b1.2 quality acceptable against full precision based on this round?",
+   "criteria": {
+    "acceptable": "acceptable",
+    "not_acceptable": "not acceptable",
+    "undetermined": "cannot be determined from this round (no comparable scored benchmark finished)"
+   }
+  },
+  "devops_signal": {
+   "type": "choice",
+   "instructions": "What does the DevOps result mainly show?",
+   "criteria": {
+    "answer_quality_ok_budget_problem": "answers are high quality when they arrive; the dominant failure is runaway thinking under validator-constrained prompts at xhigh effort within 16k",
+    "answer_quality_poor": "answer quality itself is poor",
+    "harness_problem": "mostly a harness/grader artefact"
+   }
+  },
+  "next_step": {
+   "type": "choice",
+   "instructions": "Most useful next step for the deferred work?",
+   "criteria": {
+    "b1_devops_and_effort": "rerun DevOps on b1 (same settings) plus b1.2 at reasoning_effort=medium / larger budget, to split build numerics from model behaviour",
+    "finish_lmeval_first": "finish MMLU-Pro/GSM8K/IFEval on both builds first (with --use_cache)",
+    "lcb_first": "LiveCodeBench on both builds first"
+   }
+  }
+ },
+ "answers": {
+  "equal_to_b1": {
+   "type": "choice",
+   "choice": "undetermined",
+   "confidence": 0.9,
+   "probabilities": {
+    "undetermined": 0.93,
+    "worse": 0.07,
+    "equal": 0.0
+   }
+  },
+  "vs_full_precision": {
+   "type": "choice",
+   "choice": "undetermined",
+   "confidence": 0.44,
+   "probabilities": {
+    "undetermined": 0.62,
+    "acceptable": 0.1,
+    "not_acceptable": 0.28
+   }
+  },
+  "devops_signal": {
+   "type": "choice",
+   "choice": "answer_quality_ok_budget_problem",
+   "confidence": 1.0,
+   "probabilities": {
+    "harness_problem": 0.0,
+    "answer_quality_poor": 0.0,
+    "answer_quality_ok_budget_problem": 1.0
+   }
+  },
+  "next_step": {
+   "type": "choice",
+   "choice": "b1_devops_and_effort",
+   "confidence": 0.42,
+   "probabilities": {
+    "b1_devops_and_effort": 0.61,
+    "lcb_first": 0.03,
+    "finish_lmeval_first": 0.36
+   }
+  }
+ }
+}

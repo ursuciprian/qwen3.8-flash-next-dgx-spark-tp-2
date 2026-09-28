@@ -7,6 +7,8 @@ each group. Ground truth for the current serving numbers is the top-level
 `results/shipped-20260923/`)
 — this file is the index, not a second source of numbers.
 
+Quality/task evals (not speed): `results/evals-20260928/` (b1.2 DevOps task set; MMLU-Pro stopped, other evals deferred).
+
 Workload key used below — every number carries one of these tags:
 
 - **[count]** `tools/tony-bench/bench_sweep.py`: "List the numbers from 1 to

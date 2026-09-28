@@ -1,0 +1,110 @@
+{
+ "tag": "evals-20260928-setup",
+ "ts": "2026-09-28T04:33:39+0300",
+ "model": "jev-latest",
+ "state": {
+  "goal": "Real quality benchmarks for Qwen3.8-Flash-Next NVFP4 (QAD checkpoint) served on 2x DGX Spark: primary build b1.2 (currently serving), comparison build b1 (older image, same checkpoint; differences are kernel/precision changes: HC mixers MXFP8, prefix-drop, deferred GDN checkpoints already in b1). User requires: Aider polyglot (225), MMLU-Pro ~2000 stratified subset unless full fits, GSM8K full 1319, IFEval full 541, LiveCodeBench recent window, DevOps set of 14 prompts. b1 is REQUIRED for MMLU-Pro subset, GSM8K, IFEval, DevOps; OPTIONAL for Aider and LCB if time is short. User wants real benchmarks, works autonomously, no hard deadline stated, results only.",
+  "measured": {
+   "aggregate_decode_tok_s": "about 215 tok/s at 9 concurrent thinking-mode requests (temp 1.0, MTP acceptance ~2.7); max_num_seqs 16; c16 maybe ~300",
+   "gsm8k_smoke": "16 q: 15/16, ~370 tokens/q, 2.3 s/q at c8 -> full set ~50 min",
+   "mmlu_pro_smoke": "42 q (3/subject): 88.1%, ~4.6 s/q at c8 steady, long tail; estimate ~1500 tokens/q -> 2000 q about 3-4 h per build, 1000 q about 1.5-2 h, full 12032 about 20 h",
+   "lcb_window": "release_v6 problems 2025-02-01..2025-04-06 = 131 (31 easy/39 medium/61 hard), matching the vendor's LCB v6 window; hard problems think 15-30k tokens; estimate ~2 h per build at c8",
+   "aider": "225 exercises, 2 tries, thinking on, diff format; estimate 2-3 h per build at 8 threads",
+   "ifeval_devops": "IFEval ~40 min; DevOps 14 prompts x 3 repeats at c1 ~50 min",
+   "switch_cost": "warm boot of either build ~1-4 min plus health/pong",
+   "estimated_totals": "b1.2 all evals ~9 h; b1 required set ~5 h with 2000 MMLU-Pro (3.5 h with 1000); b1 aider+LCB would add ~4-5 h"
+  },
+  "statistics": "MMLU-Pro accuracy ~80%: SE 0.9 pt at n=2000, 1.3 pt at n=1000; paired McNemar on identical questions tightens the build difference. Sampling temp 1.0 adds per-question noise. Quantization/kernel regressions of interest are ~1-2 pt."
+ },
+ "questions": {
+  "mmlu_subset": {
+   "type": "choice",
+   "instructions": "Which MMLU-Pro subset size should both builds use?",
+   "criteria": {
+    "n1000": "1000 stratified questions, seed fixed",
+    "n2000": "2000 stratified questions, seed fixed (user's default)",
+    "full": "full 12032 test set"
+   }
+  },
+  "aider_b1": {
+   "type": "choice",
+   "instructions": "Should the Aider polyglot run also be done on b1?",
+   "criteria": {
+    "run": "run b1 aider too (adds ~2-3 h)",
+    "skip": "skip b1 aider, report b1.2 only and say so"
+   }
+  },
+  "lcb_b1": {
+   "type": "choice",
+   "instructions": "Should LiveCodeBench also be run on b1?",
+   "criteria": {
+    "run": "run b1 LCB too (adds ~2 h)",
+    "skip": "skip b1 LCB, report b1.2 only and say so"
+   }
+  },
+  "packing": {
+   "type": "choice",
+   "instructions": "How should accuracy evals share the server?",
+   "criteria": {
+    "pack16": "run accuracy evals concurrently up to 16 in-flight (aider/devops timing noted as under load, except devops which runs alone)",
+    "serial_c8": "one eval at a time at c8 for clean timings"
+   }
+  },
+  "lcb_max_tokens": {
+   "type": "choice",
+   "instructions": "Max generation tokens for LiveCodeBench (thinking included)?",
+   "criteria": {
+    "t32k": "32768 (some hard problems may truncate)",
+    "t64k": "65536 (closer to vendor setting, slower tails)"
+   }
+  }
+ },
+ "answers": {
+  "mmlu_subset": {
+   "type": "choice",
+   "choice": "n2000",
+   "confidence": 0.87,
+   "probabilities": {
+    "full": 0.0,
+    "n1000": 0.09,
+    "n2000": 0.91
+   }
+  },
+  "aider_b1": {
+   "type": "choice",
+   "choice": "skip",
+   "confidence": 0.26,
+   "probabilities": {
+    "run": 0.37,
+    "skip": 0.63
+   }
+  },
+  "lcb_b1": {
+   "type": "choice",
+   "choice": "skip",
+   "confidence": 0.18,
+   "probabilities": {
+    "run": 0.41,
+    "skip": 0.59
+   }
+  },
+  "packing": {
+   "type": "choice",
+   "choice": "pack16",
+   "confidence": 0.27,
+   "probabilities": {
+    "pack16": 0.64,
+    "serial_c8": 0.36
+   }
+  },
+  "lcb_max_tokens": {
+   "type": "choice",
+   "choice": "t32k",
+   "confidence": 0.94,
+   "probabilities": {
+    "t32k": 0.97,
+    "t64k": 0.03
+   }
+  }
+ }
+}

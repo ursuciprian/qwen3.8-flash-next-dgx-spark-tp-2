@@ -1,0 +1,53 @@
+{
+ "tag": "evals-20260928-devops-config",
+ "ts": "2026-09-28T05:35:48+0300",
+ "model": "jev-latest",
+ "state": {
+  "context": "DevOps task set (14 realistic prompts: Terraform module/fix/plan review, k8s manifests/OOM/NetworkPolicy, GitHub Actions fix/OIDC, IAM least privilege, bash script with functional test, Helm values, Dockerfile, Prometheus rules, incident triage), graded by real validators + deterministic rubric (grader verified: reference answers 14/14 clean, broken inputs 0/6). Runs on b1.2 only today (user narrowed scope); GPU pair must then be released to a waiting kernel agent, so wall time matters.",
+  "finding": "Validation pass: 2 of 2 tasks tried (Terraform module, Terraform fix) ran away: 32768 reasoning tokens, </think> never emitted, no answer. Not repetition loops; over-deliberation hand-verifying terraform fmt alignment. Model default reasoning_effort is xhigh (template injects 'Reasoning effort is set to xhigh'); supported levels xhigh, medium, low. No server-side thinking-token budget without changing the shipped server flags.",
+  "coordinator_instruction": "Cap thinking sensibly (e.g. max_tokens 16k or the model's thinking-budget option); report runaway-thinking count and % as a separate metric.",
+  "timing": "c1 decode ~60-90 tok/s alone; a 16k-capped runaway costs ~3-4 min; 14 tasks x 3 repeats at c1 ~1.5-2 h with xhigh; medium effort roughly halves thinking."
+ },
+ "questions": {
+  "config": {
+   "type": "choice",
+   "instructions": "Which DevOps generation config should be the reported run?",
+   "criteria": {
+    "xhigh_16k": "model default effort (xhigh) with max_tokens 16384; runaways counted as failures and reported",
+    "medium_16k": "reasoning_effort=medium with max_tokens 16384 (deviates from the model default)",
+    "both_16k": "run both xhigh and medium at 16k and report both (about double the time)"
+   }
+  },
+  "repeats": {
+   "type": "choice",
+   "instructions": "How many repeats per prompt?",
+   "criteria": {
+    "r1": "1 repeat (fastest, noisy)",
+    "r2": "2 repeats",
+    "r3": "3 repeats (planned)"
+   }
+  }
+ },
+ "answers": {
+  "config": {
+   "type": "choice",
+   "choice": "xhigh_16k",
+   "confidence": 0.79,
+   "probabilities": {
+    "xhigh_16k": 0.85,
+    "medium_16k": 0.14,
+    "both_16k": 0.01
+   }
+  },
+  "repeats": {
+   "type": "choice",
+   "choice": "r3",
+   "confidence": 0.99,
+   "probabilities": {
+    "r3": 1.0,
+    "r1": 0.0,
+    "r2": 0.0
+   }
+  }
+ }
+}
