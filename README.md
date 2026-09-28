@@ -144,6 +144,14 @@ change is already captured by the paired probe above).
 Gate run on the A/B boots of the same build (`scripts/gate_arm.sh`); the published image adds only the plan-seed layer.
 Verdict: `arm_verdict.py` v2 + Jev, **ship** (confidence 0.97); [`jev/verdicts-candidate/b12-hcq.json`](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2).
 
+**Task evals (2026-09-28, this build, thinking on, card sampling):** a DevOps set of 14 prompts x 3 (Terraform, Kubernetes,
+GitHub Actions, IAM, bash, Helm, Dockerfile, Prometheus, incident triage), graded by terraform/kubeconform/actionlint/
+shellcheck/helm/hadolint/promtool plus rubric checks: **17/42 runs clean, mean check score 42.5%**. The main failure is
+**runaway thinking**: 23/42 runs (55%) spent the whole 16k-token budget thinking and never answered, mostly on prompts that
+say "must pass <validator>". When the model did answer, 17 of 19 runs were clean. MMLU-Pro (2000 subset) was stopped at 770/2000
+with no score; GSM8K, IFEval, LiveCodeBench and the comparison with the previous build are still to run. Details:
+[results/evals-20260928/](results/evals-20260928/README.md).
+
 ## Configuration
 
 Recipe: [`qwen3.8-flash-next-2x-dgx-spark.yaml`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml).

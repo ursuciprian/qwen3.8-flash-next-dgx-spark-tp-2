@@ -1,0 +1,32 @@
+{
+ "tag": "evals-20260928-devops-overlap",
+ "ts": "2026-09-28T06:12:37+0300",
+ "model": "jev-latest",
+ "state": {
+  "user_order": "1) let the running MMLU-Pro 2000 on b1.2 finish (never stop mid-run); 2) THEN run the DevOps set on b1.2 with the thinking cap and runaway metric; 3) THEN write DONE so a waiting kernel agent gets the GPU pair.",
+  "now": "MMLU-Pro at 462/2000 after ~1h40 (first hour shared with other clients); alone at c8 it runs ~220 tok/s aggregate at ~4000 generated tokens/question (lm-eval sends longest prompts first), ETA ~7.5 h. No resume support, cannot change its concurrency without losing progress.",
+  "devops": "14 prompts x 3 repeats at c1, 16k cap, ~1.5 h alone. One of its reported metrics is end-to-end wall-clock per prompt including thinking; running it next to MMLU's 8 streams would inflate those times ~2-3x and slow MMLU slightly. max_num_seqs 16 so both fit without queueing.",
+  "tradeoff": "overlap saves ~1.5 h of GPU-pair time for the kernel agent, at the cost of DevOps timing validity and deviating from the user's stated order"
+ },
+ "questions": {
+  "overlap": {
+   "type": "choice",
+   "instructions": "Should the DevOps set run now, concurrently with MMLU-Pro, or after MMLU-Pro as the user ordered?",
+   "criteria": {
+    "after": "after MMLU-Pro completes, alone (user's order, clean timings)",
+    "now": "now, concurrently (saves ~1.5 h, timings under load)"
+   }
+  }
+ },
+ "answers": {
+  "overlap": {
+   "type": "choice",
+   "choice": "after",
+   "confidence": 0.76,
+   "probabilities": {
+    "after": 0.88,
+    "now": 0.12
+   }
+  }
+ }
+}

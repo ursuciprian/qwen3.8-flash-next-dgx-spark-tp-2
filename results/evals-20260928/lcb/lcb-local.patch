@@ -1,0 +1,54 @@
+diff --git a/lcb_runner/lm_styles.py b/lcb_runner/lm_styles.py
+index d10b211..bf4ce19 100644
+--- a/lcb_runner/lm_styles.py
++++ b/lcb_runner/lm_styles.py
+@@ -861,6 +861,13 @@ LanguageModelList: list[LanguageModel] = [
+         datetime(2024, 4, 1),
+         "https://huggingface.co/agentica-org/DeepCoder-14B-Preview",
+     ),
++    LanguageModel(
++        "qwen3.8-flash-next",
++        "Qwen3.8-Flash-Next-NVFP4-local",
++        LMStyle.OpenAIChat,
++        datetime(2026, 9, 1),
++        "https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4",
++    ),
+ ]
+ 
+ LanguageModelStore: dict[str, LanguageModel] = {
+diff --git a/lcb_runner/runner/oai_runner.py b/lcb_runner/runner/oai_runner.py
+index 59e2074..1d6e380 100644
+--- a/lcb_runner/runner/oai_runner.py
++++ b/lcb_runner/runner/oai_runner.py
+@@ -42,6 +42,8 @@ class OpenAIRunner(BaseRunner):
+                 "presence_penalty": 0,
+                 "n": args.n,
+                 "timeout": args.openai_timeout,
++                # local eval patch: Qwen thinking-mode recommended sampling
++                "extra_body": {"top_k": int(os.getenv("LCB_TOP_K", "20")), "min_p": 0.0},
+                 # "stop": args.stop, --> stop is only used for base models currently
+             }
+ 
+diff --git a/lcb_runner/runner/parser.py b/lcb_runner/runner/parser.py
+index a047fc0..271b054 100644
+--- a/lcb_runner/runner/parser.py
++++ b/lcb_runner/runner/parser.py
+@@ -1,5 +1,8 @@
+ import os
+-import torch
++try:
++    import torch
++except ImportError:  # local eval patch: API-only runs
++    torch = None
+ import argparse
+ 
+ from lcb_runner.utils.scenarios import Scenario
+@@ -137,7 +140,7 @@ def get_args():
+     args.stop = args.stop.split(",")
+ 
+     if args.tensor_parallel_size == -1:
+-        args.tensor_parallel_size = torch.cuda.device_count()
++        args.tensor_parallel_size = torch.cuda.device_count() if torch else 1
+ 
+     if args.multiprocess == -1:
+         args.multiprocess = os.cpu_count()
