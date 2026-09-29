@@ -59,13 +59,25 @@ reading speed is about 5-8 tokens per second. Numbers below are for coding reque
 
 | People using it at once | Short conversation | Long conversation (~12,000 words already in the chat) |
 |---|---|---|
-| 1 | 54 tokens/s | 55 tokens/s |
-| 4 | 37 tokens/s each (135 in total) | 33 each (104 in total) |
-| 16 | 19 tokens/s each (241 in total) | 14 each (139 in total) |
+| 1 | **62 tokens/s** | **63 tokens/s** |
+| 4 | 39 tokens/s each (147 in total) | 36 each (114 in total) |
+| 16 | 19 tokens/s each (**241 in total**) | 16 each (179 in total) |
 
-**Time until the answer starts:** under 1 second for a short conversation, about 2.6 seconds for a long one when you are
-the only user. With 16 people at once, about 6 seconds (short) and 22 seconds (long), because each new request waits for
+That is about 8-10 times reading speed for one person, and still 2-3 times reading speed for each of 16 people at once.
+
+**Time until the answer starts:** about 0.7 seconds for a short conversation and 1.7 seconds for a long one when you are
+the only user. With 16 people at once, about 6 seconds (short) and 14 seconds (long), because each new request waits for
 the others' prompts to be read. Exact tables: [Benchmark results](#benchmark-results).
+
+**How far it has come:** since the 2026-09-25 build, one person gets about 15% more tokens per
+second, the long-conversation start time went from 2.6 to 1.7 seconds, and 16 people on long conversations get 29% more
+total throughput (139 to 179 tokens/s), all with the same model files and the same quality checks passing.
+
+**Against a copy-heavy benchmark from another GB10 recipe:** running the unmodified `bench_copy_streams.py` from
+[dime-online/qwen3.8-Flash-DGX-UltraFast](https://github.com/dime-online/qwen3.8-Flash-DGX-UltraFast) on this stack gives
+112 tokens/s for one stream and 426 in total for 8 streams (their published single-Spark numbers: 74 and 212). That
+compares two Sparks with one, and the workload is the easiest case for speculative decoding, so treat it as a ceiling,
+not as coding speed.
 
 ## Which recipe
 

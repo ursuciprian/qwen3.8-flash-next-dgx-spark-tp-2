@@ -1,0 +1,13 @@
+title: Qwen3.8-Flash-Next on 2x DGX Spark
+description: NVFP4 serving recipe for two NVIDIA DGX Spark systems (TP=2, MTP, b12x kernels)
+theme: jekyll-theme-primer
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+include:
+  - README.md
+# Eval prompts and references quote GitHub Actions/Helm templates ({{ ... }}), which Liquid would try to render.
+exclude:
+  - results/evals-20260928/devops
