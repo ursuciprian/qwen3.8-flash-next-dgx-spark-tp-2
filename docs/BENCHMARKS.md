@@ -1,8 +1,46 @@
 # Benchmarks: full tables
 
+## b1.2 image (2026-09-27)
+
+Recommended from 2026-09-27 to 2026-09-29, now the `-previous` fallback; superseded by b1.3 (README).
+
+Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`
+(`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb`), checkpoint revision `7c4f1bc1`.
+A/B against the previous build (2026-09-26) on 2026-09-27, two separate boots per build, means of both boots.
+Raw files and verdict: [`../results/b1.2-20260927/`](../results/b1.2-20260927/). The 2026-09-26 build's tables are in
+this file.
+
+**Coding**: [llama-benchy fork](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task` (agent coding turn,
+2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 / top-p 0.95 / top-k 20, prefix caching, 3 runs per boot).
+Total tok/s; `*` = beyond run-to-run noise.
+
+| depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| 0 | 61.8 * | 96.3 * | 142.2 * | 151.7 | 187.4 | 198.2 | 239.5 |
+| 0, previous | 53.4 | 87.5 | 135.6 | 147.3 | 183.1 | 195.0 | 242.2 |
+| 16k | 57.6 * | 87.2 * | 114.1 * | 127.4 | 142.9 | 152.9 | 173.3 |
+| 16k, previous | 55.0 | 82.6 | 109.8 | 120.2 | 141.4 | 151.5 | 175.9 |
+
+Depth 0: c1 +15.7%, c2 +9.9%, c4 +4.9% beyond noise; c5-c16 within noise (no cell worse).
+16k: c1 +4.9%, c2 +5.6%, c4 +3.9% beyond noise; c5-c16 within noise (no cell worse).
+Paired temperature-0 decode-step probe (same prompt, pooled 2 boots): step time -9.9% at c1 (fresh), -10.0% at c1 (16k),
+-7.6/-7.4% at c2, -4.4/-5.7% at c4, -2..-5% at c8/c16 (every CI excludes 0); MTP acceptance per position unchanged.
+The gain is from online MXFP8 on the hyper-connection mixers (router gate stays BF16): half the bytes read per mixer per step.
+
+**Counting** (`tools/tony-bench/bench_sweep.py`: "list the numbers from 1 to 300", temperature 0, thinking off, 300 tokens).
+Nearly every draft token is accepted, so this is the stack's upper bound, not coding speed. Aggregate tok/s:
+
+| | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| current | 111.9 | 199.9 | 329.1 | 386.1 | 503.3 | 572.9 | 751.5 |
+| previous | 100.7 | 176.4 | 305.9 | 349.7 | 487.3 | 533.5 | 737.4 |
+
+c1 +11.1%, c2 +13.3%, c5 +10.4%, c8 +3.3%, c10 +7.4% beyond noise; c4 +7.6% and c16 +1.9% within noise (no cell worse).
+c1 is the median of 5 single runs per boot (c1 is bimodal on this pair).
+
 ## b1.1 image (2026-09-26)
 
-Recommended from 2026-09-26 to 2026-09-27, now the `-previous` fallback; superseded by b1.2 (README).
+Recommended from 2026-09-26 to 2026-09-27, then the `-previous` fallback until 2026-09-29 (archived).
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.1-20260926-b7fbaf96-6d232f16-warm`
 (`sha256:91a60ebce422db8a80f58ce998a3e9bd847814c8579ac33fa4df99e62351b3a8`), checkpoint revision `7c4f1bc1`.
