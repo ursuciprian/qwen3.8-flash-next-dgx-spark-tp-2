@@ -73,12 +73,6 @@ the others' prompts to be read. Exact tables: [Benchmark results](#benchmark-res
 second, the long-conversation start time went from 2.6 to 1.7 seconds, and 16 people on long conversations get 29% more
 total throughput (139 to 179 tokens/s), all with the same model files and the same quality checks passing.
 
-**Against a copy-heavy benchmark from another GB10 recipe:** running the unmodified `bench_copy_streams.py` from
-[dime-online/qwen3.8-Flash-DGX-UltraFast](https://github.com/dime-online/qwen3.8-Flash-DGX-UltraFast) on this stack gives
-112 tokens/s for one stream and 426 in total for 8 streams (their published single-Spark numbers: 74 and 212). That
-compares two Sparks with one, and the workload is the easiest case for speculative decoding, so treat it as a ceiling,
-not as coding speed.
-
 ## Which recipe
 
 | Recipe | Pick it when |
