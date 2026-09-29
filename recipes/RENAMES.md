@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-09-29: b1.3 promoted (names unchanged)
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | b1.3 image (b1.2 + GDN uniform-decode metadata skip) (recommended) |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | the b1.2 recipe that was recommended on 2026-09-27 |
+| (was `-previous`, b1.1 image) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.1-20260926.yaml` (not listed; run by path) |
+
 ## 2026-09-27: b1.2 promoted (names unchanged)
 
 | name | content now |

@@ -71,8 +71,8 @@ the others' prompts to be read. Exact tables: [Benchmark results](#benchmark-res
 
 | Recipe | Pick it when |
 |---|---|
-| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | **Always, by default.** The current build (2026-09-27). |
-| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | Only if the recommended one misbehaves for you. The previous build (2026-09-26): same model and settings, slightly slower decode (no MXFP8 on the hyper-connection mixers). |
+| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | **Always, by default.** The current build (2026-09-29). |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | Only if the recommended one misbehaves for you. The previous build (2026-09-27): same model and settings, slightly slower decode (no GDN metadata skip). |
 
 Renamed on 2026-09-25: `qwen3.8-flash-next-nvfp4-tp2` is now `qwen3.8-flash-next-2x-dgx-spark` ([all renames](recipes/RENAMES.md)).
 
@@ -95,10 +95,10 @@ Everything below is for experienced users. Terms used: **concurrency (c)** = req
 **depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
 model drafts up to 4 next tokens that are checked in one step, which is what makes single-user speed high.
 
-Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`
-(`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb`), checkpoint revision `7c4f1bc1`.
-A/B against the previous build (2026-09-26) on 2026-09-27, two separate boots per build, means of both boots.
-Raw files and verdict: [`results/b1.2-20260927/`](results/b1.2-20260927/). The 2026-09-26 build's tables are in
+Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.3-20260929-b7fbaf96-7344a997-warm`
+(`sha256:32cb8bd8800e413726b4cfe3d9947f80d4eb01d92dbe12405e3c763db7306a02`), checkpoint revision `7c4f1bc1`.
+A/B against the previous build (2026-09-27) on 2026-09-29, two separate boots per build, means of both boots.
+Raw files and verdict: [`results/b1.3-20260929/`](results/b1.3-20260929/). The 2026-09-27 build's tables are in
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 **Coding**: [llama-benchy fork](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task` (agent coding turn,
@@ -107,27 +107,27 @@ Total tok/s; `*` = beyond run-to-run noise.
 
 | depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
 |---|---|---|---|---|---|---|---|
-| 0 | 61.8 * | 96.3 * | 142.2 * | 151.7 | 187.4 | 198.2 | 239.5 |
-| 0, previous | 53.4 | 87.5 | 135.6 | 147.3 | 183.1 | 195.0 | 242.2 |
-| 16k | 57.6 * | 87.2 * | 114.1 * | 127.4 | 142.9 | 152.9 | 173.3 |
-| 16k, previous | 55.0 | 82.6 | 109.8 | 120.2 | 141.4 | 151.5 | 175.9 |
+| 0 | 62.2 | 101.8 * | 147.3 | 144.7 * | 188.0 | 197.0 | 241.1 |
+| 0, previous | 58.2 | 97.8 | 142.8 | 151.9 | 187.5 | 196.0 | 240.2 |
+| 16k | 63.5 * | 85.7 | 113.8 | 123.7 | 143.3 | 153.4 | 178.5 |
+| 16k, previous | 60.4 | 85.8 | 111.8 | 122.2 | 146.4 | 152.6 | 176.1 |
 
-Depth 0: c1 +15.7%, c2 +9.9%, c4 +4.9% beyond noise; c5-c16 within noise (no cell worse).
-16k: c1 +4.9%, c2 +5.6%, c4 +3.9% beyond noise; c5-c16 within noise (no cell worse).
-Paired temperature-0 decode-step probe (same prompt, pooled 2 boots): step time -9.9% at c1 (fresh), -10.0% at c1 (16k),
--7.6/-7.4% at c2, -4.4/-5.7% at c4, -2..-5% at c8/c16 (every CI excludes 0); MTP acceptance per position unchanged.
-The gain is from online MXFP8 on the hyper-connection mixers (router gate stays BF16): half the bytes read per mixer per step.
+Depth 0: c1 +6.9%, c2 +4.0%, c4 +3.1%, c5 -4.7%, c8 +0.2%, c10 +0.5%, c16 +0.4%. 16k: c1 +5.3%, c2 -0.2%, c4 +1.7%, c5 +1.2%, c8 -2.1%, c10 +0.6%, c16 +1.4%.
+Beyond noise: d0 c2 and 16k c1 up; d0 c5 down 4.7% (the same change measured +4.7% beyond noise at d0 c5 in its first
+A/B on 2026-09-28, so this cell is run-to-run spread of the temperature-1.0 grid at c5). Everything else within noise.
+Paired temperature-0 decode-step probe (same prompt, pooled 2 boots): step time -3.1% counting / -1.9% fresh / -2.7% 16k
+at c1, -3.0/-2.5% at c2, -2.4% counting c4, -1.4..-2.8% at c8/c16; MTP acceptance per position unchanged.
+The gain is from skipping 35 per-group GDN metadata refreshes (~350 small launches) on every uniform decode step.
 
 **Counting** (`tools/tony-bench/bench_sweep.py`: "list the numbers from 1 to 300", temperature 0, thinking off, 300 tokens).
 Nearly every draft token is accepted, so this is the stack's upper bound, not coding speed. Aggregate tok/s:
 
 | | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
 |---|---|---|---|---|---|---|---|
-| current | 111.9 | 199.9 | 329.1 | 386.1 | 503.3 | 572.9 | 751.5 |
-| previous | 100.7 | 176.4 | 305.9 | 349.7 | 487.3 | 533.5 | 737.4 |
+| current | 114.0 | 194.7 | 325.9 | 374.0 | 525.4 * | 570.0 | 754.4 |
+| previous | 109.7 | 198.8 | 295.3 | 392.4 | 499.1 | 574.0 | 751.2 |
 
-c1 +11.1%, c2 +13.3%, c5 +10.4%, c8 +3.3%, c10 +7.4% beyond noise; c4 +7.6% and c16 +1.9% within noise (no cell worse).
-c1 is the median of 5 single runs per boot (c1 is bimodal on this pair).
+c1 +4.0%, c2 -2.1%, c4 +10.3%, c5 -4.7%, c8 +5.3%, c10 -0.7%, c16 +0.4%; `*` = beyond noise. c1 is the median of 5 single runs per boot (c1 is bimodal on this pair).
 
 **Single request by workload** (`scripts/decode_probe.py` after the cold-boot test, temperature 0, 512 tokens, 5 runs, mean tok/s):
 code 56.5, structured 81.6, counting 102.5, prose 48.2 on the 2026-09-25 build; not re-run for this build (decode step time
@@ -137,14 +137,14 @@ change is already captured by the paired probe above).
 
 | Check | Result |
 |---|---|
-| tool-eval-bench `--hardmode` (88 tool-use scenarios, thinking on, temperature 0) | 90 and 92/100 on the two A/B boots (previous build: 91-89; run-to-run band 86-93). TC-45 (`tool_choice=required`) 5/5 |
+| tool-eval-bench `--hardmode` (88 tool-use scenarios, thinking on, temperature 0) | 88 and 90/100 on the two A/B boots (91 and 92 in the 2026-09-28 A/B of the same change; previous build 90-92; run-to-run band 86-93). TC-45 (`tool_choice=required`) 5/5 |
 | Long-context recall (`scripts/fidelity_probe.py`, 20 tool-call retrievals per depth) | 20/20 exact at 8k, 32k, 64k and 128k; 128k also on two more seeds (11, 13): 20/20 each |
 | Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none |
 
 Gate run on the A/B boots of the same build (`scripts/gate_arm.sh`); the published image adds only the plan-seed layer.
-Verdict: `arm_verdict.py` v2 + Jev, **ship** (confidence 0.97); [`jev/verdicts-candidate/b12-hcq.json`](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2).
+Verdict: `arm_verdict.py` v2 + Jev, **ship with caveat** (confidence 1.00; the caveat is the d0 c5 coding cell); the same change as a mod on the previous image: ship 0.99 (2026-09-28). Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dlogprob| 0.031-0.035, within the 0.037-0.042 self-noise. Files: [`results/b1.3-20260929/`](results/b1.3-20260929/).
 
-**Task evals (2026-09-28, this build, thinking on, card sampling):** a DevOps set of 14 prompts x 3 (Terraform, Kubernetes,
+**Task evals (2026-09-28, previous build b1.2, thinking on, card sampling):** a DevOps set of 14 prompts x 3 (Terraform, Kubernetes,
 GitHub Actions, IAM, bash, Helm, Dockerfile, Prometheus, incident triage), graded by terraform/kubeconform/actionlint/
 shellcheck/helm/hadolint/promtool plus rubric checks: **17/42 runs clean, mean check score 42.5%**. The main failure is
 **runaway thinking**: 23/42 runs (55%) spent the whole 16k-token budget thinking and never answered, mostly on prompts that
@@ -195,23 +195,26 @@ sparkrun's runtime cache when it is missing, so even a first boot does no kernel
 
 ## What is in the image
 
-`ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`, digest
-`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb` (arm64, public). The recipe keeps the tag, not the
+`ghcr.io/ursuciprian/spark-vllm-b12x:b1.3-20260929-b7fbaf96-7344a997-warm`, digest
+`sha256:32cb8bd8800e413726b4cfe3d9947f80d4eb01d92dbe12405e3c763db7306a02` (arm64, public). The recipe keeps the tag, not the
 digest, because sparkrun 0.3.6 copies the image to the worker with `docker save | docker load`, which drops digests.
 
 | Part | Source |
 |---|---|
 | Dockerfile | [eugr/spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) `798528a2`, built by [spark-vllm-b12x](https://github.com/ursuciprian/spark-vllm-b12x) `build.sh` |
-| vLLM | [`ursuciprian/vllm` tag `shipped-b1.2-20260927`](https://github.com/ursuciprian/vllm/tree/shipped-b1.2-20260927) (`a9aa81b23`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
-| b12x kernels | [`ursuciprian/b12x` tag `shipped-b1-20260925`](https://github.com/ursuciprian/b12x/tree/shipped-b1-20260925) (`b7fbaf96`, unchanged), on local-inference-lab `a8333658` |
-| Warm layer | [`docker/b0-warm/`](docker/b0-warm/Dockerfile): b12x plan seed; pushed by the `build-b0-warm` workflow (run 36318273332) |
+| vLLM | [`ursuciprian/vllm` tag `shipped-b1.3-20260929`](https://github.com/ursuciprian/vllm/tree/shipped-b1.3-20260929) (`7344a9976`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
+| b12x kernels | [`ursuciprian/b12x` tag `shipped-b1.3-20260929`](https://github.com/ursuciprian/b12x/tree/shipped-b1.3-20260929) (`b7fbaf96`, unchanged since 2026-09-25), on local-inference-lab `a8333658` |
+| Warm layer | [`docker/b0-warm/`](docker/b0-warm/Dockerfile): b12x plan seed; pushed by the `build-b0-warm` workflow (run 36610035975) |
 
-Changes against the previous build (`b1.1-20260926-b7fbaf96-6d232f16-warm`), all in vLLM:
+Changes against the previous build (`b1.2-20260927-b7fbaf96-a9aa81b2-warm`), all in vLLM:
 
-- **HC (hyper-connection) mixers in online MXFP8** (`VLLM_QWEN38_HC_MXFP8=hc`). The router gate stays BF16. Halves the
-  bytes read per mixer per decode step (a step-time profile found the BF16 HC mixers were 13-19% of the c1/c4 step).
+- **GDN uniform-decode metadata skip** (`VLLM_GDN_UNIFORM_DECODE_META_SKIP=1`). Qwen3.8 runs its 36 GDN layers in 36
+  KV-cache groups; 35 of them re-staged the b12x mixed-batch worklists, state indices and prefill live counts every
+  step (~350 small eager launches) that a uniform speculative-decode step never reads.
+- A workspace-size fix for the online-MXFP8 linear wrapper on side streams (no effect on this recipe's settings).
 
-Earlier changes (2026-09-26 build): exact prefix-cache hits with MTP (`VLLM_PREFIX_DROP_EXACT`), the Mamba/GDN
+Earlier changes (2026-09-27 build): HC (hyper-connection) mixers in online MXFP8 (`VLLM_QWEN38_HC_MXFP8=hc`).
+Earlier (2026-09-26 build): exact prefix-cache hits with MTP (`VLLM_PREFIX_DROP_EXACT`), the Mamba/GDN
 `NULL_BLOCK_ID` padding fix (vllm#887), and the compile-worker cap. Earlier still (2026-09-25 build): deferred GDN
 checkpoints and the TC-45 `tool_choice=required` fix.
 

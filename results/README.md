@@ -2,8 +2,8 @@
 
 Every measurement, arm and verdict in this repo, newest ideas first within
 each group. Ground truth for the current serving numbers is the top-level
-`README.md` ("Benchmark results"), backed by `results/b1.2-20260927/`
-(b1.1: `results/b1.1-20260926/`; b1: `results/b1-20260925/`; b0, 2026-09-23:
+`README.md` ("Benchmark results"), backed by `results/b1.3-20260929/`
+(b1.2: `results/b1.2-20260927/`; b1.1: `results/b1.1-20260926/`; b1: `results/b1-20260925/`; b0, 2026-09-23:
 `results/shipped-20260923/`)
 — this file is the index, not a second source of numbers.
 
@@ -25,11 +25,12 @@ Workload key used below — every number carries one of these tags:
 doc for that entry; most arms also have raw JSON/logs alongside it that
 aren't summarized here.
 
-## Current default recipe: b1.2 (b1.1 + HC mixers MXFP8, router gate BF16)
+## Current default recipe: b1.3 (b1.2 + GDN uniform-decode metadata skip)
 
 | date | recipe / arm | key numbers | verdict | file |
 |---|---|---|---|---|
-| 2026-09-27 | b1.2 (`hcq`) vs b1.1, 2 boots each | [task] temp 1.0 d0: c1 61.8 (b1.1 53.4), c2 96.3 (87.5), c4 142.2 (135.6); 16k c1 57.6 (55.0), c2 87.2 (82.6), c4 114.1 (109.8); [count] c1 111.9 (100.7), c2 199.9 (176.4), c5 386.1 (349.7); paired step time -9.9% c1 fresh / -10.0% c1 16k / -7.6..-4.4% c2-c4; hardmode 90/92, fidelity 20/20 x4, TC-45 5/5, no stragglers | **promoted, now default** (Jev ship 0.97) | `results/b1.2-20260927/` |
+| 2026-09-29 | b1.3 (`b13`, gdnmeta baked) vs b1.2, 2 boots each, same day | [task] temp 1.0 d0: c1 62.2 (b1.2 58.2), c2 101.8 (97.8), c5 144.7 (151.9, caveat); 16k c1 63.5 (60.4); [count] c1 114.0 (109.7), c8 525.4 (499.1); paired step time c1 -1.9..-3.1%, c2 -2.5..-3.0%; hardmode 88/90, fidelity 20/20 x4 + 128k seeds 11/13, TC-45 5/5, no stragglers; logits within self-noise | **promoted, now default** (Jev ship_with_caveat 1.00; mod A/B 2026-09-28 ship 0.99) | `results/b1.3-20260929/` |
+| 2026-09-27 | b1.2 (`hcq`) vs b1.1, 2 boots each | [task] temp 1.0 d0: c1 61.8 (b1.1 53.4), c2 96.3 (87.5), c4 142.2 (135.6); 16k c1 57.6 (55.0), c2 87.2 (82.6), c4 114.1 (109.8); [count] c1 111.9 (100.7), c2 199.9 (176.4), c5 386.1 (349.7); paired step time -9.9% c1 fresh / -10.0% c1 16k / -7.6..-4.4% c2-c4; hardmode 90/92, fidelity 20/20 x4, TC-45 5/5, no stragglers | **promoted** (Jev ship 0.97) | `results/b1.2-20260927/` |
 | 2026-09-26 | b1.1 (`b11pdrun`, prefix-drop) vs b1, 2 boots each | [task] temp 1.0 16k: c1 56.1 (b1 52.7), c4 108.8 (101.0), c8 139.5 (119.6), c16 176.5 (139.4); cached-prefix TTFT 16k -37%, 64k -34%; hardmode 91/89, fidelity 20/20 x4 + 128k seeds 11/13, TC-45 5/5, no stragglers | **promoted** (Jev ship 0.96) | `results/b1.1-20260926/` |
 | 2026-09-25 | b1 (`oldb12x-on`) vs b0, 2 boots each | [task] temp 1.0 d0: c1 54.1 (b0 53.2), c8 186.6 (166.8), c16 241.1 (218.6); 16k c2 81.6 (72.3), c16 138.8 (130.9); [count] c1 101.0 (100.9), c16 720.4 (643.0); hardmode 89/89, fidelity 20/20 x4, no stragglers | **promoted, now default** (Jev ship 0.99) | `results/b1-20260925/` |
 | 2026-09-23 | shipped warm image, both ranks on `7c4f1bc1` | [task] temp 1.0: c1 59.2, c16 224.1, 64k c1 56.8, 64k c16 110.5; [prose]: c1 51.0, c16 126.1, 64k c16 39.0; [count]: c1 100.2 (100.3-102.1 x5), c8 456.1, c16 634.9 | **shipped**; supersedes every (hybrid) number below | `results/shipped-20260923/` |
