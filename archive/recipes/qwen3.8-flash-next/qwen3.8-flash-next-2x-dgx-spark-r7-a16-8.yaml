@@ -33,8 +33,8 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
 # Previous recommended (b1.2 image, 2026-09-27): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
-# r7 screening image: build.sh VLLM_REF=exp/r7-screen (fef484ad) B12X_REF=exp/r7-a16 (ecf2e2a7).
-container: spark-vllm-b12x:r7-ecf2e2a7-fef484ad
+# r7 screening image: build.sh VLLM_REF=exp/r7-screen (fef484ad) B12X_REF=exp/r7-a16 (3d5040e8; r7 pass-1 off/d98/d128 ran on ecf2e2a7).
+container: spark-vllm-b12x:r7-3d5040e8-fef484ad
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's

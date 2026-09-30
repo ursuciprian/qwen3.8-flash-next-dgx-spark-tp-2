@@ -5,6 +5,9 @@
 #   WAIT_FOR_STATE_FILE also waits for the owning run.sh (WAIT_FOR_DIR cwd) to exit, so a
 #   transient FAILED-* written before that script's EXIT restore does not start us early.
 #   screen:<arm>:<pass>[:<temp>] sets the probe temperature (default 0).
+#   Boot failure keeps the full serve log of both ranks; a failed non-control arm is dropped,
+#   only an r7-off boot failure stops the driver. WAIT_FOR_STATE_FILES (space separated)
+#   waits for every listed STATE file.
 #   gpu:<name>       server down; run $GPU_<name> in the b1.2 image with ~/GEN-AI/r5/b12x mounted as /src (PYTHONPATH)
 #   build:<name>     build.sh image from VLLM_REF_<name>/B12X_REF_<name>, tag spark-vllm-b12x:<TAG_<name>> on both nodes
 # STAGES (space separated), each optional:
@@ -75,7 +78,9 @@ boot() { # recipe_rel; fails fast when the engine dies during startup
     n=$(n0)
     if [ $(( $(date +%s)-s )) -gt 120 ] && { [ -z "$n" ] || docker exec "$n" grep -qE "Worker failed with error|EngineCore failed to start|Engine core initialization failed" /tmp/sparkrun_serve.log 2>/dev/null; }; then
       [ -n "$n" ] && docker exec "$n" sh -c "grep -m5 -E 'Error|error' /tmp/sparkrun_serve.log" >> "$LOG" 2>&1
-      [ -n "$n" ] && docker exec "$n" sh -c "tail -200 /tmp/sparkrun_serve.log" > "$RESULTS/bootfail-$(date +%s).log" 2>&1
+      local t=$(date +%s) w; w=$(ssh $WORKER_IP "docker ps -a --format '{{.Names}}'" | grep node_1 | head -1)
+      [ -n "$n" ] && docker exec "$n" cat /tmp/sparkrun_serve.log > "$RESULTS/bootfail-$t-node0.log" 2>&1
+      [ -n "$w" ] && ssh $WORKER_IP "docker exec $w cat /tmp/sparkrun_serve.log" > "$RESULTS/bootfail-$t-node1.log" 2>&1
       log "boot FAILED (engine died) after $(( $(date +%s)-s ))s: $1"; return 1; fi
     [ $(( $(date +%s)-s )) -ge 5400 ] && { log "health timeout"; return 1; }; sleep 15; done; }
 warm() { local i; for i in 1 2 3; do curl -s -m 600 localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
@@ -258,6 +263,13 @@ if [ -n "${WAIT_FOR_STATE_FILE:-}" ]; then
   until grep -qE '^(DONE|FAILED)' "$WAIT_FOR_STATE_FILE" 2>/dev/null && ! owner_alive; do sleep 60; done
   log "wait over: $(cat "$WAIT_FOR_STATE_FILE")"
 fi
+states_done() { local f; for f in ${WAIT_FOR_STATE_FILES:-}; do grep -qE '^(DONE|FAILED)' "$f" 2>/dev/null || return 1; done; }
+if [ -n "${WAIT_FOR_STATE_FILES:-}" ]; then
+  # settle 5 min: a FAILED-* can be written before its script's EXIT restore runs
+  until states_done; do sleep 60; done; sleep 300
+  until states_done; do sleep 60; done
+  for f in $WAIT_FOR_STATE_FILES; do log "wait over: $f = $(cat "$f")"; done
+fi
 SKIP=" "
 for st in $STAGES; do
   IFS=: read -r kind a b c <<< "$st"
@@ -269,7 +281,10 @@ for st in $STAGES; do
     gpu) stage_gpu "$a" ;;
     build) stage_build "$a" || { log "build failed: stopping"; break; } ;;
     screen) case $SKIP in *" $a "*) log "skip $st (canary)"; continue ;; esac
-            stage_screen "$a" "$b" "$c"; [ -f "$RESULTS/screen/$a-p$b/FAILED" ] && { log "screen $a boot failed: stopping"; break; }
+            stage_screen "$a" "$b" "$c"
+            if [ -f "$RESULTS/screen/$a-p$b/FAILED" ]; then
+              [ "$a" = r7-off ] && { log "screen $a boot failed: stopping"; break; }
+              log "screen $a boot failed: dropping $a"; SKIP="$SKIP$a "; continue; fi
             if [[ $a == r7-dvocab* ]] && [ "$b" = 1 ] && ! canary "$a"; then
               log "CANARY: $a acceptance collapsed vs r7-off p1: dropping $a"; echo "$a" >> "$RESULTS/CANARY_FAILED"; SKIP="$SKIP$a "; fi ;;
     *) log "unknown stage $st" ;;
