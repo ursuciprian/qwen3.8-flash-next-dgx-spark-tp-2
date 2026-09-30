@@ -23,7 +23,7 @@ grep -L "container: spark-vllm-b12x:$TAG" $AD/qwen3.8-flash-next-2x-dgx-spark-r7
 R=~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/r7-screen-20260930-1654
 [ -d $R/screen/r7-a16-8-p1 ] && mv $R/screen/r7-a16-8-p1 $R/screen/r7-a16-8-p1.bootfail-ecf2e2a7
 export RESULTS=$R WAIT_FOR_STATE_FILES="$HOME/GEN-AI/uf-test/queue/STATE $HOME/GEN-AI/tp1-lane/STATE $HOME/GEN-AI/r7/build-STATE"
-export STAGES="${STAGES:-build:r7 screen:r7-off:2 screen:r7-a16-8:1 screen:r7-a16-24:1 screen:r7-a16-24:2 screen:r7-a16-8:2 screen:r7-dvocab128k:2 screen:r7-dvocab98k:2 screen:r7-off:3:1.0 screen:r7-dvocab98k:3:1.0 screen:r7-dvocab128k:3:1.0 screen:r7-dvocab128k:4:1.0 screen:r7-dvocab98k:4:1.0 screen:r7-off:4:1.0}"
+export STAGES="${STAGES:-build:r7 screen:r7-off:2 screen:r7-block:2 screen:r7-a16-8:1 screen:r7-a16-24:1 screen:r7-a16-24:2 screen:r7-a16-8:2 screen:r7-dvocab128k:2 screen:r7-dvocab98k:2 screen:r7-block:1 screen:r7-off:3:1.0 screen:r7-block:3:1.0 screen:r7-dvocab98k:3:1.0 screen:r7-dvocab128k:3:1.0 screen:r7-dvocab128k:4:1.0 screen:r7-dvocab98k:4:1.0 screen:r7-block:4:1.0 screen:r7-off:4:1.0}"
 export VLLM_REF_r7=exp/r7-screen B12X_REF_r7=exp/r7-a16 TAG_r7=$TAG
 cd ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
 setsid nohup bash scripts/r7_driver.sh > $R/nohup-resume.log 2>&1 < /dev/null & disown
