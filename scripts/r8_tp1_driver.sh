@@ -78,7 +78,8 @@ trap restore EXIT
 # ---- per-node TP=1 helpers ----
 solo() { on "$1" "docker ps --format '{{.Names}}' | grep -E '_solo|sparkrun' | head -1"; }
 cx() { local h=$1 c; c=$(solo "$h"); shift; [ -n "$c" ] && on "$h" "docker exec $c sh -c $(printf %q "$*")"; }
-stop_host() { sparkrun stop --all --hosts "$1" >>"$LOG" 2>&1; local i; for i in $(seq 1 60); do
+sr() { flock "$RESULTS/.sparkrun.lock" sparkrun "$@"; }  # the two node loops share sparkrun state
+stop_host() { sr stop --all --hosts "$1" >>"$LOG" 2>&1; local i; for i in $(seq 1 60); do
   [ -z "$(on "$1" 'docker ps -q')" ] && return 0; sleep 5; done; on "$1" 'docker ps -q | xargs -r docker rm -f'; }
 pagecache() { # host
   local mode; [ "$1" = "$H1" ] && mode=${PAGECACHE_H1:-keep} || mode=${PAGECACHE_H2:-keep}
@@ -93,7 +94,7 @@ minmem() { awk '{for(i=1;i<=NF;i++) if($i=="MemAvailable:") print $(i+1)}' "$1" 
 boot_arm() { # host recipe dir: fails fast when the engine dies during startup
   local h=$1 rec=$2 d=$3 s n
   stop_host "$h"; log "$(label "$h"): pagecache $(pagecache "$h")"
-  log "$(label "$h"): boot $rec"; ( cd "$RECIPES" && sparkrun run "$rec" --hosts "$h" --solo --no-follow >>"$d/sparkrun.log" 2>&1 )
+  log "$(label "$h"): boot $rec"; ( cd "$RECIPES" && sr run "$rec" --hosts "$h" --solo --no-follow >>"$d/sparkrun.log" 2>&1 )
   s=$(date +%s)
   while true; do
     [ "$(health "$h")" = 200 ] && { log "$(label "$h"): health 200 after $(( $(date +%s)-s ))s"; return 0; }
