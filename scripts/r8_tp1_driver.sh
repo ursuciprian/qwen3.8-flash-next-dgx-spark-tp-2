@@ -42,7 +42,8 @@ mkdir -p "$RESULTS"
 LOG=$RESULTS/driver.log
 log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" | tee -a "$LOG"; }
 set_state() { echo "$*" > "$RESULTS/STATE"; log "STATE: $*"; }
-on() { local h=$1; shift; if [ "$h" = "$H1" ]; then bash -c "$*"; else ssh "$h" "$*"; fi; }
+on() { local h=$1; shift; if [ "$h" = "$H1" ]; then bash -c "$*" < /dev/null; else ssh -n "$h" "$*"; fi; }
+on_stdin() { local h=$1; shift; if [ "$h" = "$H1" ]; then bash -c "$*"; else ssh "$h" "$*"; fi; }
 label() { [ "$1" = "$H1" ] && echo dgx01 || echo dgx02; }
 
 # ---- TP=2 restore (as in r7_driver.sh) ----
@@ -142,7 +143,7 @@ warm() { local i; for i in 1 2 3; do curl -s -m 600 "$1:8000/v1/chat/completions
   -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Say hello in one word."}],"max_tokens":16}' > /dev/null; done; }
 counters() { # host: one JSON line of host + EngineCore counters
   local h=$1 c; c=$(solo "$h")
-  on "$h" "python3 - $c" <<'PY'
+  on_stdin "$h" "python3 - $c" <<'PY'
 import json, re, subprocess, sys, time
 out = {"t": time.time(), "nvme_reads": 0}
 for line in open("/proc/diskstats"):
