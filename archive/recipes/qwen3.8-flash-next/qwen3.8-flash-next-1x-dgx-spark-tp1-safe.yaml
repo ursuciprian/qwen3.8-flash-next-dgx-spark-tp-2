@@ -1,0 +1,126 @@
+# Single-Spark (TP=1) variant of the b1.3 stack, staged 2026-09-29 by opus-kernel-9. NOT BOOTED YET.
+# Memory approach from dime-online/qwen3.8-Flash-DGX-UltraFast v16b (Apache-2.0): the PLE
+# n-gram table is served from the page cache and the KV pool is sized explicitly.
+#
+# Why it fits: the checkpoint is 98.5 GiB, of which 26.8 GiB is the PLE table (NVFP4
+# weight rows U8 [320M, 80] + E4M3 scale rows [320M, 10], 128 shards x 2 planes in 16
+# files). Resident it cannot sit beside the other ~72 GiB on one 121.7 GiB GB10.
+# VLLM_PLE_MMAP=1 (vLLM feat/tp1-ple-mmap 19639b4b) keeps b12x's disk-table path
+# (GPU hash, per-lookup row cache, compact-row NVFP4 decode, embedding prepared
+# outside CUDA graphs) and swaps its O_DIRECT io_uring reader for buffered reads from
+# the checkpoint files, so hot rows stay in the evictable page cache. No sidecar file.
+# Pre-boot check: python3 mods/vllm-tp1-ple-mmap/ple_table_check.py <snapshot dir>.
+#
+# Budget (GiB, of 121.69; TP2 numbers are per rank from the b1.2 boot log 2026-09-29):
+#   OS + other at boot   11.9  (measured: 109.84 free at TP2 startup)
+#   weights              ~72   (TP2 52.34/rank = 71.7 non-PLE + 26.8 PLE + ~6 replicated)
+#   non-torch            ~10   (TP2 11.75/rank; b12x plans/workspaces, CUDA ctx, RSS)
+#   peak activation      ~3    (TP2 2.0 at mnbt 8192)
+#   CUDA graphs          ~0.6  (TP2 0.46)
+#   KV pool              10    (explicit; ~17.9 KB/token at TP1 fp8 incl. GDN/indexer state,
+#                               = 2x the measured 8.9 KB/token/rank: 3,652,823 tok in 30.36 GiB)
+#   left for PLE cache   ~14   (earlyoom -m 2 kills below ~2.4 GiB MemAvailable; page
+#                               cache counts as available, so it is reclaimed, not killed)
+# KV per sequence at TP1: 64k 1.1 GiB, 128k 2.2 GiB, 262k 4.4 GiB. 10 GiB = ~600k tokens:
+# 8 x 64k, 4 x 128k or 2 x 262k.
+#
+# Code: image = the b1.3 candidate spark-vllm-b12x:b13-b7fbaf96-7344a997 (vLLM feat/r5-b13
+# 7344a9976, b12x b7fbaf96); mods/vllm-tp1-ple-mmap overlays exp/tp1-screen 7881fa9d
+# (feat/r5-b13 + feat/tp1-ple-mmap + feat/r6-dvocab) and refuses any other base.
+# No image build needed.
+#
+# Run on dgx-02 alone (sparkrun 0.3.10 honours solo_only / --solo):
+#   sparkrun run qwen3.8-flash-next-1x-dgx-spark-tp1 --hosts 192.168.100.53 --solo
+# Optional reduced MTP draft vocab (r6-dvocab): copy archive/mods/r6-dvocab/ids-K65536.txt.gz
+# to <runtime cache>/r6/ on dgx-02 (see ~/GEN-AI/r6/launch_r6.sh) and uncomment
+# VLLM_MTP_DRAFT_VOCAB below.
+
+recipe_version: "1"
+name: qwen3.8-flash-next-1x-dgx-spark-tp1-safe
+description: "Single Spark TP=1: b1.3 + PLE table through the page cache (VLLM_PLE_MMAP), explicit 10 GiB KV"
+
+model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+container: spark-vllm-b12x:b13-b7fbaf96-7344a997
+runtime: vllm
+
+build_args: []
+
+solo_only: true
+min_nodes: 1
+max_nodes: 1
+
+mods:
+  - vllm-tp1-ple-mmap
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 1
+  pipeline_parallel: 1
+  block_size: 16
+  max_model_len: 262144
+  max_num_seqs: 8
+  max_num_batched_tokens: 8192
+  num_speculative_tokens: 4
+  # 10 GiB. With explicit KV bytes vLLM skips memory profiling; the utilization only
+  # gates startup (free >= util x total), which the page cache would otherwise trip.
+  kv_cache_memory_bytes: 6442450944
+  gpu_memory_utilization: 0.01
+
+env:
+  VLLM_PLE_MMAP: "1"
+  # VLLM_MTP_DRAFT_VOCAB: "/cache/runtime/r6/ids-K65536.txt.gz"
+  VLLM_QWEN38_HC_MXFP8: "hc"
+  VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
+  B12X_AUTOTUNE: "1"
+  CUTE_DSL_ARCH: "sm_121a"
+  SAFETENSORS_FAST_GPU: "1"
+  VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+  VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+  VLLM_USE_AOT_COMPILE: "1"
+  VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+  VLLM_USE_V2_MODEL_RUNNER: "1"
+  B12X_POLICY_MODE: "auto"
+  VLLM_MXFP8_LM_HEAD: "1"
+  # TP=1 shapes are cold in the plan cache: every b12x kernel compiles and autotunes on
+  # the first boot. Two workers (~1.2 GB each) keep that clear of earlyoom.
+  B12X_COMPILE_WORKERS: "1"
+  VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
+  VLLM_PREFIX_DROP_EXACT: "1"
+
+command: |
+  S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
+  vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --tensor-parallel-size {tensor_parallel} \
+    --pipeline-parallel-size {pipeline_parallel} \
+    --mamba-cache-mode align \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
+    --dtype bfloat16 \
+    --kv-cache-dtype fp8 \
+    --quantization modelopt_mixed \
+    --block-size {block_size} \
+    --load-format b12x \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"draft_sample_method":"probabilistic"}}' \
+    --gdn-decode-kernel b12x \
+    --linear-backend b12x \
+    --moe-backend b12x \
+    --no-enable-flashinfer-autotune \
+    --reasoning-parser qwen3 \
+    --tool-call-parser qwen3_xml \
+    --enable-auto-tool-choice \
+    --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
+    --kv-cache-memory-bytes {kv_cache_memory_bytes} \
+    --gpu-memory-utilization {gpu_memory_utilization}
