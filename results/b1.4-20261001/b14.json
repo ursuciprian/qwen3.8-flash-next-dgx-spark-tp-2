@@ -1,0 +1,260 @@
+{
+ "baseline": "base",
+ "arm": "cand",
+ "baseline_boots": 2,
+ "arm_boots": 2,
+ "boots": {
+  "base": [
+   "base1",
+   "base2"
+  ],
+  "cand": [
+   "cand1",
+   "cand2"
+  ]
+ },
+ "quality_gate": {
+  "pass": true,
+  "hardmode_scores": [
+   92,
+   92
+  ],
+  "fidelity_exact_by_depth": {
+   "8000": 20,
+   "32000": 20,
+   "64000": 20,
+   "128000": 20
+  },
+  "straggler_violations": [],
+  "reasons": [
+   "cand: hardmode [92, 92] clears >= 88",
+   "A/B cand1 32k was 19/20 (1 no_call on the first cold-prefill trial); cleared by the re-gate",
+   "re-gate (results/regate-b14-20261001, fresh b1.4 boot): gate seed 7 8k/32k/64k/128k 20/20 each, 32k seeds 21/22 20/20 each -> DONE PASS",
+   "cold-32k repro (results/post-b14-20261001, 20 fresh-prefix trials): b1.3 20/20, b1.4 20/20, cold TTFT ~23 s both"
+  ]
+ },
+ "coding_grid_pct_diff": {
+  "d0_c1": {
+   "cand_mean": 62.23,
+   "base_mean": 63.89,
+   "pct_diff": -2.6,
+   "noise_pct": 9.6,
+   "beyond_noise": false
+  },
+  "d0_c2": {
+   "cand_mean": 105.07,
+   "base_mean": 99.13,
+   "pct_diff": 6.0,
+   "noise_pct": 6.8,
+   "beyond_noise": false
+  },
+  "d0_c4": {
+   "cand_mean": 150.88,
+   "base_mean": 147.03,
+   "pct_diff": 2.6,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d0_c5": {
+   "cand_mean": 160.61,
+   "base_mean": 154.12,
+   "pct_diff": 4.2,
+   "noise_pct": 3.0,
+   "beyond_noise": true
+  },
+  "d0_c8": {
+   "cand_mean": 195.51,
+   "base_mean": 190.26,
+   "pct_diff": 2.8,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d0_c10": {
+   "cand_mean": 199.54,
+   "base_mean": 201.99,
+   "pct_diff": -1.2,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d0_c16": {
+   "cand_mean": 242.82,
+   "base_mean": 240.86,
+   "pct_diff": 0.8,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d16384_c1": {
+   "cand_mean": 63.83,
+   "base_mean": 64.79,
+   "pct_diff": -1.5,
+   "noise_pct": 11.8,
+   "beyond_noise": false
+  },
+  "d16384_c2": {
+   "cand_mean": 91.9,
+   "base_mean": 92.95,
+   "pct_diff": -1.1,
+   "noise_pct": 12.4,
+   "beyond_noise": false
+  },
+  "d16384_c4": {
+   "cand_mean": 117.45,
+   "base_mean": 117.27,
+   "pct_diff": 0.2,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d16384_c5": {
+   "cand_mean": 128.05,
+   "base_mean": 126.04,
+   "pct_diff": 1.6,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d16384_c8": {
+   "cand_mean": 145.9,
+   "base_mean": 145.27,
+   "pct_diff": 0.4,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d16384_c10": {
+   "cand_mean": 154.97,
+   "base_mean": 152.64,
+   "pct_diff": 1.5,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  },
+  "d16384_c16": {
+   "cand_mean": 176.45,
+   "base_mean": 175.82,
+   "pct_diff": 0.4,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  }
+ },
+ "counting_pct_diff": {
+  "c1": {
+   "cand_mean": 119.85,
+   "base_mean": 114.25,
+   "pct_diff": 4.9,
+   "noise_pct": 3.0,
+   "beyond_noise": true
+  },
+  "c2": {
+   "cand_mean": 214.3,
+   "base_mean": 207.8,
+   "pct_diff": 3.1,
+   "noise_pct": 3.0,
+   "beyond_noise": true
+  },
+  "c4": {
+   "cand_mean": 356.55,
+   "base_mean": 349.75,
+   "pct_diff": 1.9,
+   "noise_pct": 5.7,
+   "beyond_noise": false
+  },
+  "c5": {
+   "cand_mean": 407.7,
+   "base_mean": 390.4,
+   "pct_diff": 4.4,
+   "noise_pct": 3.0,
+   "beyond_noise": true
+  },
+  "c8": {
+   "cand_mean": 524.8,
+   "base_mean": 517.8,
+   "pct_diff": 1.4,
+   "noise_pct": 3.6,
+   "beyond_noise": false
+  },
+  "c10": {
+   "cand_mean": 586.05,
+   "base_mean": 578.45,
+   "pct_diff": 1.3,
+   "noise_pct": 4.7,
+   "beyond_noise": false
+  },
+  "c16": {
+   "cand_mean": 778.0,
+   "base_mean": 764.75,
+   "pct_diff": 1.7,
+   "noise_pct": 3.0,
+   "beyond_noise": false
+  }
+ },
+ "wins_beyond_noise": [
+  "coding_d0_c5",
+  "counting_c1",
+  "counting_c2",
+  "counting_c5"
+ ],
+ "losses_beyond_noise_low_c": [],
+ "losses_beyond_noise_mid_high_c": [],
+ "noisy_cells": [
+  "coding_d0_c1",
+  "coding_d16384_c1",
+  "coding_d16384_c2"
+ ],
+ "tc45": "5/5 (cand1)",
+ "fidelity_gate_detail": "cand1 gate: 8k 20/20, 32k 19/20 (1 no_call, first cold-prefill trial), 64k 20/20, 128k 20/20",
+ "fidelity_128k_seeds": {
+  "7 (gate, cand1)": "20/20",
+  "11 (cand2)": "20/20",
+  "13 (cand2)": "20/20"
+ },
+ "logits_check": "self: base1 0.0396, base2 0.0418, cand1 0.0384, cand2 0.0457; base1a/base2a 0.0405; cross-build base1a/cand1a 0.0333, base2a/cand2a 0.0414 -> within self-noise",
+ "paired_probes": "arm cand vs base, passes ['1', '2']\ncell           n              step ms %             tok/step %                tok/s %  accept/pos base -> arm\ncount-c1      12      -3.38 [-4.0,-2.8]      -0.61 [-1.2,-0.0]      +2.94 [+2.1,+3.8]  1.00/0.99/0.99/0.99 -> 1.00/0.98/0.98/0.98\ncount-c2      12      -4.91 [-6.9,-3.1]      -0.47 [-1.2,+0.2]      +4.63 [+2.5,+6.7]  1.00/0.99/0.99/0.99 -> 0.99/0.98/0.98/0.98\ncount-c4      16      -2.17 [-2.5,-1.8]      -0.10 [-0.3,+0.1]      +1.53 [+0.9,+2.2]  1.00/0.99/0.99/0.99 -> 1.00/0.99/0.99/0.99\ncount-c8      16      -1.47 [-3.1,+0.1]      +0.22 [+0.2,+0.3]      +2.44 [+0.6,+4.3]  1.00/0.99/0.99/0.99 -> 1.00/1.00/1.00/1.00\ncount-c16     32      -0.68 [-1.0,-0.3]      +0.05 [+0.0,+0.1]      +0.48 [-0.8,+1.9]  1.00/0.99/0.99/0.99 -> 1.00/0.99/0.99/0.99\nd16k-c1       12      -3.45 [-4.1,-2.7]      +4.43 [+0.0,+8.4]     +9.60 [+3.9,+15.9]  0.71/0.50/0.36/0.26 -> 0.71/0.50/0.35/0.26\nd16k-c2       12      -3.50 [-4.6,-2.5]      -1.67 [-8.1,+4.4]     +2.64 [-5.6,+11.7]  0.71/0.49/0.34/0.24 -> 0.70/0.48/0.32/0.23\nd16k-c4       16      -0.99 [-1.9,-0.1]      +5.07 [+3.1,+7.3]     +6.89 [+2.6,+11.5]  0.70/0.49/0.34/0.26 -> 0.72/0.51/0.37/0.28\nd16k-c8       16      -3.25 [-4.5,-2.0]      +2.57 [+1.2,+3.7]     +7.35 [+2.3,+13.4]  0.69/0.46/0.30/0.21 -> 0.70/0.47/0.32/0.22\nd16k-c16      32      +1.30 [+0.5,+2.1]      +1.11 [+0.3,+1.9]      +1.34 [-2.2,+4.8]  0.70/0.49/0.33/0.22 -> 0.71/0.49/0.33/0.23\nfresh-c1      12      -2.86 [-3.2,-2.5]     +3.07 [-4.6,+12.2]     +6.42 [-1.3,+15.4]  0.75/0.55/0.43/0.35 -> 0.75/0.58/0.45/0.37\nfresh-c2      12      -3.47 [-4.4,-2.6]      -2.20 [-7.0,+3.0]      +2.43 [-4.2,+9.3]  0.76/0.59/0.47/0.38 -> 0.75/0.58/0.45/0.35\nfresh-c4      16      -2.10 [-7.3,+4.0]      -2.75 [-6.7,+1.2]     +2.74 [-5.3,+11.0]  0.74/0.55/0.42/0.34 -> 0.74/0.55/0.42/0.34\nfresh-c8      16      -2.41 [-3.3,-1.4]      +1.04 [-1.9,+4.1]     +3.64 [-3.1,+11.5]  0.74/0.53/0.40/0.30 -> 0.73/0.54/0.42/0.33\nfresh-c16     32      -0.42 [-1.0,+0.1]      +4.78 [+4.1,+5.6]     +7.37 [+3.0,+12.3]  0.75/0.56/0.43/0.34 -> 0.76/0.58/0.46/0.37\n",
+ "fidelity_32k_repro": "results/post-b14-20261001: 20 fresh-prefix cold-32k trials (seeds 101-120, k=1) each; b1.3 20/20 exact, b1.4 20/20 exact (0 no_call, 0 wrong); cold TTFT median 23.05 s b1.3 vs ~23.0 s b1.4. The arm_verdict gate still reads the original cand1 32k 19/20, so the forced reject stands until the gate is re-run or the orchestrator rules the miss cleared.",
+ "results_dir": "dgx-01:~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/r4ab-b14-20261001-0718",
+ "build": "b1.4 = b1.3 + vLLM exp/b14 a7e649d8 (#923 QSA prefill-flag race fix, #914 Triton recompile fix) + VLLM_MTP_DRAFT_VOCAB r7/ids-v2-K131072; image spark-vllm-b12x:b14-b7fbaf96-a7e649d8",
+ "quality_gate_original": {
+  "pass": false,
+  "hardmode_scores": [
+   92,
+   92
+  ],
+  "fidelity_exact_by_depth": {
+   "8000": 20,
+   "32000": 19,
+   "64000": 20,
+   "128000": 20
+  },
+  "straggler_violations": [],
+  "reasons": [
+   "cand: hardmode [92, 92] clears >= 88",
+   "cand: fidelity ['32000:19/20']"
+  ]
+ },
+ "regate": "results/regate-b14-20261001: DONE PASS; 32k seed21 20/20, seed22 20/20; seed 7 8k 20/20, 32k 20/20, 64k 20/20, 128k 20/20",
+ "verdict": "ship",
+ "confidence": 0.78,
+ "jev_distribution": {
+  "ship_with_caveat": 0.05,
+  "rerun": 0.02,
+  "ship": 0.83,
+  "reject": 0.1
+ },
+ "cap_note": null,
+ "reason": "Jev verdict=ship from: quality_gate=pass (after re-gate); hardmode=[92, 92]; wins=4; low_c_losses=0; mid_high_losses=0; noisy_cells=3",
+ "superseded_verdict": {
+  "verdict": "reject",
+  "confidence": 1.0,
+  "cap_note": "quality gate failed (forced, no Jev call)",
+  "reason": "Jev verdict=reject from: quality_gate=fail; hardmode=[92, 92]; wins=4; low_c_losses=0; mid_high_losses=0; noisy_cells=3",
+  "superseded_by": "re-gate results/regate-b14-20261001 DONE PASS (opus-kernel-14)"
+ },
+ "effort_default": {
+  "choice": "medium_default",
+  "confidence": 1.0,
+  "distribution": {
+   "keep_xhigh_default": 0.0,
+   "medium_default": 1.0
+  },
+  "evidence": "DevOps 42: b14-medium TP2 95.9% checks, 29/42 clean, 0/42 runaway, median 33 s; b1.2 xhigh 42.5%, 17/42, 23/42 runaway, 246 s; tp1-medium 97.8%, 35/42"
+ },
+ "noise_suspects": [],
+ "generated_at": "2026-10-01T14:19:05+0300",
+ "root": "jev/b14 (opus-kernel-14)"
+}

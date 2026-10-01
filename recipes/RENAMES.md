@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-01: b1.4 promoted (names unchanged)
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | b1.4 image (b1.3 + 131k-id MTP draft vocab + vllm#923/#914 fixes), server default `reasoning_effort` medium (recommended) |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | the b1.3 recipe that was recommended on 2026-09-29 (template default effort xhigh) |
+| (was `-previous`, b1.2 image) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.2-20260927.yaml` (not listed; run by path) |
+
 ## 2026-09-29: b1.3 promoted (names unchanged)
 
 | name | content now |

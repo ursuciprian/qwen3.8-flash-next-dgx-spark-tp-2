@@ -1,0 +1,47 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "32000",
+  "k": 1,
+  "trials": 1,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 110,
+  "timeout": 1800,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/post-b14-20261001/b13-seed110.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 32000,
+   "actual_prompt_tokens": 61404,
+   "counts": {
+    "exact": 1,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 23.02178645133972,
+   "mean_latency": 24.958011627197266,
+   "results": [
+    {
+     "target": "INV-1000-A09C",
+     "path": "/srv/clients/acme-billling-24f00c/svc-sync_v4/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-24f00c/svc-sync_v4/logs/sync.log",
+     "prompt_tokens": 61404,
+     "ttft": 23.02178645133972,
+     "dt": 24.958011627197266
+    }
+   ]
+  }
+ ]
+}

@@ -1,6 +1,6 @@
 # Reference
 
-Configuration, image provenance, tuning and known limits for the current build (b1.3, 2026-09-29).
+Configuration, image provenance, tuning and known limits for the current build (b1.4, 2026-10-01).
 Back to the [README](../README.md).
 
 ## Configuration
@@ -26,12 +26,14 @@ Sampling comes from the checkpoint: **temperature 1.0, top-p 0.95, top-k 20** fo
 | `--compilation-config` | `fuse_act_quant: true` | Fused activation quantization |
 | `--no-enable-flashinfer-autotune` | set | Kernel tuning is b12x's (`B12X_AUTOTUNE`) |
 | `--served-model-name` | `qwen3.8-flash-next` (+ the HF id) | Model name clients send |
+| `--default-chat-template-kwargs` | `{"reasoning_effort":"medium"}` | Thinking effort for requests that set none (the template's own default is `xhigh`, which runs away on validator-gated tasks); a request overrides it, see the README [Thinking effort](../README.md#thinking-effort) (since 2026-10-01) |
 
 | Environment | Value | Why |
 |---|---|---|
 | `VLLM_PREFIX_DROP_EXACT` | `1` | Exact prefix-cache hits with MTP (since 2026-09-26; see [What is in the image](#what-is-in-the-image)) |
 | `VLLM_GDN_DEFERRED_CHECKPOINTS` | `1` | Deferred GDN checkpoints (since 2026-09-25) |
 | `VLLM_GDN_UNIFORM_DECODE_META_SKIP` | `1` | Skips ~350 GDN metadata launches per uniform decode step (since 2026-09-29) |
+| `VLLM_MTP_DRAFT_VOCAB` | `/opt/mtp-vocab/ids-v2-K131072.txt.gz` | MTP draft head scores 131,072 of 248,320 vocab ids (lossless via rejection sampling); the list ships in the image (since 2026-10-01) |
 | `VLLM_QWEN38_HC_MXFP8` | `hc` | Hyper-connection mixers in online MXFP8 (since 2026-09-27) |
 | `B12X_AUTOTUNE` | `1` | The base Dockerfile sets `0`, which truncates kernel selection (81 vs 96-98 tok/s c1 counting) |
 | `B12X_COMPILE_WORKERS` | `2` | Caps kernel compile parallelism (~1.7 GB RAM each) so a cold first boot stays clear of the OOM killer. Honoured from this build on (earlier builds always used 16) |
@@ -48,24 +50,33 @@ sparkrun's runtime cache when it is missing, so even a first boot does no kernel
 
 ## What is in the image
 
-`ghcr.io/ursuciprian/spark-vllm-b12x:b1.3-20260929-b7fbaf96-7344a997-warm`, digest
-`sha256:32cb8bd8800e413726b4cfe3d9947f80d4eb01d92dbe12405e3c763db7306a02` (arm64, public). The recipe keeps the tag, not the
+`ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`, digest
+`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd` (arm64, public). The recipe keeps the tag, not the
 digest, because sparkrun 0.3.6 copies the image to the worker with `docker save | docker load`, which drops digests.
 
 | Part | Source |
 |---|---|
 | Dockerfile | [eugr/spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) `798528a2`, built by [spark-vllm-b12x](https://github.com/ursuciprian/spark-vllm-b12x) `build.sh` |
-| vLLM | [`ursuciprian/vllm` tag `shipped-b1.3-20260929`](https://github.com/ursuciprian/vllm/tree/shipped-b1.3-20260929) (`7344a9976`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
-| b12x kernels | [`ursuciprian/b12x` tag `shipped-b1.3-20260929`](https://github.com/ursuciprian/b12x/tree/shipped-b1.3-20260929) (`b7fbaf96`, unchanged since 2026-09-25), on local-inference-lab `a8333658` |
-| Warm layer | [`docker/b0-warm/`](../docker/b0-warm/Dockerfile): b12x plan seed; pushed by the `build-b0-warm` workflow (run 36610035975) |
+| vLLM | [`ursuciprian/vllm` tag `shipped-b1.4-20261001`](https://github.com/ursuciprian/vllm/tree/shipped-b1.4-20261001) (`a7e649d8`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
+| b12x kernels | [`ursuciprian/b12x` tag `shipped-b1.4-20261001`](https://github.com/ursuciprian/b12x/tree/shipped-b1.4-20261001) (`b7fbaf96`, unchanged since 2026-09-25), on local-inference-lab `a8333658` |
+| Warm layer | [`docker/b0-warm/`](../docker/b0-warm/Dockerfile): b12x plan seed + the MTP draft-vocab list (`/opt/mtp-vocab`); pushed by the `build-b0-warm` workflow (run 36866001482) |
 
-Changes against the previous build (`b1.2-20260927-b7fbaf96-a9aa81b2-warm`), all in vLLM:
+Changes against the previous build (`b1.3-20260929-b7fbaf96-7344a997-warm`):
 
-- **GDN uniform-decode metadata skip** (`VLLM_GDN_UNIFORM_DECODE_META_SKIP=1`). Qwen3.8 runs its 36 GDN layers in 36
-  KV-cache groups; 35 of them re-staged the b12x mixed-batch worklists, state indices and prefill live counts every
-  step (~350 small eager launches) that a uniform speculative-decode step never reads.
-- A workspace-size fix for the online-MXFP8 linear wrapper on side streams (no effect on this recipe's settings).
+- **MTP draft vocab** (`VLLM_MTP_DRAFT_VOCAB`). The draft head scores 131,072 of the 248,320 vocab ids (65,536 rows
+  per rank) instead of all of them, which cuts the draft-head GEMM per pass; rejection sampling keeps the output
+  distribution unchanged (an id outside the list gets draft probability 0). The list is ranked on our own corpora and
+  eval outputs and always holds every special token, all 256 byte symbols and all single-character tokens, so a copied
+  rare string can still be drafted byte by byte ([provenance](../archive/mods/r7-dvocab/README.md)). A borrowed
+  65,536-id list cost 3-5 acceptance points at 16k and was rejected on 2026-09-30; this one keeps acceptance within
+  0.2 points.
+- **vllm#923 port**: the QSA prefill flag sat in a pinned host buffer that the next step could overwrite before the
+  GPU read it (a race that can give NaN state and token loops); it is now a plain host tensor.
+- **vllm#914 port**: a Triton restore kernel no longer specialises on block/slot values, so it stops recompiling on
+  the request path.
+- **Default thinking effort `medium`** (`--default-chat-template-kwargs`), a recipe change, not an image change.
 
+Earlier changes (2026-09-29 build): GDN uniform-decode metadata skip (`VLLM_GDN_UNIFORM_DECODE_META_SKIP=1`).
 Earlier changes (2026-09-27 build): HC (hyper-connection) mixers in online MXFP8 (`VLLM_QWEN38_HC_MXFP8=hc`).
 Earlier (2026-09-26 build): exact prefix-cache hits with MTP (`VLLM_PREFIX_DROP_EXACT`), the Mamba/GDN
 `NULL_BLOCK_ID` padding fix (vllm#887), and the compile-worker cap. Earlier still (2026-09-25 build): deferred GDN

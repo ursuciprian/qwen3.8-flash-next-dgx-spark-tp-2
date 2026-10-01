@@ -10,6 +10,11 @@
 #  - archive/mods/b12x-startup-boundedwait applied at build time (fail-closed,
 #    sha-checked; skips itself when the base vLLM already has it, as the b1
 #    base candidate-b12x-b7fbaf96-vllm-14077fb3 does).
+#  - mtp-vocab/ids-v2-K131072.txt.gz (b1.4, 2026-10-01): the 131,072-id MTP draft-vocab
+#    list the recipe's VLLM_MTP_DRAFT_VOCAB points at (/opt/mtp-vocab). Our own ranking
+#    (scripts/build_draft_vocab_v2.py, archive/mods/r7-dvocab/README.md); its tail order follows the
+#    65,536-id list of dime-online/qwen3.8-Flash-DGX-UltraFast (Apache-2.0). sha256-checked
+#    below. Base images without draft-vocab support simply ignore it.
 # The AGPL draft_vocab table is not part of this image or its base.
 #
 # Build (from the repo root):
@@ -20,6 +25,8 @@
 ARG BASE=spark-vllm-b12x:local-20260918-a8333658
 FROM ${BASE}
 COPY preparation/ /opt/b12x-seed/preparation/
+COPY mtp-vocab/ /opt/mtp-vocab/
 COPY --from=mods b12x-startup-boundedwait/ /tmp/mod-boundedwait/
 RUN bash /tmp/mod-boundedwait/run.sh && rm -rf /tmp/mod-boundedwait \
- && chmod -R a+rX /opt/b12x-seed
+ && echo 'fc40970533741fc14217879a5f5385897f4126bd1d7ce23ed0268236b4b8cf7b  /opt/mtp-vocab/ids-v2-K131072.txt.gz' | sha256sum -c - \
+ && chmod -R a+rX /opt/b12x-seed /opt/mtp-vocab

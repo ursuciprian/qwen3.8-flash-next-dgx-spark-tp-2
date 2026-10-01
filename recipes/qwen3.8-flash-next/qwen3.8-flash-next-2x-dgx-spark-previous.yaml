@@ -4,13 +4,14 @@
 # 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
-# Fallback since 2026-09-29: was the recommended recipe from 2026-09-27 to
-# 2026-09-29 (b1.2 image). Superseded by b1.3 (b1.2 + GDN uniform-decode metadata
-# skip). The b1.1 recipe it replaced as fallback is archived as
-# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.1-20260926.yaml.
+# Fallback since 2026-10-01: was the recommended recipe from 2026-09-29 to
+# 2026-10-01 (b1.3 image). Superseded by b1.4 (b1.3 + vLLM #923/#914 fixes + 131,072-id
+# MTP draft vocab + server default reasoning_effort=medium). The b1.2 recipe it replaced
+# as fallback is archived as
+# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.2-20260927.yaml.
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark-previous
-description: "Fallback. The previous build (2026-09-27, b1.2); pick it only if the recommended recipe misbehaves."
+description: "Fallback. The previous build (2026-09-29, b1.3); pick it only if the recommended recipe misbehaves."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -18,26 +19,26 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-# B1.2 image, promoted 2026-09-27: build.sh image spark-vllm-b12x:r3-hcq-b7fbaf96-a9aa81b2
-# (vLLM ursuciprian/vllm feat/hc-mxfp8-on-b1.1@a9aa81b23, tag shipped-b1.2-20260927 =
-# b1.1 6d232f16f + HC (hyper-connection) mixers online MXFP8, router gate stays BF16
-# (VLLM_QWEN38_HC_MXFP8=hc); b12x b7fbaf96, unchanged from b1.1) plus docker/b0-warm
-# (b12x plan-cache seed). No mods, no --trust, no host mounts.
-# A/B vs b1.1 (2 boots each, dgx-01 results/r3ab-hcq-20260927, arm_verdict v2 + Jev
-# ship 0.97): step time -9.9% fresh c1 / -10.0% 16k c1, -7.6/-7.4% c2, -4.4/-5.7% c4,
-# -2..-5% c8/c16 (every CI excludes 0), acceptance per position unchanged; paired
-# tok/s fresh c1 +10.4%, 16k c1 +13.3%, fresh c2 +16.2%, c4 +7.3/+5.6%, counting
-# c1 +10.3, c2 +18.8, c4 +10.6, c16 +6.8; no cell negative. Gate: hardmode 90/92,
-# TC-45 5/5, stragglers clean, fidelity 20/20 at every depth, 128k seeds 7/11/13.
-# Full tables: docs/BENCHMARKS.md, results/b1.2-20260927/.
-# Digest of this tag: sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb
+# B1.3 image, promoted 2026-09-29: build.sh image spark-vllm-b12x:b13-b7fbaf96-7344a997
+# (vLLM ursuciprian/vllm feat/r5-b13@7344a9976, tag shipped-b1.3-20260929 = b1.2 a9aa81b23
+# + GDN uniform-decode metadata skip (VLLM_GDN_UNIFORM_DECODE_META_SKIP) + the online-MXFP8
+# wrapper workspace fix + declared (unused) wm MoE env vars; b12x b7fbaf96, unchanged)
+# plus docker/b0-warm (b12x plan-cache seed). No mods, no --trust, no host mounts.
+# A/B vs b1.2 (2 boots each, same day, dgx-01 results/r4ab-b13-20260929, arm_verdict v2
+# + Jev ship_with_caveat 1.00): paired temp-0 decode step -3.1/-1.9/-2.7% at c1
+# (count/fresh/16k), -3.0/-2.5% c2, -2.4% count c4, -1.4..-2.8% c8/c16; acceptance
+# unchanged; coding d0 c2 +4.0%, 16k c1 +5.3%, counting c8 +5.3% beyond noise; coding
+# d0 c5 -4.7% (the caveat; +4.7% beyond noise in the 2026-09-28 A/B of the same change).
+# Gate: hardmode 88/90, TC-45 5/5, stragglers clean, fidelity 20/20 at every depth,
+# 128k seeds 11/13. Full tables: README, results/b1.3-20260929/.
+# Digest of this tag: sha256:32cb8bd8800e413726b4cfe3d9947f80d4eb01d92dbe12405e3c763db7306a02
 # (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
 # head->worker with `docker save | docker load`, which drops RepoDigests, so a
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Previous recommended (b1.1 image, 2026-09-26): archived, see the header.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm
+# Previous recommended (b1.2 image, 2026-09-27): archived, see the header.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.3-20260929-b7fbaf96-7344a997-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -76,6 +77,11 @@ env:
   # 2026-09-27, vLLM feat/hc-mxfp8-on-b1.1 a9aa81b23). See the comment block above
   # container: for the A/B numbers.
   VLLM_QWEN38_HC_MXFP8: "hc"
+  # GDN uniform-decode metadata skip (promoted 2026-09-29, vLLM feat/r5-b13): 35 of the
+  # 36 GDN KV-cache groups re-staged the b12x mixed-batch worklists, state indices and
+  # prefill live counts every step (~350 eager launches) that a uniform spec-decode
+  # step never reads. See the comment block above container: for the A/B numbers.
+  VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
   B12X_AUTOTUNE: "1"
   B12X_ROCE_SPIN_LIMIT: "300000000"
   CUTE_DSL_ARCH: "sm_121a"
