@@ -6,7 +6,7 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark
-description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-09-29 build)."
+description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-10-01 build)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -14,26 +14,28 @@ model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 # vLLM offline, so each node would otherwise follow its own refs/main;
 # docs/ENGINEERING.md known issues).
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-# B1.3 image, promoted 2026-09-29: build.sh image spark-vllm-b12x:b13-b7fbaf96-7344a997
-# (vLLM ursuciprian/vllm feat/r5-b13@7344a9976, tag shipped-b1.3-20260929 = b1.2 a9aa81b23
-# + GDN uniform-decode metadata skip (VLLM_GDN_UNIFORM_DECODE_META_SKIP) + the online-MXFP8
-# wrapper workspace fix + declared (unused) wm MoE env vars; b12x b7fbaf96, unchanged)
-# plus docker/b0-warm (b12x plan-cache seed). No mods, no --trust, no host mounts.
-# A/B vs b1.2 (2 boots each, same day, dgx-01 results/r4ab-b13-20260929, arm_verdict v2
-# + Jev ship_with_caveat 1.00): paired temp-0 decode step -3.1/-1.9/-2.7% at c1
-# (count/fresh/16k), -3.0/-2.5% c2, -2.4% count c4, -1.4..-2.8% c8/c16; acceptance
-# unchanged; coding d0 c2 +4.0%, 16k c1 +5.3%, counting c8 +5.3% beyond noise; coding
-# d0 c5 -4.7% (the caveat; +4.7% beyond noise in the 2026-09-28 A/B of the same change).
-# Gate: hardmode 88/90, TC-45 5/5, stragglers clean, fidelity 20/20 at every depth,
-# 128k seeds 11/13. Full tables: README, results/b1.3-20260929/.
-# Digest of this tag: sha256:32cb8bd8800e413726b4cfe3d9947f80d4eb01d92dbe12405e3c763db7306a02
+# B1.4 image, promoted 2026-10-01: build.sh image spark-vllm-b12x:b14-b7fbaf96-a7e649d8
+# (vLLM ursuciprian/vllm exp/b14@a7e649d8, tag shipped-b1.4-20261001 = b1.3 7344a9976
+# + the r6/r7 MTP draft-vocab support (VLLM_MTP_DRAFT_VOCAB) + vllm#923 QSA prefill-flag
+# race fix (pinned-buffer race that could give NaN state / token loops) + vllm#914
+# Triton recompile fix; b12x b7fbaf96, unchanged) plus docker/b0-warm (b12x plan-cache
+# seed + the 131,072-id draft-vocab list at /opt/mtp-vocab). No mods, no --trust, no
+# host mounts.
+# A/B vs b1.3 (2 boots each, same day, results/b1.4-20261001/, arm_verdict v2 + Jev ship
+# 0.78 after the re-gate): coding d0 c5 +4.2%, counting c1/c2/c5 +4.9/+3.1/+4.4% beyond
+# noise, no cell worse beyond noise; paired temp-0 decode step -2..-5% at c1-c8 (16k c16
+# +1.3%, tok/s there flat); MTP acceptance per position within +-0.03; logits within
+# self-noise. Gate: hardmode 92/92, TC-45 5/5, stragglers clean, fidelity 20/20 at every
+# depth on the re-gate boot (the A/B gate boot had 32k 19/20, one no_call on the first
+# cold-prefill trial; cold-32k repro 20/20 on both builds), 128k seeds 11/13 20/20.
+# Digest of this tag: sha256:@@DIGEST@@
 # (arm64, public). Kept as a tag on purpose: sparkrun 0.3.6 copies the image
 # head->worker with `docker save | docker load`, which drops RepoDigests, so a
 # repo@sha256 reference never matches on the worker (containers/distribute.py
 # identity check). Every run would re-transfer the image and then pull it again
 # from ghcr on the worker.
-# Previous recommended (b1.2 image, 2026-09-27): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.3-20260929-b7fbaf96-7344a997-warm
+# Previous recommended (b1.3 image, 2026-09-29): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -121,6 +123,17 @@ env:
   # c16 +26.6%; fresh-context coding and counting within noise; hardmode 91/89,
   # fidelity 20/20 at every depth (128k seeds 7/11/13), TC-45 5/5, no stragglers.
   VLLM_PREFIX_DROP_EXACT: "1"
+  # MTP draft vocab (promoted 2026-10-01, r7 dvocab v2): the draft head scores 131,072 of
+  # the 248,320 vocab ids (65,536 rows per rank) instead of all of them. Lossless: the
+  # draft proposes q=0 outside the list and rejection sampling keeps the target
+  # distribution. The list is ranked on our own corpora and eval outputs and always holds
+  # every added/special token, all 256 byte symbols and all 8,883 single-character tokens
+  # (scripts/build_draft_vocab_v2.py; held-out coverage 0.9997 on DevOps outputs). Its
+  # tail order comes from the 65,536-id list of dime-online/qwen3.8-Flash-DGX-UltraFast
+  # (Apache-2.0). Baked into the image by docker/b0-warm (sha256 checked at build). The
+  # compile cache keys on this path, not on the file content: a changed list needs a new
+  # file name.
+  VLLM_MTP_DRAFT_VOCAB: "/opt/mtp-vocab/ids-v2-K131072.txt.gz"
 
 # --speculative-config: promoted 2026-09-22 (was use_local_argmax_reduction:
 # true, one-hot drafts). Clients that send no temperature run at the
@@ -144,6 +157,14 @@ env:
 #   c16 635.0-641.3
 # Quality gate: fidelity 8k-64k 20/20, 128k 19/20 then 20/20 x2, straggler
 # c5-16 clean, hardmode 86 -> 90 on rerun (la band 86-93).
+# --default-chat-template-kwargs (promoted 2026-10-01): the chat template's own default is
+# reasoning_effort xhigh, which on validator-gated DevOps prompts thinks until the token
+# budget runs out (b1.2: 23/42 runs never closed </think>). medium (no effort sentence
+# in the system prompt) on the b1.4 candidate, DevOps 14 tasks x 3: mean checks 95.9% vs
+# 42.5%, clean 29/42 vs 17/42, runaway 0/42 vs 23/42, median 33 s vs 246 s per task
+# (Jev medium_default 1.00). A request still picks its own effort: top-level
+# "reasoning_effort" or chat_template_kwargs {"reasoning_effort": "xhigh"|"medium"|"low"}
+# (the template rejects any other value); README "Thinking effort".
 # One-hot draft variant (archived 2026-09-25): archive/recipes/qwen3.8-flash-next/
 # qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
@@ -179,5 +200,6 @@ command: |
     --reasoning-parser qwen3 \
     --tool-call-parser qwen3_xml \
     --enable-auto-tool-choice \
+    --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
     --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
     --gpu-memory-utilization {gpu_memory_utilization}

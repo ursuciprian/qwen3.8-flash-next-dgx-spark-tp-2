@@ -1,0 +1,47 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "32000",
+  "k": 1,
+  "trials": 1,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 118,
+  "timeout": 1800,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/post-b14-20261001/b14-seed118.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 32000,
+   "actual_prompt_tokens": 61517,
+   "counts": {
+    "exact": 1,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 23.013641834259033,
+   "mean_latency": 25.00888705253601,
+   "results": [
+    {
+     "target": "INV-1000-070B",
+     "path": "/srv/clients/orryn-data-331c0a/svc-relay-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-331c0a/svc-relay-v2/logs/access.log",
+     "prompt_tokens": 61517,
+     "ttft": 23.013641834259033,
+     "dt": 25.00888705253601
+    }
+   ]
+  }
+ ]
+}

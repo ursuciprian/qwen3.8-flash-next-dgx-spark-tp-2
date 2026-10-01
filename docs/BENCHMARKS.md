@@ -1,8 +1,87 @@
 # Benchmarks: full tables
 
-## b1.3 image (2026-09-29)
+## b1.4 image (2026-10-01)
 
 The current default build.
+
+Terms used: **concurrency (c)** = requests running at the same time;
+**depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
+model drafts up to 4 next tokens that are checked in one step, which is what makes single-user speed high.
+
+Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`
+(`sha256:@@DIGEST@@`), checkpoint revision `7c4f1bc1`.
+A/B against the previous build (2026-09-29) on 2026-10-01, two separate boots per build, means of both boots.
+Raw files and verdict: [`results/b1.4-20261001/`](../results/b1.4-20261001/). The 2026-09-29 build's tables follow below.
+What changed: the MTP draft head scores 131,072 of the 248,320 vocab ids (lossless via rejection sampling), the vllm#923
+QSA prefill-flag race fix, the vllm#914 Triton recompile fix, and the server default thinking effort `medium` (a recipe
+flag; the speed and gate numbers below were measured without it, at the template default).
+
+**Coding**: [llama-benchy fork](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task` (agent coding turn,
+2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 / top-p 0.95 / top-k 20, prefix caching, 3 runs per boot).
+Total tok/s; `*` = beyond run-to-run noise.
+
+| depth | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| 0 | 62.2 | 105.1 | 150.9 | 160.6 * | 195.5 | 199.5 | 242.8 |
+| 0, previous | 63.9 | 99.1 | 147.0 | 154.1 | 190.3 | 202.0 | 240.9 |
+| 16k | 63.8 | 91.9 | 117.5 | 128.1 | 145.9 | 155.0 | 176.4 |
+| 16k, previous | 64.8 | 93.0 | 117.3 | 126.0 | 145.3 | 152.6 | 175.8 |
+
+Depth 0: c1 -2.6% (noise 9.6%), c2 +6.0% (noise 6.8%), c4 +2.6%, c5 +4.2%, c8 +2.8%, c10 -1.2%, c16 +0.8%.
+16k: c1 -1.5% (noise 11.8%), c2 -1.1% (noise 12.4%), c4 +0.2%, c5 +1.6%, c8 +0.4%, c10 +1.5%, c16 +0.4%.
+Beyond noise: d0 c5 up. No cell is worse beyond noise. d0 c1 and 16k c1/c2 split boot 1 vs boot 2 on both builds, so their
+noise band is wide; the paired probe below is the low-variance reading for them.
+
+**Paired temperature-0 decode-step probe** (same prompts on both builds, pooled 2 boots, 95% CI):
+
+| cell | step time | tokens/step | tok/s |
+|---|---|---|---|
+| fresh c1 / c2 / c4 / c8 / c16 | -2.9 / -3.5 / -2.1 (CI incl. 0) / -2.4 / -0.4% | +3.1 / -2.2 / -2.8 / +1.0 / +4.8% | +6.4 / +2.4 / +2.7 / +3.6 / +7.4% |
+| 16k c1 / c2 / c4 / c8 / c16 | -3.5 / -3.5 / -1.0 / -3.3 / +1.3% | +4.4 / -1.7 / +5.1 / +2.6 / +1.1% | +9.6 / +2.6 / +6.9 / +7.4 / +1.3% |
+| counting c1 / c2 / c4 / c8 / c16 | -3.4 / -4.9 / -2.2 / -1.5 / -0.7% | -0.6 / -0.5 / -0.1 / +0.2 / +0.1% | +2.9 / +4.6 / +1.5 / +2.4 / +0.5% |
+
+MTP acceptance per draft position within ±0.03 everywhere (16k c1 0.71/0.50/0.36/0.26 -> 0.71/0.50/0.35/0.26; fresh c1
+0.75/0.55/0.43/0.35 -> 0.75/0.58/0.45/0.37). The step gain is the smaller draft-head GEMM (65,536 instead of 124,160 rows
+per rank, four passes per step). Only 16k c16 has a slower step (+1.3%), offset by more tokens per step (tok/s +1.3%, CI incl. 0).
+
+**Counting** (`tools/tony-bench/bench_sweep.py`: "list the numbers from 1 to 300", temperature 0, thinking off, 300 tokens).
+Nearly every draft token is accepted, so this is the stack's upper bound, not coding speed. Aggregate tok/s:
+
+| | c1 | c2 | c4 | c5 | c8 | c10 | c16 |
+|---|---|---|---|---|---|---|---|
+| current | 119.8 * | 214.3 * | 356.6 | 407.7 * | 524.8 | 586.0 | 778.0 |
+| previous | 114.2 | 207.8 | 349.8 | 390.4 | 517.8 | 578.5 | 764.8 |
+
+c1 +4.9%, c2 +3.1%, c4 +1.9%, c5 +4.4%, c8 +1.4%, c10 +1.3%, c16 +1.7%; `*` = beyond noise. c1 is the median of 5 single
+runs per boot (c1 is bimodal on this pair).
+
+### Quality (b1.4)
+
+| Check | Result |
+|---|---|
+| tool-eval-bench `--hardmode` (88 tool-use scenarios, thinking on, temperature 0) | 92 and 92/100 on the two A/B boots (previous build 88-90; run-to-run band 86-93). TC-45 (`tool_choice=required`) 5/5 |
+| Long-context recall (`scripts/fidelity_probe.py`, 20 tool-call retrievals per depth) | A/B gate boot: 20/20 at 8k, 64k, 128k and **19/20 at 32k** (one `no_call` on the first cold-prefill trial). Re-gate on a fresh boot: 20/20 at 8k, 32k, 64k and 128k, plus 32k seeds 21 and 22 20/20 each. Cold-32k repro (20 fresh-prefix trials per build): b1.3 20/20, b1.4 20/20, cold TTFT ~23 s on both. 128k seeds 11 and 13: 20/20 each |
+| Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none |
+
+Verdict: `arm_verdict.py` v2 forced a reject on the 32k 19/20 alone; after the re-gate passed, Jev on the same fact sheet
+with the re-gate result: **ship** (0.78; distribution ship 0.83 / reject 0.10 / ship_with_caveat 0.05 / rerun 0.02).
+Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dlogprob| 0.033-0.041, within the
+0.038-0.046 self-noise. Files: [`results/b1.4-20261001/`](../results/b1.4-20261001/).
+
+**Thinking effort default** (DevOps 14 prompts x 3, same grader as 2026-09-28, T=1.0, max 16,384 tokens):
+
+| | Mean checks passed | Clean runs | Runaway thinking | Median time per task |
+|---|:---:|:---:|:---:|:---:|
+| b1.2, `xhigh` (template default) | 42.5% | 17 / 42 | 23 / 42 | 246 s |
+| b1.4 candidate, `medium` | 95.9% | 29 / 42 | 0 / 42 | 33 s |
+| same weights at TP=1, `medium` | 97.8% | 35 / 42 | 0 / 42 | 105 s |
+
+Total wall time for the 42 runs 1,498 s at `medium` vs 8,982 s at `xhigh`. Jev on making `medium` the server default:
+**medium_default 1.00**. Per-task table: [`results/b1.4-20261001/devops-b14-medium.md`](../results/b1.4-20261001/devops-b14-medium.md).
+
+## b1.3 image (2026-09-29)
+
+Recommended from 2026-09-29 to 2026-10-01, now the `-previous` fallback; superseded by b1.4 (above).
 
 Terms used: **concurrency (c)** = requests running at the same time;
 **depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
@@ -66,7 +145,7 @@ with no score; GSM8K, IFEval, LiveCodeBench and the comparison with the previous
 
 ## b1.2 image (2026-09-27)
 
-Recommended from 2026-09-27 to 2026-09-29, now the `-previous` fallback; superseded by b1.3 (above).
+Recommended from 2026-09-27 to 2026-09-29, then the `-previous` fallback until 2026-10-01 (archived).
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`
 (`sha256:ed5520eb037ceaadb02c9325d05ad55a37dc7cf972e0ef25a1f24dcddef624cb`), checkpoint revision `7c4f1bc1`.

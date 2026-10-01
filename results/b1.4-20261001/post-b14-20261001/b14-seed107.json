@@ -1,0 +1,47 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "32000",
+  "k": 1,
+  "trials": 1,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 107,
+  "timeout": 1800,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/post-b14-20261001/b14-seed107.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 32000,
+   "actual_prompt_tokens": 61375,
+   "counts": {
+    "exact": 1,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 23.016449689865112,
+   "mean_latency": 24.4394850730896,
+   "results": [
+    {
+     "target": "INV-1000-AA29",
+     "path": "/srv/clients/vertexx-cargo-eaf399/svc-sync_v4/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-eaf399/svc-sync_v4/logs/ingest.log",
+     "prompt_tokens": 61375,
+     "ttft": 23.016449689865112,
+     "dt": 24.4394850730896
+    }
+   ]
+  }
+ ]
+}
