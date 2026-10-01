@@ -60,6 +60,10 @@ def drafts(text, n):
     return sub(text, r"^  num_speculative_tokens: 4$", f"  num_speculative_tokens: {n}")
 
 
+def willneed(text):
+    return env(text, VLLM_PLE_MMAP_WILLNEED_MAX="8192")
+
+
 def profiler(text):
     text = sub(text, r"^runtime: vllm\n", "runtime: vllm\n\nmods:\n  - vllm-decode-profiler\n")
     return env(text, VLLM_LOCAL_PROF_TRIGGER_DIR="/cache/runtime/prof-trigger",
@@ -91,6 +95,20 @@ TP1_ARMS = {
                   lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K131072.txt.gz")),
     "tp1-dv98": ("r7 dvocab v2 K=98304 MTP draft vocabulary (rejected at TP=2 in r7)",
                  lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K98304.txt.gz")),
+    # opus-kernel-16: the wm arms run on the r8 TP=1 wm image (b12x exp/r8-tp1-wm, I=640
+    # geometry); tp1-willneed is their same-image control (= tp1-ple-willneed, the r8 winner).
+    "tp1-willneed": ("control for the k16 arms (wm, b12x GEMV): PLE WILLNEED pass (gathers <= 8192 lookups)",
+                     lambda t: willneed(t)),
+    "tp1-wm2m8": ("willneed + weight-major fused NVFP4 MoE decode (wm) at <= 8 tokens "
+                  "(c1 verify M=5); numerics: BF16 combine order, canary",
+                  lambda t: env(willneed(t), B12X_MOE_DECODE_BACKEND="wm", B12X_MOE_WM_MAX_TOKENS="8")),
+    "tp1-wm": ("willneed + wm MoE decode at <= 32 tokens (c1..c6 verify); numerics: canary",
+               lambda t: env(willneed(t), B12X_MOE_DECODE_BACKEND="wm", B12X_MOE_WM_MAX_TOKENS="32")),
+    # vLLM feat/r8-mtp-gemv: b12x SIMT GEMV (rows <= 8) for BF16 projections, same math.
+    "tp1-gemv-mtp": ("willneed + b12x GEMV for the MTP draft qkv/o_proj (BF16, rows <= 8)",
+                     lambda t: env(willneed(t), VLLM_QWEN38_B12X_GEMV="mtp")),
+    "tp1-gemv": ("willneed + b12x GEMV for the MTP draft qkv/o_proj and every MoE router gate",
+                 lambda t: env(willneed(t), VLLM_QWEN38_B12X_GEMV="mtp,gate")),
 }
 
 TP2_ARMS = {
@@ -109,7 +127,7 @@ TP2_ARMS = {
 }
 
 
-def make(kind, base, out, image=None):
+def make(kind, base, out, image=None, only=None):
     text = Path(base).read_text()
     digest = hashlib.sha256(text.encode()).hexdigest()[:12]
     if kind == "tp1":
@@ -122,6 +140,11 @@ def make(kind, base, out, image=None):
         if "rejection_sample_method" in text:
             arms = {k: v for k, v in arms.items() if k != "r8-block"}
             print("base already sets rejection_sample_method: r8-block skipped (in b1.4)")
+    if only:
+        missing = set(only) - set(arms)
+        if missing:
+            sys.exit(f"unknown arms {sorted(missing)}")
+        arms = {k: v for k, v in arms.items() if k in only}
     for arm, (what, edit) in arms.items():
         body = edit(text)
         body = sub(body, r"^name: .*$", f"name: {prefix}-{arm}")
@@ -139,10 +162,11 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--image", help="tp1: container tag of the r8 TP=1 screening image")
     ap.add_argument("--out", default=AD)
+    ap.add_argument("--only", help="comma list: write only these arms")
     a = ap.parse_args()
     if a.kind == "tp1" and not a.image:
         ap.error("tp1 needs --image")
-    make(a.kind, a.base, a.out, a.image)
+    make(a.kind, a.base, a.out, a.image, a.only.split(",") if a.only else None)
 
 
 if __name__ == "__main__":

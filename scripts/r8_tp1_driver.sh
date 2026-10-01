@@ -17,7 +17,8 @@
 #                state set by scripts/ple_pagecache.py before every boot on that node
 #   SHIPPED_IMAGE_EXPECT (required): tag of the shipped TP=2 registry recipe (restore check)
 #   CANARY_ARMS (default "tp1-dv128 tp1-dv98"): after pass 1, pos-0 acceptance of every temp-0 cell
-#                vs tp1-off p1 on the same node; < 0.7x drops the arm on that node
+#                vs $CONTROL_ARM p1 on the same node; < 0.7x drops the arm on that node
+#   CONTROL_ARM (default tp1-off): the node's control; its failed boot stops the node
 #   tp1-ple-cpuhash is dropped on a node whose serve log shows "PLE cpu-hash MISMATCH".
 # Every pass keeps the full serve log, the PLE reader stats lines, a 5 s MemAvailable/Cached
 # log and the env/cmdline. A failed boot drops that arm on that node (tp1-off: the node stops).
@@ -36,6 +37,7 @@ SNAP=$HOME/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Nex
 CODE_CORPUS=$REPO/results/corpus-code.txt
 GEN="List the numbers from 1 to 300 separated by commas. Output only the numbers, nothing else, no commentary."
 CANARY_ARMS=${CANARY_ARMS:-"tp1-dv128 tp1-dv98"}
+CONTROL_ARM=${CONTROL_ARM:-tp1-off}
 PROF_WINDOWS=${PROF_WINDOWS:-"fresh-c1:256:1:1 d16k-c1:16384:1:4 fresh-c4:256:4:3 d16k-c4:16384:4:6 count-c1:0:1:0"}
 RESULTS=${RESULTS:?RESULTS}
 mkdir -p "$RESULTS"
@@ -235,7 +237,7 @@ node_run() { # host "seq": one node's sequence, sequential
     mp=$(memlog "$h" "$d/mem.log")
     if ! boot_arm "$h" "$rec" "$d"; then
       keep_logs "$h" "$d"; kill "$mp" 2>/dev/null; echo fail > "$d/FAILED"; stop_host "$h"
-      [ "$arm" = tp1-off ] && { log "$node: control boot failed: node stops"; return 1; }
+      [ "$arm" = "$CONTROL_ARM" ] && { log "$node: control boot failed: node stops"; return 1; }
       skip="$skip$arm "; continue; fi
     warm "$h"
     if [ "$arm" = prof ]; then pass_prof "$h" "$pass" "$d"; else PROBE_TEMP=${temp:-0} pass_screen "$h" "$d"; fi
@@ -244,8 +246,8 @@ node_run() { # host "seq": one node's sequence, sequential
     if [ "$arm" = tp1-ple-cpuhash ] && grep -q "PLE cpu-hash MISMATCH" "$d/serve.log"; then
       log "$node: CANARY tp1-ple-cpuhash ids differ from the GPU hash: dropping"; echo "$node $arm" >> "$RESULTS/CANARY_FAILED"; skip="$skip$arm "; fi
     if [[ " $CANARY_ARMS " == *" $arm "* ]] && [ "$pass" = 1 ] && [ -z "$temp" ] \
-        && ! canary "$RESULTS/screen/$node/tp1-off-p1" "$d"; then
-      log "$node: CANARY $arm acceptance collapsed vs tp1-off p1: dropping"; echo "$node $arm" >> "$RESULTS/CANARY_FAILED"; skip="$skip$arm "; fi
+        && ! canary "$RESULTS/screen/$node/$CONTROL_ARM-p1" "$d"; then
+      log "$node: CANARY $arm acceptance collapsed vs $CONTROL_ARM p1: dropping"; echo "$node $arm" >> "$RESULTS/CANARY_FAILED"; skip="$skip$arm "; fi
     stop_host "$h"
   done; }
 
