@@ -116,7 +116,8 @@ A build ships only if it passes all of these. A faster build that fails any chec
 
 ## Thinking effort
 
-The chat template knows three efforts: `xhigh` (its own default), `medium` and `low`; any other value is an error.
+The chat template knows three efforts: `xhigh` (its own default), `medium` and `low`; any other value is an HTTP 400
+(vLLM's top-level `"reasoning_effort": "none"` switches thinking off instead).
 At `xhigh` it adds a "think carefully, validate key assumptions" system sentence, and on prompts that say "must pass
 `terraform validate`" the model keeps re-checking its draft until the token budget runs out. **This recipe sets the
 server default to `medium`** (`--default-chat-template-kwargs '{"reasoning_effort":"medium"}'`), which adds no sentence.
@@ -139,6 +140,24 @@ curl -s http://<head>:8000/v1/chat/completions -H 'Content-Type: application/jso
   "messages": [{"role": "user", "content": "Prove that the square root of 2 is irrational."}]}'
 # or: "chat_template_kwargs": {"reasoning_effort": "xhigh"}
 ```
+
+Both fields override the server default, checked live on the promoted server (3 short prompts × 2 runs per request,
+server default sampling). `prompt_tokens` shows which effort the template applied: `xhigh` and `low` add a system
+sentence, `medium` adds none.
+
+| Request | Effort applied | Prompt tokens | Thinking tokens (median) |
+|---|---|:---:|:---:|
+| no effort field | `medium` (server default) | 30 / 28 / 44 | 58 / 357 / 185 |
+| `"reasoning_effort": "medium"` | `medium` | 30 / 28 / 44 | 56 / 483 / 202 |
+| `"reasoning_effort": "xhigh"` | `xhigh` | 72 / 70 / 86 | 73 / **6,144** / 67 |
+| `"chat_template_kwargs": {"reasoning_effort": "xhigh"}` | `xhigh` | 72 / 70 / 86 | 73 / 1,776 / 81 |
+| top-level `"low"` + `chat_template_kwargs` `"xhigh"` | `low`: the top-level field wins | 60 / 58 / 74 | 55 / 321 / 125 |
+| `"reasoning_effort": "none"` | thinking off | 32 / 30 / 46 | 0 |
+| `"reasoning_effort": "high"` | HTTP 400, `Unexpected reasoning effort high` | | |
+
+The 6,144 is the request's `max_tokens`: both top-level `xhigh` runs of the "5 largest files" bash prompt thought until
+the cap and never answered, the same runaway the `medium` default avoids. Script and raw rows:
+[`results/b1.4-20261001/effort-override/`](results/b1.4-20261001/effort-override/).
 
 Not yet measured at `medium`: MMLU-Pro, GSM8K, IFEval and LiveCodeBench, where long thinking may still pay off; ask for
 `xhigh` there. `-previous` (b1.3) keeps the template default `xhigh`. [Eval details](results/evals-20260928/README.md),
