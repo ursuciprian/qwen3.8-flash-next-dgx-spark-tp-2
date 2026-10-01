@@ -87,7 +87,9 @@ TP1_ARMS = {
                   lambda t: spec(t, '"rejection_sample_method":"block"')),
     "tp1-d3": ("3 MTP drafts instead of 4", lambda t: drafts(t, 3)),
     "tp1-cg": ("CUDA-graph capture sizes + [5,10,20]", lambda t: capture(t, "tp1")),
-    "tp1-dv98": ("r7 dvocab v2 K=98304 MTP draft vocabulary (numerics: acceptance canary)",
+    "tp1-dv128": ("b1.4's MTP draft vocabulary, r7 dvocab v2 K=131072 (numerics: canary)",
+                  lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K131072.txt.gz")),
+    "tp1-dv98": ("r7 dvocab v2 K=98304 MTP draft vocabulary (rejected at TP=2 in r7)",
                  lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K98304.txt.gz")),
 }
 

@@ -16,7 +16,7 @@
 #   PAGECACHE_H1 / PAGECACHE_H2  keep (default) | evict | touch: PLE table page-cache
 #                state set by scripts/ple_pagecache.py before every boot on that node
 #   SHIPPED_IMAGE_EXPECT (required): tag of the shipped TP=2 registry recipe (restore check)
-#   CANARY_ARMS (default "tp1-dv98"): after pass 1, pos-0 acceptance of every temp-0 cell
+#   CANARY_ARMS (default "tp1-dv128 tp1-dv98"): after pass 1, pos-0 acceptance of every temp-0 cell
 #                vs tp1-off p1 on the same node; < 0.7x drops the arm on that node
 #   tp1-ple-cpuhash is dropped on a node whose serve log shows "PLE cpu-hash MISMATCH".
 # Every pass keeps the full serve log, the PLE reader stats lines, a 5 s MemAvailable/Cached
@@ -35,7 +35,7 @@ RCDIR=$HOME/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flas
 SNAP=$HOME/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 CODE_CORPUS=$REPO/results/corpus-code.txt
 GEN="List the numbers from 1 to 300 separated by commas. Output only the numbers, nothing else, no commentary."
-CANARY_ARMS=${CANARY_ARMS:-"tp1-dv98"}
+CANARY_ARMS=${CANARY_ARMS:-"tp1-dv128 tp1-dv98"}
 PROF_WINDOWS=${PROF_WINDOWS:-"fresh-c1:256:1:1 d16k-c1:16384:1:4 fresh-c4:256:4:3 d16k-c4:16384:4:6 count-c1:0:1:0"}
 RESULTS=${RESULTS:?RESULTS}
 mkdir -p "$RESULTS"

@@ -50,10 +50,11 @@ for f in "$AD"/qwen3.8-flash-next-1x-dgx-spark-tp1-*.yaml; do
   case $f in *-tp1-safe.yaml|*-tp1-dvocab.yaml) continue ;; esac
   sparkrun recipe validate "$f" >> "$L" 2>&1 || { log "validate failed: $f"; echo "FAILED: validate" > "$RESULTS/STATE"; exit 1; }
 done
-SUM="396cdfa7872aad2b9b19f8f9bebd11df461e4a0ef30f2d5b850202658eaf56b8  ids-v2-K98304.txt.gz"
-if [[ "$SEQ_H1 $SEQ_H2" == *tp1-dv98* ]]; then
+SUM="396cdfa7872aad2b9b19f8f9bebd11df461e4a0ef30f2d5b850202658eaf56b8  ids-v2-K98304.txt.gz
+fc40970533741fc14217879a5f5385897f4126bd1d7ce23ed0268236b4b8cf7b  ids-v2-K131072.txt.gz"
+if [[ "$SEQ_H1 $SEQ_H2" == *tp1-dv* ]]; then
   (cd "$RC/r7" && echo "$SUM" | sha256sum -c --quiet) && ssh $H2 "cd $RC/r7 && echo '$SUM' | sha256sum -c --quiet" \
-    || { log "r7 98k ids missing on a node"; echo "FAILED: ids" > "$RESULTS/STATE"; exit 1; }
+    || { log "r7 draft-vocab ids missing on a node"; echo "FAILED: ids" > "$RESULTS/STATE"; exit 1; }
 fi
 scp -q "$REPO/scripts/ple_pagecache.py" "$H2:$REPO/scripts/ple_pagecache.py" || { log "scp ple_pagecache.py failed"; exit 1; }
 log "start driver: RESULTS=$RESULTS SEQ_H1=$SEQ_H1 SEQ_H2=$SEQ_H2"
