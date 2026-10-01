@@ -7,7 +7,9 @@
 # 3. writes only the k16 arms (r8_make_recipes.py --only), all on that image, control tp1-willneed
 #    (= the r8 PLE winner tp1-ple-willneed; every knob below is off in it);
 # 4. runs scripts/r8_tp1_driver.sh, ABBA per node, canary on every arm (pos-0 acc < 0.7x control).
-# Arms: tp1-gemv-mtp, tp1-gemv (dgx-01), tp1-wm2m8 (dgx-02). ~35 min per pass -> ~3.5 h.
+# Arms: tp1-gemv (dgx-01), tp1-gemv-mtp (dgx-02), ~35 min per pass -> ~2.3 h. tp1-wm2m8 is
+# written too but not in the default sequences (I=640 microbench: wm = dynamic at M=5).
+# Refuses to start unless results/r8-wm-bench/gemv-test.txt (job2, GPU op test) passed.
 set -u
 WAIT=${1:?usage: launch_r8_tp1_k16.sh <STATE file to wait for>}
 : "${SHIPPED_IMAGE_EXPECT:?set to the tag the registry recipe serves (b1.4)}"
@@ -21,14 +23,19 @@ IMAGE=spark-vllm-b12x:$TP1_TAG
 ARMS=tp1-willneed,tp1-gemv-mtp,tp1-gemv,tp1-wm2m8
 export RESULTS=${RESULTS:-$REPO/results/r8-tp1-k16-$(date +%Y%m%d-%H%M)}
 export CONTROL_ARM=tp1-willneed CANARY_ARMS="tp1-gemv-mtp tp1-gemv tp1-wm2m8"
-export SEQ_H1=${SEQ_H1-"tp1-willneed:1 tp1-gemv:1 tp1-gemv-mtp:1 tp1-gemv-mtp:2 tp1-gemv:2 tp1-willneed:2"}
-export SEQ_H2=${SEQ_H2-"tp1-willneed:1 tp1-wm2m8:1 tp1-wm2m8:2 tp1-willneed:2"}
+export SEQ_H1=${SEQ_H1-"tp1-willneed:1 tp1-gemv:1 tp1-gemv:2 tp1-willneed:2"}
+export SEQ_H2=${SEQ_H2-"tp1-willneed:1 tp1-gemv-mtp:1 tp1-gemv-mtp:2 tp1-willneed:2"}
 mkdir -p "$RESULTS"; L=$RESULTS/launch.log
 log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" | tee -a "$L"; }
 echo waiting > "$RESULTS/STATE"
 log "waiting for $WAIT"
 until grep -qE '^(DONE|FAILED|SKIPPED)' "$WAIT" 2>/dev/null; do sleep 60; done
-log "wait over: $(head -1 "$WAIT"); taking gpu-lock"
+log "wait over: $(head -1 "$WAIT")"
+B=$REPO/results/r8-wm-bench
+until grep -q DONE "$B/job2.STATE" 2>/dev/null; do sleep 60; done
+grep -q " passed" "$B/gemv-test.txt" && ! grep -qiE "failed|error" "$B/gemv-test.txt" \
+  || { log "b12x GEMV op GPU test did not pass ($B/gemv-test.txt)"; echo "FAILED: gemv test" > "$RESULTS/STATE"; exit 1; }
+log "taking gpu-lock"
 exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"
 if docker image inspect "$IMAGE" >/dev/null 2>&1 && ssh $H2 "docker image inspect $IMAGE >/dev/null 2>&1"; then
   log "image $IMAGE present on both nodes"
