@@ -33,7 +33,7 @@ until grep -qE '^(DONE|FAILED|SKIPPED)' "$WAIT" 2>/dev/null; do sleep 60; done
 log "wait over: $(head -1 "$WAIT")"
 B=$REPO/results/r8-wm-bench
 until grep -q DONE "$B/job2.STATE" 2>/dev/null; do sleep 60; done
-grep -q " passed" "$B/gemv-test.txt" && ! grep -qiE "failed|error" "$B/gemv-test.txt" \
+grep -qE "[0-9]+ passed" "$B/gemv-test.txt" && ! grep -qE "[0-9]+ (failed|errors?)" "$B/gemv-test.txt" \
   || { log "b12x GEMV op GPU test did not pass ($B/gemv-test.txt)"; echo "FAILED: gemv test" > "$RESULTS/STATE"; exit 1; }
 log "taking gpu-lock"
 exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"
