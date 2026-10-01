@@ -3,7 +3,7 @@
 - Candidate: `spark-vllm-b12x:b14-b7fbaf96-a7e649d8` (vLLM `shipped-b1.4-20261001` = `a7e649d8`, b12x `b7fbaf96`),
   recipe = the b1.3 recipe + `VLLM_MTP_DRAFT_VOCAB` (the r7 v2 131,072-id list, `archive/mods/r7-dvocab/`).
   Shipped as the warm image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`
-  (`sha256:@@DIGEST@@`), which also carries the id list at `/opt/mtp-vocab`, plus the recipe flag
+  (`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd`), which also carries the id list at `/opt/mtp-vocab`, plus the recipe flag
   `--default-chat-template-kwargs '{"reasoning_effort":"medium"}'`.
 - A/B `r4ab-b14-20261001/`: base1, cand1 (gate + TC-45), cand2 (hardmode + 128k seeds 11/13), base2, same day.
   Paired temp-0 probes `paired-report.txt`; logits `logits-cmp.txt` (cross-build within self-noise).

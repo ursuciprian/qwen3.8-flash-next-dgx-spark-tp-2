@@ -51,7 +51,7 @@ sparkrun's runtime cache when it is missing, so even a first boot does no kernel
 ## What is in the image
 
 `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`, digest
-`sha256:@@DIGEST@@` (arm64, public). The recipe keeps the tag, not the
+`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd` (arm64, public). The recipe keeps the tag, not the
 digest, because sparkrun 0.3.6 copies the image to the worker with `docker save | docker load`, which drops digests.
 
 | Part | Source |
@@ -59,7 +59,7 @@ digest, because sparkrun 0.3.6 copies the image to the worker with `docker save 
 | Dockerfile | [eugr/spark-vllm-docker](https://github.com/eugr/spark-vllm-docker) `798528a2`, built by [spark-vllm-b12x](https://github.com/ursuciprian/spark-vllm-b12x) `build.sh` |
 | vLLM | [`ursuciprian/vllm` tag `shipped-b1.4-20261001`](https://github.com/ursuciprian/vllm/tree/shipped-b1.4-20261001) (`a7e649d8`), on local-inference-lab `dev/jovian-judgement` `8e1f1e58` |
 | b12x kernels | [`ursuciprian/b12x` tag `shipped-b1.4-20261001`](https://github.com/ursuciprian/b12x/tree/shipped-b1.4-20261001) (`b7fbaf96`, unchanged since 2026-09-25), on local-inference-lab `a8333658` |
-| Warm layer | [`docker/b0-warm/`](../docker/b0-warm/Dockerfile): b12x plan seed + the MTP draft-vocab list (`/opt/mtp-vocab`); pushed by the `build-b0-warm` workflow (run @@RUN@@) |
+| Warm layer | [`docker/b0-warm/`](../docker/b0-warm/Dockerfile): b12x plan seed + the MTP draft-vocab list (`/opt/mtp-vocab`); pushed by the `build-b0-warm` workflow (run 36866001482) |
 
 Changes against the previous build (`b1.3-20260929-b7fbaf96-7344a997-warm`):
 

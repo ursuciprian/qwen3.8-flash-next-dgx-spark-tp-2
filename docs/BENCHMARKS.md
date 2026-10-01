@@ -9,7 +9,7 @@ Terms used: **concurrency (c)** = requests running at the same time;
 model drafts up to 4 next tokens that are checked in one step, which is what makes single-user speed high.
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`
-(`sha256:@@DIGEST@@`), checkpoint revision `7c4f1bc1`.
+(`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd`), checkpoint revision `7c4f1bc1`.
 A/B against the previous build (2026-09-29) on 2026-10-01, two separate boots per build, means of both boots.
 Raw files and verdict: [`results/b1.4-20261001/`](../results/b1.4-20261001/). The 2026-09-29 build's tables follow below.
 What changed: the MTP draft head scores 131,072 of the 248,320 vocab ids (lossless via rejection sampling), the vllm#923

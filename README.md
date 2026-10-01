@@ -140,8 +140,6 @@ curl -s http://<head>:8000/v1/chat/completions -H 'Content-Type: application/jso
 # or: "chat_template_kwargs": {"reasoning_effort": "xhigh"}
 ```
 
-@@OVERRIDE@@
-
 Not yet measured at `medium`: MMLU-Pro, GSM8K, IFEval and LiveCodeBench, where long thinking may still pay off; ask for
 `xhigh` there. `-previous` (b1.3) keeps the template default `xhigh`. [Eval details](results/evals-20260928/README.md),
 [b1.4 run](results/b1.4-20261001/devops-b14-medium.md).
