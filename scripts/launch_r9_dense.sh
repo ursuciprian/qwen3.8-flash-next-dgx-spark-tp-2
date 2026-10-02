@@ -33,7 +33,7 @@ def acc(sub, tag):
 try:
     if open(f"{d}/STATE").read().strip() != "DONE": print("no: state"); sys.exit()
     txt = open(f"{d}/dense/fidelity.txt").read()
-    if len(re.findall(r"20/20", txt)) < 2: print("no: fidelity"); sys.exit()
+    if len(re.findall(r"^depth +(32000|128000) .*exact +20 ", txt, re.M)) < 2: print("no: fidelity"); sys.exit()
     for t in ("fresh-c1", "d16k-c1"):
         if any(abs(x - y) > 0.03 for x, y in zip(acc("base", t), acc("dense", t))): print(f"no: acceptance {t}"); sys.exit()
     print("yes")

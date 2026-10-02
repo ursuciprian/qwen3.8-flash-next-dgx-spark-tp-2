@@ -68,6 +68,19 @@ def mtpq(text):
     return sub(text, r'^  VLLM_QWEN38_HC_MXFP8: "hc"$', '  VLLM_QWEN38_HC_MXFP8: "hc,mtp"')
 
 
+def dense_snapshot(text):
+    """Boot a local-only checkpoint snapshot (R9_DENSE_SNAP, default DENSE_REV): an absolute model: path
+    makes sparkrun skip HF distribution and identity-mount the dir; sparkrun swaps the path in only
+    through {model}, so the literal serve argument and --revision go."""
+    import os
+    snap = os.environ.get("R9_DENSE_SNAP", DENSE_REV)
+    path = os.path.expanduser(f"~/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/{snap}")
+    text = sub(text, r"^model: .*$", f"model: {path}")
+    text = sub(text, r"^model_revision: .*\n", "")
+    text = sub(text, re.escape("vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 "), "vllm serve {model} ")
+    return sub(text, rf"^ *--revision {SHIP_REV} \\\n", "")
+
+
 def profiler(text):
     text = sub(text, r"^runtime: vllm\n", "runtime: vllm\n\nmods:\n  - vllm-decode-profiler\n")
     return env(text, VLLM_LOCAL_PROF_TRIGGER_DIR="/cache/runtime/prof-trigger",
@@ -144,7 +157,7 @@ TP2_ARMS = {
                lambda t: env(t, VLLM_B12X_BLOCKSCALED_PIN=PIN_TP2)),
     "r9-dense": ("checkpoint snapshot f400...01: GDN qkv/z/out + attention q/k/v/o as weight-only NVFP4 "
                  "(scripts/r9_requant_dense.py), same b1.4 image (numerics: canary)",
-                 lambda t: t.replace(SHIP_REV, DENSE_REV) if t.count(SHIP_REV) >= 2 else sys.exit("r9-dense: revision not found")),
+                 lambda t: dense_snapshot(t)),
     "r9-gemv": ("b12x SIMT GEMV for the MTP draft qkv/o_proj and the MoE router gates "
                 "(VLLM_QWEN38_B12X_GEMV=mtp,gate)", lambda t: env(t, VLLM_QWEN38_B12X_GEMV="mtp,gate")),
 }
@@ -167,6 +180,8 @@ def make(kind, base, out, image=None, only=None):
         arms, prefix = TP2_ARMS, "qwen3.8-flash-next-2x-dgx-spark"
         if image:
             text = sub(text, r"^container: .*$", f"container: {image}")
+            # non-warm screening images have no /opt/mtp-vocab: same list (sha fc409705) from the runtime cache
+            text = text.replace("/opt/mtp-vocab/ids-v2-K131072.txt.gz", "/cache/runtime/r7/ids-v2-K131072.txt.gz")
         elif only and any(a.startswith("r9-") and a != "r9-dense" for a in only):
             sys.exit("r9 arms need --image (the r9 screening image)")
         if "rejection_sample_method" in text:
