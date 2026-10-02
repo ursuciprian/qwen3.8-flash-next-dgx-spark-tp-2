@@ -119,6 +119,8 @@ TP1_ARMS = {
                      lambda t: env(willneed(t), VLLM_QWEN38_B12X_GEMV="mtp")),
     "tp1-gemv": ("willneed + b12x GEMV for the MTP draft qkv/o_proj and every MoE router gate",
                  lambda t: env(willneed(t), VLLM_QWEN38_B12X_GEMV="mtp,gate")),
+    "tp1-pin": ("willneed + pin out_proj/o_proj decode regimes (<= 16 rows) to A16 64x128 split 8",
+                lambda t: env(willneed(t), VLLM_B12X_BLOCKSCALED_PIN=PIN_TP1)),
 }
 
 TP2_ARMS = {
@@ -134,7 +136,18 @@ TP2_ARMS = {
                     lambda t: env(t, VLLM_B12X_MOE_FP4_LAYER_MAX_INPUT_SCALE="w13")),
     "r8-block": ("block verification rejection sampling (lossless)",
                  lambda t: spec(t, '"rejection_sample_method":"block"')),
+    # opus-kernel-17 (2026-10-02): r9 arms run on the r9 image (--image; vLLM feat/r9-pin +
+    # b12x feat/r9-pin), control r9-off = that image with every knob off.
+    "r9-off": ("control: b1.4 recipe on the r9 image, every r9 knob off", lambda t: t),
+    "r9-pin": ("pin dense out_proj/o_proj decode regimes (<= 16 rows) to the raced-best A16 split-8 "
+               "config (VLLM_B12X_BLOCKSCALED_PIN; TP=2 shard 2560x3072)",
+               lambda t: env(t, VLLM_B12X_BLOCKSCALED_PIN=PIN_TP2)),
+    "r9-gemv": ("b12x SIMT GEMV for the MTP draft qkv/o_proj and the MoE router gates "
+                "(VLLM_QWEN38_B12X_GEMV=mtp,gate)", lambda t: env(t, VLLM_QWEN38_B12X_GEMV="mtp,gate")),
 }
+# k15 microbench (L2-cold, ~/GEN-AI/k15/out/bench*.jsonl): raced best at M=5..16.
+PIN_TP1 = "2560x6144@16=a16:64:128:8"
+PIN_TP2 = "2560x3072@16=a16:64:64:8"
 
 
 def make(kind, base, out, image=None, only=None):
@@ -147,6 +160,10 @@ def make(kind, base, out, image=None, only=None):
         text = env(text, VLLM_PLE_MMAP_STATS="100")
     else:
         arms, prefix = TP2_ARMS, "qwen3.8-flash-next-2x-dgx-spark"
+        if image:
+            text = sub(text, r"^container: .*$", f"container: {image}")
+        elif only and any(a.startswith("r9-") for a in only):
+            sys.exit("r9 arms need --image (the r9 screening image)")
         if "rejection_sample_method" in text:
             arms = {k: v for k, v in arms.items() if k != "r8-block"}
             print("base already sets rejection_sample_method: r8-block skipped (in b1.4)")

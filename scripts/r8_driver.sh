@@ -31,6 +31,7 @@ AD=archive/recipes/qwen3.8-flash-next
 REGISTRY_RECIPE=qwen3.8-flash-next-2x-dgx-spark
 SHIPPED_IMAGE_EXPECT=${SHIPPED_IMAGE_EXPECT:?set to the tag the registry recipe serves (b1.4)}
 CANARY_ARMS=${CANARY_ARMS:-"r8-fp4scale r8-d3 r8-d3g"}
+CONTROL_ARM=${CONTROL_ARM:-r8-off}  # r9: r9-off (same image as the arms)
 RCDIR=$HOME/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-2d9615ab
 CODE_CORPUS=$REPO/results/corpus-code.txt
 PROSE_CORPUS=$REPO/results/corpus-prose.txt
@@ -43,7 +44,7 @@ log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" | tee -a "$LOG"; }
 set_state() { echo "$*" > "$RESULTS/STATE"; log "STATE: $*"; }
 recipe_of() { case $1 in
   base) echo recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml ;;
-  r5-*|r6-*|r7-*|r8-*) echo "$AD/qwen3.8-flash-next-2x-dgx-spark-$1.yaml" ;;
+  r5-*|r6-*|r7-*|r8-*|r9-*) echo "$AD/qwen3.8-flash-next-2x-dgx-spark-$1.yaml" ;;
   *) echo "$AD/qwen3.8-flash-next-2x-dgx-spark-r4-$1.yaml" ;; esac; }
 
 OWNS=0; RESTORED=0
@@ -239,7 +240,7 @@ stage_build() { # name
 }
 
 canary() { # arm: <arm> p1 vs r8-off p1, draft position 0 acceptance per cell: fail if any cell < 0.7x off
-  python3 - "$RESULTS/screen/r8-off-p1" "$RESULTS/screen/$1-p1" <<'PY' >> "$LOG" 2>&1
+  python3 - "$RESULTS/screen/$CONTROL_ARM-p1" "$RESULTS/screen/$1-p1" <<'PY' >> "$LOG" 2>&1
 import re,sys,glob,os
 def acc0(d,tag):
     def rd(f):
@@ -289,10 +290,10 @@ for st in $STAGES; do
     screen) case $SKIP in *" $a "*) log "skip $st (canary)"; continue ;; esac
             stage_screen "$a" "$b" "$c"
             if [ -f "$RESULTS/screen/$a-p$b/FAILED" ]; then
-              [ "$a" = r8-off ] && { log "screen $a boot failed: stopping"; break; }
+              [ "$a" = "$CONTROL_ARM" ] && { log "screen $a boot failed: stopping"; break; }
               log "screen $a boot failed: dropping $a"; SKIP="$SKIP$a "; continue; fi
             if [[ " $CANARY_ARMS " == *" $a "* ]] && [ "$b" = 1 ] && ! canary "$a"; then
-              log "CANARY: $a acceptance collapsed vs r8-off p1: dropping $a"; echo "$a" >> "$RESULTS/CANARY_FAILED"; SKIP="$SKIP$a "; fi ;;
+              log "CANARY: $a acceptance collapsed vs $CONTROL_ARM p1: dropping $a"; echo "$a" >> "$RESULTS/CANARY_FAILED"; SKIP="$SKIP$a "; fi ;;
     *) log "unknown stage $st" ;;
   esac
 done
