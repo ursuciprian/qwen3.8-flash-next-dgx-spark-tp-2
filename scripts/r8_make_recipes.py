@@ -3,6 +3,7 @@
 
     r8_make_recipes.py tp1 --base <tp1-safe.yaml> --image <tag> [--out <dir>]
     r8_make_recipes.py tp2 --base <registry recipe = b1.4> [--out <dir>]
+    r8_make_recipes.py tp1v2 --base <shipped 1x v2 recipe> --image <tag> [--out <dir>]
 
 TP=1 arms start from the tp1-safe recipe (KV 6 GiB, 1 compile worker), swap in the r8
 TP=1 screening image (vLLM exp/r8-tp1-screen: page-cache PLE reader + all r8 knobs,
@@ -161,6 +162,16 @@ TP2_ARMS = {
     "r9-gemv": ("b12x SIMT GEMV for the MTP draft qkv/o_proj and the MoE router gates "
                 "(VLLM_QWEN38_B12X_GEMV=mtp,gate)", lambda t: env(t, VLLM_QWEN38_B12X_GEMV="mtp,gate")),
 }
+# opus-kernel-18 (2026-10-02): TP=1 A16 MoE arms on the k18 image (= shipped 1x v2 image with b12x
+# exp/k18-tp1-a16: A16 token cutoff + upstream W4A16 / stream-gate fixes), base = the shipped v2
+# recipe. Control tp1-a16off = v2 on that image with the cutoff off.
+TP1V2_ARMS = {
+    "tp1-a16off": ("control: shipped 1x v2 recipe on the k18 image, A16 cutoff off", lambda t: t),
+    **{f"tp1-a16-{n}": (f"NVFP4 MoE runs W4A16 (BF16 activations) for calls of <= {n} tokens "
+                        f"(VLLM_B12X_A16_MAX_TOKENS={n}); numerics: canary",
+                        lambda t, n=n: env(t, VLLM_B12X_A16_MAX_TOKENS=str(n)))
+       for n in (24, 40)},
+}
 # k15 microbench (L2-cold, ~/GEN-AI/k15/out/bench*.jsonl): raced best at M=5..16.
 SHIP_REV = "7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
 DENSE_REV = "f400000000000000000000000000000000000001"
@@ -175,6 +186,10 @@ def make(kind, base, out, image=None, only=None):
         arms, prefix = TP1_ARMS, "qwen3.8-flash-next-1x-dgx-spark"
         text = sub(text, r"^container: .*$", f"container: {image}")
         text = sub(text, r"^mods:\n  - vllm-tp1-ple-mmap\n\n?", "")
+        text = env(text, VLLM_PLE_MMAP_STATS="100")
+    elif kind == "tp1v2":
+        arms, prefix = TP1V2_ARMS, "qwen3.8-flash-next-1x-dgx-spark"
+        text = sub(text, r"^container: .*$", f"container: {image}")
         text = env(text, VLLM_PLE_MMAP_STATS="100")
     else:
         arms, prefix = TP2_ARMS, "qwen3.8-flash-next-2x-dgx-spark"
@@ -205,14 +220,14 @@ def make(kind, base, out, image=None, only=None):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("kind", choices=("tp1", "tp2"))
+    ap.add_argument("kind", choices=("tp1", "tp1v2", "tp2"))
     ap.add_argument("--base", required=True)
     ap.add_argument("--image", help="tp1: container tag of the r8 TP=1 screening image")
     ap.add_argument("--out", default=AD)
     ap.add_argument("--only", help="comma list: write only these arms")
     a = ap.parse_args()
-    if a.kind == "tp1" and not a.image:
-        ap.error("tp1 needs --image")
+    if a.kind in ("tp1", "tp1v2") and not a.image:
+        ap.error(f"{a.kind} needs --image")
     make(a.kind, a.base, a.out, a.image, a.only.split(",") if a.only else None)
 
 

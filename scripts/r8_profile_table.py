@@ -48,8 +48,8 @@ def main():
     ap.add_argument("--tp2", default=TP2_DEFAULT)
     a = ap.parse_args()
     prof = os.path.join(a.results, "prof")
-    windows = sorted({d[5:] for n, _ in NODES for d in os.listdir(os.path.join(prof, n))
-                      if d.startswith("prof-")} if os.path.isdir(prof) else [])
+    windows = sorted({d[5:] for n, _ in NODES if os.path.isdir(os.path.join(prof, n))
+                      for d in os.listdir(os.path.join(prof, n)) if d.startswith("prof-")})
     print(f"# r8 Phase 1 profile: {a.results}\n\nms per decode step (60-step windows, rank 0); "
           f"TP=2 = {a.tp2}\n")
     for w in windows:
