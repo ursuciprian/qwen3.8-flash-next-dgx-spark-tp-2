@@ -1,0 +1,96 @@
+# ARM tp1-v2-kv8 (2026-10-03): qwen3.8-flash-next-1x-dgx-spark v2 with a 8 GiB KV pool instead of 6 GiB.
+#
+# Why: 16k c8 collapses to 21.9 tok/s on v2 (KV pool 94-99%, Running 7 / Waiting 1, re-prefill, prefix hit 0.434 -> 0.041).
+# The hybrid pool is 1,958 pages of ~3.14 MiB (attention block 3,024 tokens, sized up to the GDN state page). Per request:
+# 37 GDN/short-conv groups x (2 + 4 MTP draft slots) = 222 pages, plus 13 attention groups x 7 pages at 16k+2k+512 = 91.
+# 8 x 313 = 2,504 pages (7.67 GiB) > 1,958. 8 GiB = 2,610 pages: the smallest pool that holds all eight at once.
+# Cold-boot guard: if the b12x plan seed cannot be copied (the case where every plan autotunes and MemAvailable fell to
+# 3.79 GiB with 6 GiB KV), the command falls back to 6 GiB.
+# Everything else is identical to the shipped v2 recipe.
+
+recipe_version: "1"
+name: qwen3.8-flash-next-1x-dgx-spark-kv8
+description: "Experimental. Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache), OpenAI-compatible API on port 8000 (2026-10-02)."
+
+model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-20261002-5bf24021-884b4ff6-warm
+runtime: vllm
+
+build_args: []
+
+solo_only: true
+min_nodes: 1
+max_nodes: 1
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 1
+  pipeline_parallel: 1
+  block_size: 16
+  max_model_len: 262144
+  max_num_seqs: 8
+  max_num_batched_tokens: 8192
+  num_speculative_tokens: 4
+  # 8 GiB. With explicit KV bytes vLLM skips memory profiling; the utilization only gates
+  # startup (free >= util x total), which the page cache would otherwise trip.
+  kv_cache_memory_bytes: 8589934592
+  gpu_memory_utilization: 0.01
+
+env:
+  VLLM_PLE_MMAP: "1"
+  VLLM_PLE_MMAP_WILLNEED_MAX: "8192"
+  VLLM_MTP_DRAFT_VOCAB: "/opt/mtp-vocab/ids-v2-K131072.txt.gz"
+  VLLM_QWEN38_HC_MXFP8: "hc"
+  VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
+  B12X_AUTOTUNE: "1"
+  CUTE_DSL_ARCH: "sm_121a"
+  SAFETENSORS_FAST_GPU: "1"
+  VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+  VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+  VLLM_USE_AOT_COMPILE: "1"
+  VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+  VLLM_USE_V2_MODEL_RUNNER: "1"
+  B12X_POLICY_MODE: "auto"
+  VLLM_MXFP8_LM_HEAD: "1"
+  B12X_COMPILE_WORKERS: "1"
+  VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
+  VLLM_PREFIX_DROP_EXACT: "1"
+
+command: |
+  S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; KVB={kv_cache_memory_bytes}; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; else KVB=6442450944; echo "b12x plan seed missing: KV pool back to 6 GiB for a safe cold boot"; fi
+  vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --tensor-parallel-size {tensor_parallel} \
+    --pipeline-parallel-size {pipeline_parallel} \
+    --mamba-cache-mode align \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
+    --dtype bfloat16 \
+    --kv-cache-dtype fp8 \
+    --quantization modelopt_mixed \
+    --block-size {block_size} \
+    --load-format b12x \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"draft_sample_method":"probabilistic"}}' \
+    --gdn-decode-kernel b12x \
+    --linear-backend b12x \
+    --moe-backend b12x \
+    --no-enable-flashinfer-autotune \
+    --reasoning-parser qwen3 \
+    --tool-call-parser qwen3_xml \
+    --enable-auto-tool-choice \
+    --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
+    --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
+    --kv-cache-memory-bytes "$KVB" \
+    --gpu-memory-utilization {gpu_memory_utilization}
