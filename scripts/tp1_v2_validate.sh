@@ -46,6 +46,15 @@ restore() {
     *) log "FAILED FAILED: restore -- MANUAL INTERVENTION"; st "FAILED: restore" ;; esac; }
 trap restore EXIT
 st running; sparkrun stop --all >>"$LOG" 2>&1; sleep 15
+IMG=$(awk '/^container:/{print $2}' "$RECIPE")
+if ! docker image inspect "$IMG" >/dev/null 2>&1; then
+  # The CI warm build runs on this node's runner and refuses while :8000 serves: dispatch it now.
+  st ci-window; log "waiting up to 40 min for $IMG (dispatch build-b0-warm now)"
+  for i in $(seq 1 80); do docker image inspect "$IMG" >/dev/null 2>&1 && break; sleep 30; done
+  docker image inspect "$IMG" >/dev/null 2>&1 || { log "image $IMG never appeared"; exit 1; }
+  sleep 120; st running   # let the workflow finish its push
+fi
+ssh -n $H2 "docker image inspect $IMG >/dev/null 2>&1 || docker pull $IMG" >> "$LOG" 2>&1 || { log "dgx-02 cannot get $IMG"; exit 1; }
 cp "$RECIPE" "$RESULTS/recipe.yaml"
 sed 's|S=/opt/b12x-seed/preparation;|S=/nonexistent-k17-cold;|' "$RECIPE" > "$RESULTS/cold/recipe-noseed.yaml"
 grep -q nonexistent-k17-cold "$RESULTS/cold/recipe-noseed.yaml" || { log "seed line not found in recipe"; exit 1; }
