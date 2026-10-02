@@ -54,7 +54,8 @@ if ! docker image inspect "$IMG" >/dev/null 2>&1; then
   docker image inspect "$IMG" >/dev/null 2>&1 || { log "image $IMG never appeared"; exit 1; }
   sleep 120; st running   # let the workflow finish its push
 fi
-ssh -n $H2 "docker image inspect $IMG >/dev/null 2>&1 || docker pull $IMG" >> "$LOG" 2>&1 || { log "dgx-02 cannot get $IMG"; exit 1; }
+for i in $(seq 1 40); do ssh -n $H2 "docker image inspect $IMG >/dev/null 2>&1 || docker pull -q $IMG" >> "$LOG" 2>&1 && break; sleep 30; done
+ssh -n $H2 "docker image inspect $IMG >/dev/null 2>&1" || { log "dgx-02 cannot get $IMG"; exit 1; }
 cp "$RECIPE" "$RESULTS/recipe.yaml"
 sed 's|S=/opt/b12x-seed/preparation;|S=/nonexistent-k17-cold;|' "$RECIPE" > "$RESULTS/cold/recipe-noseed.yaml"
 grep -q nonexistent-k17-cold "$RESULTS/cold/recipe-noseed.yaml" || { log "seed line not found in recipe"; exit 1; }
