@@ -24,7 +24,7 @@ until grep -qE '^(DONE|FAILED|SKIPPED)' "$WAIT" 2>/dev/null; do sleep 60; done
 log "wait over: $(head -1 "$WAIT")"
 log "taking gpu-lock"; exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"
 health() { curl -s -m 5 -o /dev/null -w '%{http_code}' localhost:8000/health; }
-wait_health() { local s=$(date +%s); until [ "$(health)" = 200 ]; do [ $(( $(date +%s) - s )) -gt 5400 ] && return 1; sleep 15; done; log "health after $(( $(date +%s) - s ))s"; }
+wait_health() { local s=$(date +%s); until [ "$(health)" = 200 ]; do [ $(( $(date +%s) - s )) -gt 3000 ] && return 1; sleep 15; done; log "health after $(( $(date +%s) - s ))s"; }
 pong() { curl -s -m 120 localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Reply with exactly one word: pong"}],"max_tokens":400,"temperature":0,"chat_template_kwargs":{"enable_thinking":false}}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["choices"][0]["message"]["content"].strip())' 2>&1; }
 stop_all() { sparkrun stop --all >>"$LOG" 2>&1; sleep 10; docker ps -q | xargs -r docker rm -f >/dev/null; ssh -n $H2 'docker ps -q | xargs -r docker rm -f' >/dev/null; }
 FINAL="FAILED: check"
@@ -35,8 +35,15 @@ trap restore EXIT
 BASE=$(find "$HOME/.cache/sparkrun/registries" -path '*recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml' | head -1)
 grep -q "^container: .*$SHIPPED_IMAGE_EXPECT" "$BASE" || { log "registry recipe does not serve b1.4"; exit 1; }
 cp "$BASE" "$RESULTS/base.yaml"
-sed -e "s/^name: .*/name: qwen3.8-flash-next-2x-dgx-spark-r9-dense/" -e "s/$SHIP/$SNAP/g" "$BASE" > "$RESULTS/dense.yaml"
-[ "$(grep -c "$SNAP" "$RESULTS/dense.yaml")" -ge 2 ] || { log "revision swap failed"; exit 1; }
+# The f400 snapshot exists only locally: an absolute model: path makes sparkrun skip the HF model
+# distribution and identity-mount the directory (its files are hardlinks to the shipped blobs).
+# sparkrun swaps that path in only through {model}, so the literal serve argument and --revision go.
+MP=$HOME/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/$SNAP
+sed -e "s/^name: .*/name: qwen3.8-flash-next-2x-dgx-spark-r9-dense/" -e "s|^model: .*|model: $MP|" -e "/^model_revision:/d" \
+    -e "s|vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 |vllm serve {model} |" -e "/--revision $SHIP/d" "$BASE" > "$RESULTS/dense.yaml"
+grep -q "^model: $MP" "$RESULTS/dense.yaml" && grep -q "vllm serve {model}" "$RESULTS/dense.yaml" && ! grep -q "$SHIP" "$RESULTS/dense.yaml" \
+  || { log "dense recipe rewrite failed"; exit 1; }
+sparkrun recipe validate "$RESULTS/dense.yaml" >> "$LOG" 2>&1 || { log "dense recipe invalid"; exit 1; }
 pos() { curl -s -m 10 localhost:8000/metrics | grep -E '^vllm:spec_decode_num_(accepted|draft)_tokens_per_pos_total'; }
 probe() { # dir tag src depth conc reps offset
   local d=$1 tag=$2 src=$3 depth=$4 c=$5 r=$6 off=$7; pos > "$d/pos-$tag.before"
@@ -59,7 +66,7 @@ PY
 }
 run_boot() { # name recipe
   local d=$RESULTS/$1; mkdir -p "$d"; st "boot:$1"; stop_all
-  ( cd "$RESULTS" && sparkrun run "$2" --no-follow >> "$d/sparkrun.log" 2>&1 )
+  ( cd "$RESULTS" && sparkrun run "$2" --no-follow >> "$d/sparkrun.log" 2>&1 ) || { log "$1: sparkrun run failed (see $d/sparkrun.log)"; return 1; }
   wait_health || { log "$1 boot failed"; c=$(docker ps -a --format '{{.Names}}' | grep node_0 | head -1); docker logs "$c" > "$d/serve.log" 2>&1; return 1; }
   log "$1 pong=$(pong)"; st "probe:$1"
   ( cd "$REPO" && python3 scripts/logits_equiv.py capture --out "$d/logits-a.json" > "$d/logits.log" 2>&1 \
@@ -70,7 +77,8 @@ run_boot() { # name recipe
   c=$(docker ps --format '{{.Names}}' | grep node_0 | head -1); docker exec "$c" cat /tmp/sparkrun_serve.log > "$d/serve.log" 2>&1 || docker logs "$c" > "$d/serve.log" 2>&1
   for t in fresh-c1 d16k-c1 count-c1 fresh-c4; do log "$1 $t acc/pos $(acc0 "$d" "$t")"; done; }
 st running
-run_boot base "$RESULTS/base.yaml" || exit 1
+if [ "${SKIP_BASE:-0}" = 1 ] && [ -f "$RESULTS/base/pos-fresh-c4.after" ]; then log "base results kept (SKIP_BASE=1)"
+else run_boot base "$RESULTS/base.yaml" || exit 1; fi
 run_boot dense "$RESULTS/dense.yaml" || { FINAL="FAILED: dense boot"; exit 1; }
 ( cd "$REPO" && for p in a b; do python3 scripts/logits_equiv.py diff "$RESULTS/base/logits-$p.json" "$RESULTS/dense/logits-$p.json"; done
   python3 scripts/logits_equiv.py diff "$RESULTS/base/logits-a.json" "$RESULTS/base/logits-b.json" ) > "$RESULTS/logits-diff.txt" 2>&1

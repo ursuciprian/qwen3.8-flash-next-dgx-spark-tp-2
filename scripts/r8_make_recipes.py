@@ -142,10 +142,15 @@ TP2_ARMS = {
     "r9-pin": ("pin dense out_proj/o_proj decode regimes (<= 16 rows) to the raced-best A16 split-8 "
                "config (VLLM_B12X_BLOCKSCALED_PIN; TP=2 shard 2560x3072)",
                lambda t: env(t, VLLM_B12X_BLOCKSCALED_PIN=PIN_TP2)),
+    "r9-dense": ("checkpoint snapshot f400...01: GDN qkv/z/out + attention q/k/v/o as weight-only NVFP4 "
+                 "(scripts/r9_requant_dense.py), same b1.4 image (numerics: canary)",
+                 lambda t: t.replace(SHIP_REV, DENSE_REV) if t.count(SHIP_REV) >= 2 else sys.exit("r9-dense: revision not found")),
     "r9-gemv": ("b12x SIMT GEMV for the MTP draft qkv/o_proj and the MoE router gates "
                 "(VLLM_QWEN38_B12X_GEMV=mtp,gate)", lambda t: env(t, VLLM_QWEN38_B12X_GEMV="mtp,gate")),
 }
 # k15 microbench (L2-cold, ~/GEN-AI/k15/out/bench*.jsonl): raced best at M=5..16.
+SHIP_REV = "7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
+DENSE_REV = "f400000000000000000000000000000000000001"
 PIN_TP1 = "2560x6144@16=a16:64:128:8"
 PIN_TP2 = "2560x3072@16=a16:64:64:8"
 
@@ -162,7 +167,7 @@ def make(kind, base, out, image=None, only=None):
         arms, prefix = TP2_ARMS, "qwen3.8-flash-next-2x-dgx-spark"
         if image:
             text = sub(text, r"^container: .*$", f"container: {image}")
-        elif only and any(a.startswith("r9-") for a in only):
+        elif only and any(a.startswith("r9-") and a != "r9-dense" for a in only):
             sys.exit("r9 arms need --image (the r9 screening image)")
         if "rejection_sample_method" in text:
             arms = {k: v for k, v in arms.items() if k != "r8-block"}
