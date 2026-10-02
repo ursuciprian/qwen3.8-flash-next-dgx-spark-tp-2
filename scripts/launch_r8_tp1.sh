@@ -8,6 +8,8 @@
 #    with that image, validates them, checks the r7 98k draft-vocab ids on both nodes;
 # 4. runs scripts/r8_tp1_driver.sh (SEQ_H1/SEQ_H2, PAGECACHE_*, POST pass through).
 # Defaults: the PLE reader arms on dgx-01, the host/spec arms on dgx-02, each ABBA vs tp1-off.
+# ARMS=<comma list>: generate/validate only these arms. ANY_STATE=1: start after DONE or FAILED
+# (the driver stops every server first). The whole run holds ~/GEN-AI/gpu-lock (flock).
 set -u
 WAIT=${1:?usage: launch_r8_tp1.sh <STATE file to wait for>}
 : "${SHIPPED_IMAGE_EXPECT:?set to the tag the registry recipe serves (b1.4)}"
@@ -26,9 +28,10 @@ mkdir -p "$RESULTS"; L=$RESULTS/launch.log
 log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" | tee -a "$L"; }
 echo waiting > "$RESULTS/STATE"
 log "waiting for $WAIT (DONE)"
-until grep -qE '^(DONE|FAILED)' "$WAIT" 2>/dev/null; do sleep 60; done
-grep -q '^DONE' "$WAIT" || { log "wait state: $(cat "$WAIT"): not starting"; echo "SKIPPED: $(head -1 "$WAIT")" > "$RESULTS/STATE"; exit 1; }
+until grep -qE '^(DONE|FAILED|SKIPPED)' "$WAIT" 2>/dev/null; do sleep 60; done
+{ grep -q '^DONE' "$WAIT" || [ "${ANY_STATE:-0}" = 1 ]; } || { log "wait state: $(cat "$WAIT"): not starting"; echo "SKIPPED: $(head -1 "$WAIT")" > "$RESULTS/STATE"; exit 1; }
 log "wait over: $(cat "$WAIT")"
+log "taking gpu-lock"; exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"
 if docker image inspect "$IMAGE" >/dev/null 2>&1 && ssh $H2 "docker image inspect $IMAGE >/dev/null 2>&1"; then
   log "image $IMAGE present on both nodes"
 else
@@ -44,10 +47,11 @@ fi
 docker run --rm --entrypoint grep "$IMAGE" -q "def reader_knobs" /usr/local/lib/python3.12/dist-packages/vllm/models/qwen3_8_flash_next/ple_mmap.py \
   || { log "image $IMAGE lacks the r8 PLE reader"; echo "FAILED: image" > "$RESULTS/STATE"; exit 1; }
 ( cd "$RECIPES" && python3 "$REPO/scripts/r8_make_recipes.py" tp1 --image "$IMAGE" \
-    --base "$AD/qwen3.8-flash-next-1x-dgx-spark-tp1-safe.yaml" --out "$AD" ) >> "$L" 2>&1 \
+    --base "$AD/qwen3.8-flash-next-1x-dgx-spark-tp1-safe.yaml" --out "$AD" ${ARMS:+--only "$ARMS"} ) >> "$L" 2>&1 \
   || { log "recipe generation failed"; echo "FAILED: recipes" > "$RESULTS/STATE"; exit 1; }
 for f in "$AD"/qwen3.8-flash-next-1x-dgx-spark-tp1-*.yaml; do
   case $f in *-tp1-safe.yaml|*-tp1-dvocab.yaml) continue ;; esac
+  [ -n "${ARMS:-}" ] && [[ ",$ARMS," != *",$(basename "$f" .yaml | sed s/qwen3.8-flash-next-1x-dgx-spark-//),"* ]] && continue
   sparkrun recipe validate "$f" >> "$L" 2>&1 || { log "validate failed: $f"; echo "FAILED: validate" > "$RESULTS/STATE"; exit 1; }
 done
 SUM="396cdfa7872aad2b9b19f8f9bebd11df461e4a0ef30f2d5b850202658eaf56b8  ids-v2-K98304.txt.gz

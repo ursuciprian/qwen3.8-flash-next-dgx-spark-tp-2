@@ -64,6 +64,10 @@ def willneed(text):
     return env(text, VLLM_PLE_MMAP_WILLNEED_MAX="8192")
 
 
+def mtpq(text):
+    return sub(text, r'^  VLLM_QWEN38_HC_MXFP8: "hc"$', '  VLLM_QWEN38_HC_MXFP8: "hc,mtp"')
+
+
 def profiler(text):
     text = sub(text, r"^runtime: vllm\n", "runtime: vllm\n\nmods:\n  - vllm-decode-profiler\n")
     return env(text, VLLM_LOCAL_PROF_TRIGGER_DIR="/cache/runtime/prof-trigger",
@@ -91,8 +95,14 @@ TP1_ARMS = {
                   lambda t: spec(t, '"rejection_sample_method":"block"')),
     "tp1-d3": ("3 MTP drafts instead of 4", lambda t: drafts(t, 3)),
     "tp1-cg": ("CUDA-graph capture sizes + [5,10,20]", lambda t: capture(t, "tp1")),
-    "tp1-dv128": ("b1.4's MTP draft vocabulary, r7 dvocab v2 K=131072 (numerics: canary)",
-                  lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K131072.txt.gz")),
+    # opus-kernel-17 (2026-10-02): tp1-dv128 sits on willneed (the r8 PLE winner), like the
+    # drafter arms below; all run on the k16 image, control tp1-willneed.
+    "tp1-dv128": ("willneed + b1.4's MTP draft vocabulary, r7 dvocab v2 K=131072 (numerics: canary)",
+                  lambda t: env(willneed(t), VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K131072.txt.gz")),
+    "tp1-mtpq": ("willneed + online MXFP8 on the MTP layer's BF16 linears (VLLM_QWEN38_HC_MXFP8=hc,mtp; "
+                 "numerics: canary)", lambda t: mtpq(willneed(t))),
+    "tp1-mtpq-d3": ("willneed + mtpq + 3 MTP drafts instead of 4 (numerics: canary)",
+                    lambda t: drafts(mtpq(willneed(t)), 3)),
     "tp1-dv98": ("r7 dvocab v2 K=98304 MTP draft vocabulary (rejected at TP=2 in r7)",
                  lambda t: env(t, VLLM_MTP_DRAFT_VOCAB="/cache/runtime/r7/ids-v2-K98304.txt.gz")),
     # opus-kernel-16: the wm arms run on the r8 TP=1 wm image (b12x exp/r8-tp1-wm, I=640
