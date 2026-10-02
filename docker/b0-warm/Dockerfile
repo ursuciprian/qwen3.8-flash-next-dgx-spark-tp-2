@@ -1,6 +1,7 @@
 # Warm layer over the B0 image (spark-vllm-b12x a8333658). A fresh pair boots it
 # with plain `sparkrun run`, with no mods and no host mounts:
-#  - preparation/: b12x plan-selection cache for checkpoint 7c4f1bc1 at TP=2 on
+#  - preparation/: b12x plan-selection caches for checkpoint 7c4f1bc1 at TP=2 (8ccf4799) and TP=1
+#    (54b3e768, the 1x recipe; added 2026-10-02) on
 #    GB10. Its identity is device name + namespace (model snapshot path, TP, dtype,
 #    spec method), not host or GPU UUID, so it hits on any GB10 pair. The recipe's
 #    command copies it into sparkrun's runtime cache ($XDG_CACHE_HOME) when that
