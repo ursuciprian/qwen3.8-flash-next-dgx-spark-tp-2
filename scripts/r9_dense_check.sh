@@ -13,7 +13,7 @@ WAIT=${1:?usage: r9_dense_check.sh <STATE file>}
 : "${SHIPPED_IMAGE_EXPECT:?}" "${RESULTS:?}"
 export PATH="$HOME/.local/bin:$PATH"
 REPO=$HOME/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2; H2=192.168.100.53
-SNAP=f400000000000000000000000000000000000001; SHIP=7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+SNAP=${SNAP:-f400000000000000000000000000000000000001}; SHIP=7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 CODE=$REPO/results/corpus-code.txt
 GEN="List the numbers from 1 to 300 separated by commas. Output only the numbers, nothing else, no commentary."
 mkdir -p "$RESULTS"; LOG=$RESULTS/driver.log
@@ -89,4 +89,9 @@ if [ $bad = 1 ]; then log "CANARY: dense pos-0 acceptance < 0.7x base"; FINAL="D
 st fidelity; ( cd "$REPO" && python3 scripts/fidelity_probe.py --base http://localhost:8000 --model qwen3.8-flash-next \
   --depths 32000,128000 --seed 7 --out "$RESULTS/dense/fidelity.json" > "$RESULTS/dense/fidelity.txt" 2>&1 )
 log "fidelity: $(tail -3 "$RESULTS/dense/fidelity.txt" | tr '\n' ' ')"
+if grep -E "depth +128000" "$RESULTS/dense/fidelity.txt" | grep -q "exact  20"; then
+  for sd in 11 13; do ( cd "$REPO" && python3 scripts/fidelity_probe.py --base http://localhost:8000 --model qwen3.8-flash-next \
+    --depths 128000 --seed $sd --out "$RESULTS/dense/fidelity-seed$sd.json" > "$RESULTS/dense/fidelity-seed$sd.txt" 2>&1 )
+    log "fidelity 128k seed $sd: $(grep depth "$RESULTS/dense/fidelity-seed$sd.txt" | tr -s ' ' | cut -c1-90)"; done
+fi
 FINAL=DONE; exit 0

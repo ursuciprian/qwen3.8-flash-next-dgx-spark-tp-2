@@ -40,18 +40,41 @@ def fused_group(mod):
     return f"{layer}.{key}"
 
 
-def nvfp4(w, gs2=None, right=False):
-    """W [N,K] float -> (packed U8 [N,K/2], E4M3 scale [N,K/16], FP32 weight_scale_2)."""
+MSE_FACTORS = (1.0, 0.95, 0.9, 0.85, 0.8)
+
+
+def _codes(blk, s, gs2, right):
+    denom = (s.float() * gs2).unsqueeze(-1)
+    x = torch.where(denom > 0, blk / denom, torch.zeros_like(blk))
+    mag = torch.bucketize(x.abs().clamp(max=6.0), MID, right=right)
+    deq = E2M1[mag] * torch.sign(x) * denom
+    return mag, x, ((deq - blk) ** 2).sum(-1)
+
+
+def nvfp4(w, gs2=None, right=False, mse=False):
+    """W [N,K] float -> (packed U8 [N,K/2], E4M3 scale [N,K/16], FP32 weight_scale_2).
+
+    mse=True: per 16-block, try block scales amax/6 x MSE_FACTORS and keep the one with the lowest
+    squared reconstruction error (values above the clipped range saturate at +-6)."""
     w = w.float()
     n, k = w.shape
     if gs2 is None:
         gs2 = w.abs().amax() / (6.0 * 448.0)
     gs2 = torch.as_tensor(gs2, dtype=torch.float32)
     blk = w.view(n, k // 16, 16)
-    s = (blk.abs().amax(-1) / 6.0 / gs2).clamp(max=448.0).to(torch.float8_e4m3fn)
-    denom = (s.float() * gs2).unsqueeze(-1)
-    x = torch.where(denom > 0, blk / denom, torch.zeros_like(blk))
-    mag = torch.bucketize(x.abs().clamp(max=6.0), MID, right=right)
+    amax = blk.abs().amax(-1)
+    best = None
+    for f in (MSE_FACTORS if mse else (1.0,)):
+        s_f = (amax * f / 6.0 / gs2).clamp(max=448.0).to(torch.float8_e4m3fn)
+        mag_f, x_f, err = _codes(blk, s_f, gs2, right)
+        if best is None:
+            s, mag, x, best = s_f, mag_f, x_f, err
+        else:
+            take = err < best
+            s = torch.where(take, s_f.view(torch.uint8), s.view(torch.uint8)).view(torch.float8_e4m3fn)
+            mag = torch.where(take.unsqueeze(-1), mag_f, mag)
+            x = torch.where(take.unsqueeze(-1), x_f, x)
+            best = torch.minimum(err, best)
     code = (mag | ((x < 0) & (mag > 0)).to(torch.long) << 3).view(n, k).to(torch.uint8)
     packed = code[:, 0::2] | (code[:, 1::2] << 4)
     return packed.contiguous(), s.contiguous(), gs2.reshape(())
@@ -96,6 +119,10 @@ def main():
     ap.add_argument("--shipped", required=True)
     ap.add_argument("--base", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--scope", choices=("all", "attn_out", "gdn", "qkvz"), default="all",
+                    help="attn_out: attention q/k/v/o + GDN out_proj; gdn: GDN in_proj_qkv/z + out_proj; "
+                         "qkvz: GDN in_proj_qkv/z only (the rest stays MXFP8)")
+    ap.add_argument("--mse", action="store_true", help="per-block MSE scale search")
     ap.add_argument("--limit-layers", type=int, default=None, help="dry run: only the first N in-scope layers, write nothing")
     a = ap.parse_args()
     torch.set_num_threads(min(16, os.cpu_count() or 4))
@@ -122,6 +149,8 @@ def main():
 
     mods = sorted({k.rsplit(".", 1)[0] for k in shipped.map if SCOPE.match(k.rsplit(".", 1)[0])},
                   key=lambda m: (int(SCOPE.match(m).group(1)), m))
+    keep = {"all": r".", "attn_out": r"(self_attn\.|out_proj$)", "gdn": r"linear_attn\.", "qkvz": r"in_proj_(qkv|z)$"}[a.scope]
+    mods = [m for m in mods if re.search(keep, m)]
     if a.limit_layers is not None:
         layers = sorted({int(SCOPE.match(m).group(1)) for m in mods})[: a.limit_layers]
         mods = [m for m in mods if int(SCOPE.match(m).group(1)) in layers]
@@ -158,7 +187,7 @@ def main():
     for m in mods:
         wb = base.get(m + ".weight")
         gs2 = torch.tensor(amax[fused_group(m)] / (6.0 * 448.0), dtype=torch.float32)
-        pk, sc, g2 = nvfp4(wb, gs2, right=right)
+        pk, sc, g2 = nvfp4(wb, gs2, right=right, mse=a.mse)
         deq = nvfp4_dequant(pk, sc, g2)
         mx = shipped.get(m + ".weight").float() * torch.exp2(shipped.get(m + ".weight_scale").float() - 127).repeat_interleave(32, 1)
         rep["quant"][m] = {"rel_err_nvfp4": float((deq - wb.float()).norm() / wb.float().norm()),
@@ -219,6 +248,7 @@ def main():
     hq = json.load(open(os.path.join(a.shipped, "hf_quant_config.json")))
     requant(hq.get("quantization", hq))
     json.dump(hq, open(os.path.join(a.out, "hf_quant_config.json"), "w"), indent=2)
+    rep["options"] = {"scope": a.scope, "mse": a.mse}
     rep["base_revision"] = "de4b8e4d43b917e7706784d8bb445c9af86a3540"
     rep["shipped_revision"] = "7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
     json.dump(rep, open(os.path.join(a.out, "r9-report.json"), "w"), indent=1)

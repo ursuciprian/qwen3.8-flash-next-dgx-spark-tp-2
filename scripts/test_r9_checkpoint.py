@@ -26,7 +26,7 @@ def t(k):
     handles.setdefault(f, safe_open(f"{new}/{f}", "pt", device="cpu"))
     return handles[f].get_tensor(k)
 mods = sorted({k.rsplit(".", 1)[0] for k in added})
-assert len(mods) == 156, len(mods)
+assert len(mods) in (156, 108, 72, 84), len(mods)  # all / gdn / qkvz / attn_out
 gs = {}
 for m in mods:
     w, s, g = t(m + ".weight"), t(m + ".weight_scale"), t(m + ".weight_scale_2")
@@ -47,8 +47,9 @@ cfg = ModelOptMixedPrecisionConfig.from_config(qc)
 cfg.packed_modules_mapping = {"qkv_proj": ["q_proj", "k_proj", "v_proj"], "in_proj_qkvz": ["in_proj_qkv", "in_proj_z"],
                               "in_proj_ba": ["in_proj_b", "in_proj_a"], "gate_up_proj": ["gate_proj", "up_proj"]}
 P = "model.language_model.layers"
-want = {f"{P}.0.linear_attn.in_proj_qkvz": "W4A16_NVFP4", f"{P}.0.linear_attn.out_proj": "W4A16_NVFP4",
-        f"{P}.3.self_attn.qkv_proj": "W4A16_NVFP4", f"{P}.3.self_attn.o_proj": "W4A16_NVFP4",
+algo = lambda m: "W4A16_NVFP4" if m in mods else "MXFP8"
+want = {f"{P}.0.linear_attn.in_proj_qkvz": algo(f"{P}.0.linear_attn.in_proj_qkv"), f"{P}.0.linear_attn.out_proj": algo(f"{P}.0.linear_attn.out_proj"),
+        f"{P}.3.self_attn.qkv_proj": algo(f"{P}.3.self_attn.q_proj"), f"{P}.3.self_attn.o_proj": algo(f"{P}.3.self_attn.o_proj"),
         f"{P}.0.linear_attn.in_proj_ba": "MXFP8", f"{P}.3.self_attn.indexer.index_qk_proj": "MXFP8",
         f"{P}.0.mlp.shared_expert.gate_up_proj": "MXFP8"}
 got = {p: cfg._resolve_quant_algo(p) for p in want}
