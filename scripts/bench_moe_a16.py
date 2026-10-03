@@ -60,8 +60,8 @@ def make_experts(device, *, a16_cutoff):
         w2_block_scales=scales((E, K, I // 16)),
         w13_global_scales=torch.full((E,), 0.6, device=device),
         w2_global_scales=torch.full((E,), 0.7, device=device),
-        input_scale=torch.full((E,), 48.0, device=device),
-        intermediate_scale=torch.full((E,), 384.0, device=device),
+        input_scale=torch.full((1,), 48.0, device=device),
+        intermediate_scale=torch.full((1,), 384.0, device=device),
     ))
 
 

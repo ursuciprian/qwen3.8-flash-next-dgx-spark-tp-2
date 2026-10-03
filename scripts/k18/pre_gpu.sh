@@ -6,7 +6,7 @@
 set -u
 OUT=${1:?out dir}; mkdir -p "$OUT"
 K=$HOME/GEN-AI/k18
-IMG=${K18_IMAGE:-spark-vllm-b12x:k18a16-338c8167-884b4ff6}
+IMG=${K18_IMAGE:-spark-vllm-b12x:k18a16-4e777f5e-884b4ff6}
 REF=${REF_IMAGE:-qwen38-flash-dgx:iter6d-20260910}
 SHAPES=${SHAPES:-5:33,10:60,20:96,40:170}
 G="--rm --gpus all --ipc host --network none -e CUTE_DSL_ARCH=sm_121a -e PYTHONDONTWRITEBYTECODE=1"
