@@ -19,6 +19,8 @@
 #   CANARY_ARMS (default "tp1-dv128 tp1-dv98"): after pass 1, pos-0 acceptance of every temp-0 cell
 #                vs $CONTROL_ARM p1 on the same node; < 0.7x drops the arm on that node
 #   CONTROL_ARM (default tp1-off): the node's control; its failed boot stops the node
+#   BENCHY=1     after each screening pass, the llama-benchy task grid d0/16k c1-c8 (T=1.0, 3 runs, as
+#                tp1_kv16k_screen.sh) with preemption/prefix counters: <pass dir>/task.csv, counters.*
 #   tp1-ple-cpuhash is dropped on a node whose serve log shows "PLE cpu-hash MISMATCH".
 # Every pass keeps the full serve log, the PLE reader stats lines, a 5 s MemAvailable/Cached
 # log and the env/cmdline. A failed boot drops that arm on that node (tp1-off: the node stops).
@@ -199,6 +201,14 @@ pass_screen() { # host dir
     probe "$h" "$d" "fresh-c$c" "$CODE_CORPUS" 256 "$c" "$r" $((k*104729))
     probe "$h" "$d" "d16k-c$c" "$CODE_CORPUS" 16384 "$c" "$r" $(((k+10)*104729))
     probe "$h" "$d" "count-c$c" count 0 "$c" "$r" 0; done; }
+benchy() { # host dir
+  local h=$1 d=$2; bcount() { curl -s -m 10 "$1:8000/metrics" | grep -E '^vllm:(num_preemptions|prefix_cache_(hits|queries))(_total)?'; }
+  bcount "$h" > "$d/counters.before"
+  ( cd "$REPO" && timeout 4500 uvx --from "$HOME/GEN-AI/llama-benchy-fork" llama-benchy --base-url "http://$h:8000/v1" --model qwen3.8-flash-next \
+      --tokenizer "$SNAP" --prompt-mode task --no-force-length --pp 2048 --tg 512 --depth 0 16384 --concurrency 1 2 4 8 --runs 3 \
+      --temperature 1.0 --top-p 0.95 --top-k 20 --enable-prefix-caching --metrics-url "http://$h:8000/metrics" \
+      --save-result "$d/task.csv" > "$d/task_grid.log" 2>&1 ); local rc=$?
+  bcount "$h" > "$d/counters.after"; log "$(label "$h")/$(basename "$d"): benchy exit=$rc"; }
 canary() { # control-dir arm-dir
   python3 - "$1" "$2" <<'PY' >> "$LOG" 2>&1
 import glob, os, re, sys
@@ -240,7 +250,7 @@ node_run() { # host "seq": one node's sequence, sequential
       [ "$arm" = "$CONTROL_ARM" ] && { log "$node: control boot failed: node stops"; return 1; }
       skip="$skip$arm "; continue; fi
     warm "$h"
-    if [ "$arm" = prof ]; then pass_prof "$h" "$pass" "$d"; else PROBE_TEMP=${temp:-0} pass_screen "$h" "$d"; fi
+    if [ "$arm" = prof ]; then pass_prof "$h" "$pass" "$d"; else PROBE_TEMP=${temp:-0} pass_screen "$h" "$d"; [ -n "${BENCHY:-}" ] && benchy "$h" "$d"; fi
     keep_logs "$h" "$d"; kill "$mp" 2>/dev/null
     log "$node: $item done, min MemAvailable $(minmem "$d/mem.log") GiB"
     if [ "$arm" = tp1-ple-cpuhash ] && grep -q "PLE cpu-hash MISMATCH" "$d/serve.log"; then

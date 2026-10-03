@@ -51,7 +51,9 @@ for a in ${ARMS//,/ }; do
   sparkrun recipe validate "$AD/qwen3.8-flash-next-2x-dgx-spark-$a.yaml" >> "$L" 2>&1 \
     || { log "validate failed: $a"; echo "FAILED: validate" > "$RESULTS/STATE"; exit 1; }
 done
-log "taking gpu-lock"; exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"
+# GPU_LOCK_HELD=1: the caller already holds ~/GEN-AI/gpu-lock (fd inherited); a second flock would deadlock.
+if [ -n "${GPU_LOCK_HELD:-}" ]; then log "gpu-lock held by the caller"
+else log "taking gpu-lock"; exec 9>"$HOME/GEN-AI/gpu-lock"; flock 9; log "gpu-lock held"; fi
 export STAGES
 log "start driver: RESULTS=$RESULTS STAGES=$STAGES"
 cd "$REPO" && exec bash scripts/r8_driver.sh
