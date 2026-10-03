@@ -171,6 +171,13 @@ TP1V2_ARMS = {
                         f"(VLLM_B12X_A16_MAX_TOKENS={n}); numerics: canary",
                         lambda t, n=n: env(t, VLLM_B12X_A16_MAX_TOKENS=str(n)))
        for n in (24, 40)},
+    # opus-gaps (2026-10-03): r11 image = shipped v2 warm image + vLLM exp/r11-tp1-gaps (PLE
+    # reader NVMe keepalive). Control tp1-v2c = v2 on that image with the keepalive off.
+    "tp1-v2c": ("control: shipped 1x v2 recipe on the r11 image, keepalive off", lambda t: t),
+    "tp1-keepalive": ("one 4 KiB O_DIRECT read of the PLE table every 50 ms while gathers are "
+                      "recent: the NVMe drive stays out of APST between decode steps "
+                      "(VLLM_PLE_MMAP_KEEPALIVE_MS=50; host only, same numerics)",
+                      lambda t: env(t, VLLM_PLE_MMAP_KEEPALIVE_MS="50")),
 }
 # k15 microbench (L2-cold, ~/GEN-AI/k15/out/bench*.jsonl): raced best at M=5..16.
 SHIP_REV = "7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
