@@ -33,8 +33,8 @@ SRC = {
     "tp2_benchy": [RES / "b1.4-20261001/benchy/cand1-task.csv", RES / "b1.4-20261001/benchy/cand2-task.csv"],
     # TODO(#65): replace with the b1.4 copy-heavy file from results/showcase-* when the showcase run lands.
     "tp2_copy": RES / "b1.2-20260927/copy-streams-20260929.json",
-    # 1x Spark (TP=1), v3a coding grid.
-    "tp1_benchy": RES / "tp1-v3a-20261004/bench-task.csv",
+    # 1x Spark (TP=1), v3b coding grid.
+    "tp1_benchy": RES / "tp1-v3b-20261004/bench-task.csv",
     # TODO(#65): replace both with the v3a files from results/showcase-* when the showcase run lands.
     "tp1_copy": RES / "tp1-v2-20261002/copy-streams.json",
     "tp1_count": RES / "tp1-v2-20261002/counting-sweep.json",
@@ -48,8 +48,8 @@ SRC = {
     ],
     "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
     "tp2_tc45": RES / "b1.4-20261001/gate/tc45-cand1.txt",
-    "tp1_fidelity": RES / "tp1-v3a-20261004/gate-fidelity_probe.txt",
-    "tp1_gate": RES / "tp1-v3a-20261004/gate-summary.txt",
+    "tp1_fidelity": RES / "tp1-v3b-20261004/gate-fidelity_probe.txt",
+    "tp1_gate": RES / "tp1-v3b-20261004/gate-summary.txt",
 }
 
 # Neutral ink that keeps >= 3:1 contrast on both #ffffff and #0d1117; series hues are mid-tone.
@@ -195,7 +195,7 @@ def chart_throughput(tp2, tp1):
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.1), fontsize=10)
     fig.text(0.0, -0.17, "Copy-heavy: best of 3 rounds, low thinking effort. Counting: T=0, thinking off, best run (2×: over 2 boots; "
-             "1×: one run). Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4 (copy-heavy b1.2); 1× v3a "
+             "1×: one run). Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4 (copy-heavy b1.2); 1× v3b "
              "(copy-heavy and counting v2). Raw files under results/.", fontsize=8.5, color=MUTED)
     save(fig, "throughput.svg")
 
@@ -217,7 +217,7 @@ def chart_prefill(prefill):
     ax.set_ylim(0, 3500)
     ax.legend(loc="upper left", ncol=2, fontsize=10)
     fig.text(0.0, -0.06, "llama-benchy pp2048 and ctx_pp at depth 16,384. 2× Spark b1.4 (two boots, range shown); "
-             "1× Spark v3a.", fontsize=8.5, color=MUTED)
+             "1× Spark v3b.", fontsize=8.5, color=MUTED)
     save(fig, "prefill.svg")
 
 
@@ -268,7 +268,7 @@ def chart_quality():
     ax.axis("off")
     fig.subplots_adjust(left=0.01, right=0.99)
     cols = (0.0, 0.45, 0.65, 0.87)
-    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3a", "Threshold")):
+    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3b", "Threshold")):
         ax.text(x, len(rows), h, fontweight="bold", fontsize=11, color=INK, va="center")
     for i, (name, a, b, thr) in enumerate(rows):
         y = len(rows) - 1 - i

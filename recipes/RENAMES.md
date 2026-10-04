@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-04: single-Spark v3b promoted
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-1x-dgx-spark` | v3b: v3a + `VLLM_PLE_MMAP_PREFILL_WILLNEED=1`, image `tp1-v3b-20261004-5bf24021-0632e506-warm` (experimental) |
+| `qwen3.8-flash-next-1x-dgx-spark-previous` | the v3a recipe that was `qwen3.8-flash-next-1x-dgx-spark` on 2026-10-04 |
+| (was `-previous`, v2) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-v2-20261002.yaml` (not listed; run by path) |
+
 ## 2026-10-04: single-Spark v3a promoted
 
 | name | content now |

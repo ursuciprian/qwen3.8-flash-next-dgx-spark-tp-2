@@ -1,5 +1,47 @@
 # Benchmarks: full tables
 
+## Single Spark v3b (2026-10-04)
+
+Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
+`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3b-20261004-5bf24021-0632e506-warm`
+(digest `sha256:7308411dca81d1454cfc84725f87c9db80a6963ad7d4568a0255a046d51b90fa`), checkpoint revision `7c4f1bc1`.
+v3b = v3a + `VLLM_PLE_MMAP_PREFILL_WILLNEED=1`: prefill-sized PLE table gathers get read-ahead before the copy, so
+rows that left the page cache are no longer read back one page fault at a time. Decode is unchanged.
+Raw files: [`results/tp1-v3b-20261004/`](../results/tp1-v3b-20261004/).
+
+**Coding**: llama-benchy `--prompt-mode task`, 2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 /
+top-p 0.95 / top-k 20, prefix caching, 3 runs, one boot. Total tok/s, mean ± sd over runs.
+
+| depth | test | c1 | c2 | c4 | c8 |
+|---|---|---|---|---|---|
+| 0 | pp2048 | 1767 ± 29 | 2037 ± 14 | 2063 ± 21 | 2156 ± 45 |
+| 0 | tg512 | 55.0 ± 3.1 | 76.5 ± 9.1 | 99.8 ± 2.9 | 130.2 ± 9.1 |
+| 16k | ctx_pp (fill) | 2103 ± 40 | 2153 ± 14 | 2198 ± 0 | 1984 ± 42 |
+| 16k | pp2048 | 1045 ± 15 | 1130 ± 9 | 1219 ± 1 | 119 ± 4 |
+| 16k | tg512 | 54.6 ± 4.2 | 76.3 ± 8.7 | 99.0 ± 1.9 | 22.1 ± 2.0 |
+
+16k c8: the 6 GiB KV pool fills and requests are deferred (same in v3a).
+
+**A/B vs v3a settings** (same image, knob off vs on; 6 fresh boots per arm over 2 Sparks in ABBA order, llama-benchy
+T=0, 3 runs per cell). Total tok/s, mean over boots; noise is the pooled run-to-run spread.
+Report: [`ab-report-v3b-vs-v3a.txt`](../results/tp1-v3b-20261004/ab-report-v3b-vs-v3a.txt).
+
+| cell | v3a | v3b | change | noise |
+|---|---|---|---|---|
+| pp2048 c1 | 1163.7 | 1747.7 | +50.2% | 2.3% |
+| pp2048 c4 | 1724.8 | 2058.4 | +19.3% | 1.7% |
+| pp2048 c8 | 1963.1 | 2144.8 | +9.3% | 2.4% |
+| 16k fill c1 | 2000.8 | 2093.0 | +4.6% | 1.5% |
+| 16k fill c2-c8 | | | -0.0 to +1.8% | 1.5-1.9% |
+| tg512 c1-c8, depth 0 and 16k | | | -3.1 to +1.9% | 2.5-14% |
+
+pp2048 c1 within-node sd over boots fell from 32.0 to 14.9 tok/s. The prefill-sized gathers in that cell took 33-34 s in
+total per run before and 17-18 s after.
+
+**Quality gate**: hardmode 91/100 (v3a 92; run-to-run band 86-93), TC-45 100/100, fidelity 20/20 at
+8k/32k/64k/128k plus 128k seeds 11 and 13 at 20/20, batch stragglers c8-c16 with 0 preemptions (3.98-3.99 accepted per
+draft), min MemAvailable 14.01 GiB.
+
 ## Single Spark v3a (2026-10-04)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
