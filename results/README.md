@@ -23,10 +23,12 @@ Workload key used below — every number carries one of these tags:
 - **[copy]** copy-heavy decode: 1-8 concurrent copy tasks from a shared cached
   prefix, low reasoning effort, 1,500 tokens out, 3 rounds per stream count;
   tok/s over the window where all streams decode, ~4.9 tokens/step. Files:
-  `results/b1.2-20260927/copy-streams-20260929.json` (2x Spark b1.2),
-  `results/tp1-v2-20261002/copy-streams.json` (1x Spark v2). The README charts
-  (`docs/img/`) are rendered from these, `b14.json`, `b1.4-20261001/benchy/`
-  and `tp1-v3a-20261004/` by `scripts/make_charts.py`.
+  `results/showcase-20261004/A/copy-streams.json` (2x Spark b1.4) and
+  `B/dgx0{1,2}/copy-streams.json` (1x Spark v3a on each Spark), with the
+  counting files of the same run; earlier: `results/b1.2-20260927/copy-streams-20260929.json`
+  (2x b1.2), `results/tp1-v2-20261002/copy-streams.json` (1x v2). The README
+  charts (`docs/img/`) are rendered from the showcase files, `b14.json`,
+  `b1.4-20261001/benchy/` and `tp1-v3b-20261004/` by `scripts/make_charts.py`.
 - **[prose]** llama-benchy 0.4.0 default book continuation, 2048 new prompt
   tokens, 128 output tokens, default temperature 1.0; aggregate gen tok/s. "File" points at the primary
 doc for that entry; most arms also have raw JSON/logs alongside it that
