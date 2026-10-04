@@ -1,5 +1,12 @@
 # Renames
 
+## 2026-10-04: single-Spark v3a promoted
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-1x-dgx-spark` | v3a: v2 + `VLLM_PLE_MMAP_KEEPALIVE_MS=50`, image `tp1-v3a-20261004-5bf24021-7fa812b3-warm` (experimental) |
+| `qwen3.8-flash-next-1x-dgx-spark-previous` (new) | the v2 recipe that was `qwen3.8-flash-next-1x-dgx-spark` from 2026-10-02 to 2026-10-04 |
+
 ## 2026-10-01: b1.4 promoted (names unchanged)
 
 | name | content now |

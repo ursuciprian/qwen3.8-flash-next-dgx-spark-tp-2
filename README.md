@@ -176,7 +176,8 @@ Both share the runtime cache, so a rollback boots warm. Renames: [recipes/RENAME
 
 | Recipe | Image | Use |
 |---|---|---|
-| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-20261002-5bf24021-884b4ff6-warm` | One GB10, TP=1. Experimental |
+| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3a-20261004-5bf24021-7fa812b3-warm` | One GB10, TP=1. Experimental (v3a) |
+| [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-20261002-5bf24021-884b4ff6-warm` | Rollback: v2, without the NVMe keepalive |
 
 ```sh
 sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo
@@ -184,25 +185,34 @@ sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo
 
 It is the same checkpoint on one Spark. The 26.8 GiB PLE n-gram table is served from the checkpoint files through the page cache (`VLLM_PLE_MMAP=1`, with a WILLNEED pass before each decode gather). The KV pool is fixed at 6 GiB (~379k fp8 tokens), and it uses 4 MTP drafts over the 131k-id draft vocab.
 
-Measured 2026-10-02 on one GB10. llama-benchy task mode as above: T=1.0, thinking on, 3 runs, aggregate tok/s. The reference column is dime-online/qwen3.8-Flash-DGX-UltraFast v16b on the same hardware and benchmark:
+v3a adds `VLLM_PLE_MMAP_KEEPALIVE_MS=50`: while decode gathers are recent, the reader issues one 4 KiB direct read of the PLE table every 50 ms. Without it the NVMe drive enters a power-saving state after 100 ms idle, and the next PLE read waits ~10 ms to wake it; at 4-8 concurrent requests that added ~10 ms to many decode steps. The change is host-side only; the numerics are the same. The image also ships the torch compile cache, so the first boot on a new Spark skips the compile.
 
-| Concurrency | Depth 0: this · reference | Depth 16k: this · reference |
+Measured 2026-10-04 on one GB10. llama-benchy task mode as above: T=1.0, thinking on, 3 runs, aggregate tok/s (tg512):
+
+| Concurrency | Depth 0 | Depth 16k |
 |:---:|:---:|:---:|
-| c1 | **47.4** · 47.3 | **46.7** · 47.8 |
-| c2 | 80.6 · 70.7 | 73.1 · 66.7 |
-| c4 | 94.9 · 105.4 | 95.2 · 103.2 |
-| c8 | 120.0 · 131.7 | **21.9** · 124.2 |
+| c1 | 50.0 | 51.2 |
+| c2 | 73.3 | 77.6 |
+| c4 | 103.7 | 102.5 |
+| c8 | 117.6 | **19.7** |
 
-The reference's own `bench_copy_streams.py` gives this recipe 74.9 tok/s at c1 and 266 at c8, against 73.8 and 250 for the reference.
+Paired A/B against v2 (ABBA, 4 passes over 2 Sparks, temperature 0, same prompts), decode step time and tok/s:
+- 4 concurrent: step -8.4%, tok/s +7.6%; at 16k depth step -8.0%, tok/s +7.7%;
+- 8 concurrent: step -5.1%, tok/s +4.9%; counting workload step -3.1%, tok/s +3.6%;
+- 1-2 concurrent: step -0.5% to -0.9% or within noise;
+- MTP acceptance per draft position unchanged; no cell slower beyond noise.
+
+The llama-benchy grid varies by up to ~10% between runs, so it does not resolve differences this size; the paired A/B does. Raw files: [`results/tp1-v3a-20261004/`](results/tp1-v3a-20261004/).
 
 The quality gate passes:
-- hardmode 90/100;
-- TC-45 5/5;
-- fidelity 20/20 at 8k/32k/64k/128k, plus 128k seeds 11/13 at 20/20 and 19/20;
-- no batch stragglers from c5 to c16.
+- hardmode 92/100;
+- TC-45 100/100;
+- fidelity 20/20 at 8k/32k/64k/128k, plus 128k seeds 11/13 at 20/20;
+- no batch stragglers from c8 to c16, 0 preemptions;
+- min MemAvailable 13.97 GiB during the gate.
 
 Known limits:
-- **8 concurrent requests at 16k context collapse to ~22 tok/s.** The 6 GiB KV pool fills to 94-97% and requests are deferred. Keep long-context concurrency at 4 or less.
+- **8 concurrent requests at 16k context collapse to ~20 tok/s.** The 6 GiB KV pool fills and requests are deferred. Keep long-context concurrency at 4 or less. A fix is in progress.
 - The first boot without a usable plan seed autotunes and compiles every kernel. It took ~30 min, and host MemAvailable dropped to 3.8 GiB for about a minute; earlyoom triggers at ~2.4 GiB. The image ships the TP=1 plan seed, so a normal first boot skips autotune. Close other memory-heavy work on the Spark during the first boot.
 - Steady-state MemAvailable is 13-14 GiB, most of it PLE page cache.
 
