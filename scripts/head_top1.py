@@ -56,6 +56,9 @@ def capture(a):
 
 
 def compare(x, y):
+    # JSON object keys come back as strings; token ids are ints everywhere below.
+    for rec in x["records"] + y["records"]:
+        rec["top5"] = {int(k): v for k, v in rec["top5"].items()}
     out = {}
     for kind in ("all", "prose", "code"):
         pairs = [(p, q) for p, q in zip(x["records"], y["records"]) if kind in ("all", p["kind"])]
