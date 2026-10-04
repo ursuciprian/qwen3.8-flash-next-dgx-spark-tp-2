@@ -48,7 +48,7 @@ Spark skips pass 2 and the arm is KILL.
 Why d16k c8 is different: on the 6 GiB KV pool of v2/v3a/v3b, 8 requests at 16K do not fit, so the engine
 preempts and recomputes. Some requests then stall for most of their life, and per-request tok/s becomes
 meaningless (one control request read 853 tok/s with 145 stalls). One rep took 134 to 441 s when it
-finished, and about 40 % of runs hit the 900 s request timeout. So the cell runs once per boot, is cut at
+finished, and 19 of 56 runs (34 %) in the last 14 TP1 driver logs hit the 900 s request timeout. So the cell runs once per boot, is cut at
 480 s, and is judged on its wall time. An unfinished run counts as the cut.
 
 ## Verdict
@@ -116,110 +116,120 @@ summarized, not judged. It drops the parts of `gate_arm.sh` that are not in the 
 
 ## Usage
 
-Everything runs on dgx-01, and dgx-02 is driven over ssh. Recipe paths can be relative. Recipes boot
-from their own directory, so `mods:` paths keep working.
+Everything runs on dgx-01, and dgx-02 is driven over ssh. Thunderdome never takes `~/GEN-AI/gpu-lock`. The
+caller holds it and sets `GPU_LOCK_HELD=1`, and the script refuses to run without that. The k31 chain does
+this for its stages. By hand, use `flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ...`.
 
 ```bash
 R=~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
 
-# plan and image checks only: nothing is locked, stopped or booted
-ARM_A=$R/arms/x.yaml ARM_B=$R/arms/y.yaml RES=/tmp/td bash $R/scripts/thunderdome.sh --dry-run
+# two arm dirs (first on dgx-01, second on dgx-02), as the k31 chain calls it
+RES=$R/results/thunderdome-k32-k34-20261005 bash $R/scripts/thunderdome.sh ~/GEN-AI/k32 ~/GEN-AI/k34
 
-# two arms, default v3b control, gate for PROMOTE arms, 2x restored at the end
-ARM_A=$R/arms/x.yaml ARM_B=$R/arms/y.yaml RES=$R/results/td-xy-20261005 \
-  setsid nohup bash $R/scripts/thunderdome.sh > /tmp/td-xy.nohup 2>&1 < /dev/null &
+# plan, spec and image checks only: nothing is stopped, booted or written
+RES=/tmp/td bash $R/scripts/thunderdome.sh ~/GEN-AI/k32 ~/GEN-AI/k34 --dry-run
 
-# one arm (dgx-02 stays idle), arm-specific control (same image, knob off)
-ARM_A=$K/arm.yaml CONTROL_A=$K/ctl.yaml RES=$K/td bash $R/scripts/thunderdome.sh
+# by hand, with recipes instead of dirs (default v3b control)
+flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ARM_A=x.yaml ARM_B=y.yaml RES=/tmp/td-xy bash $R/scripts/thunderdome.sh
 
-# one-time cold boot for images whose compile key changed
-RES=$K/td bash $R/scripts/thunderdome.sh bake $K/arm.yaml $K/ctl.yaml
-
-# gate only
+# one-time cold boot on both Sparks; gate only
+RES=$K/td bash $R/scripts/thunderdome.sh bake $K/arm.yaml
 RES=$K/td bash $R/scripts/thunderdome.sh gate $K/arm.yaml
 ```
 
+### Arm dir
+
+An arm dir holds `thunderdome.arm`, written as `key: value` lines with `#` comments. Thunderdome turns it
+into an arm recipe and a control recipe in `$RES/recipes/`. The arm's results go to `$RES/<dir name>/`.
+
+| key | meaning |
+|-----|---------|
+| `name` | label for recipes and logs (default: the dir name) |
+| `image` | arm = the base recipe on this image ... |
+| `env` | ... plus `KEY=VALUE` in its env block (repeatable; replaces a key the base already has) |
+| `control_image` | control = the base recipe on this image, for a same-image control. Default: the base as is |
+| `control_env` | extra `KEY=VALUE` for the control (repeatable) |
+| `base` | base recipe (default: the v3b recipe) |
+| `recipe`, `control_recipe` | full recipes instead, for arms that change more than image and env (paths relative to the dir) |
+| `bake: yes` | before the screen, cold-boot control and arm once on their Spark (the compile key changed). Adds ~14 min. The gate allows a cold boot on the other Spark |
+| `hook` | script run after each boot's probes as `bash <hook> <host> <boot dir>`, capped at 1 h. Its time adds to the screen |
+
+Example, `~/GEN-AI/k32/thunderdome.arm`:
+
+```
+name: tp1-v3b-heads4
+image: spark-vllm-b12x:r14h4-5bf24021-e070a14c
+env: VLLM_LM_HEAD_NVFP4=mse
+control_image: spark-vllm-b12x:r14h4-5bf24021-e070a14c
+bake: yes
+hook: heads_probe.sh
+```
+
+A dir without `thunderdome.arm` can instead publish a recipe pair: `thunderdome-arm.yaml` and, optionally,
+`thunderdome-ctl.yaml` (the default control is v3b). The pair is used as is. k33's `prep.sh` does this.
+
+The preflight checks each arm on its own: spec, TP=1, images on the Sparks that boot them, and the compile
+seed (skipped with `bake: yes`). A failing arm is dropped, its `verdict.txt` says why
+(`VERDICT=INCONCLUSIVE`), and the other arm still runs. The run is refused (exit 2) only when no arm is
+left or a shared check fails. Even then, `$RES/STATE` says why.
+
 | variable | meaning |
 |----------|---------|
-| `ARM_A`, `ARM_B` | arm recipes screened on dgx-01 / dgx-02 (one may be empty) |
-| `CONTROL` | control recipe for both Sparks (default v3b); `CONTROL_A` / `CONTROL_B` per Spark |
-| `RES` | results dir (required); `OUT_A` / `OUT_B` override the per-Spark dirs (default `$RES/dgx01`, `$RES/dgx02`) |
+| `RES` | results dir (required) |
+| `GPU_LOCK_HELD=1` | required: the caller holds `~/GEN-AI/gpu-lock` |
+| `ARM_A`, `ARM_B` | recipe mode instead of dirs: arms for dgx-01 / dgx-02 |
+| `CONTROL`, `CONTROL_A`, `CONTROL_B` | recipe mode controls (default v3b) |
+| `OUT_A`, `OUT_B` | recipe mode per-Spark dirs (default `$RES/dgx01`, `$RES/dgx02`) |
 | `GATE=0` | skip the gate after a PROMOTE |
-| `GPU_LOCK_HELD=1` | the caller holds `~/GEN-AI/gpu-lock`; without it the script takes the lock and waits |
 | `NO_RESTORE=1` or `CHAIN_NO_RESTORE=1` | leave the pair idle on exit instead of booting the 2x recipe |
 | `SHIPPED_TAG` | image tag of the 2x recipe for the restore check (default: the 2x image serving at start) |
 
-Exit codes: 0 means done (verdicts written, including KILL), 1 means failed, and 2 means refused by the
-preflight, before anything was touched. `$RES/STATE` holds the state, `$RES/thunderdome.log` the log,
-and `$RES/verdicts.txt` one line with every arm's verdict. To stop a run: `kill -TERM <pid>` (the pid is
-in the log). The script stops its probes and servers and restores as configured. Never `pkill -f`.
+Exit codes: 0 means done (verdicts written, including KILL), 1 means failed, and 2 means refused.
+`$RES/STATE` holds the state on every path, `$RES/thunderdome.log` the log, and `$RES/verdicts.txt` one
+line with every arm's verdict. To stop a run: `kill -TERM <pid>` (the pid is in the log). The script stops
+its probes and servers and restores as configured. Never `pkill -f`.
 
-Files per Spark (`$RES/dgx01`, `$RES/dgx02`):
+Files per arm (`$RES/<dir name>` or `$RES/dgx0N`):
 
 ```
 arms.txt                 arm and control names and recipe paths
+bake-ctl/ bake-arm/      the cold boots, with bake: yes
 ctl-p1 arm-p1 arm-p2 ctl-p2/
   recipe.yaml sparkrun.log serve.log aot.txt env.txt image.txt boot.txt mem.log
   probe-<cell>.json/.log  pos-<cell>.before/.after  time-<cell>.txt   (cells: warm + 6)
-  logits-a.json logits-b.json  task.csv benchy.log
+  logits-a.json logits-b.json  task.csv benchy.log  hook.log
   FAILED or COLD          when that boot did not come up warm
 acc-p1.txt               acceptance check after pass 1
 verdict.txt              report; last line VERDICT=...
 gate/                    split gate of a PROMOTE arm (dgx01/, dgx02/, summary.txt)
 ```
 
-## Calling it from a k31 stage script
+## With the k31 chain
 
-The k31 chain (`~/GEN-AI/k31/chain.sh`) runs `~/GEN-AI/k3N/*_job.sh` with
-`GPU_LOCK_HELD=1 CHAIN_NO_RESTORE=1 RES=<stage dir>`. Thunderdome inherits both flags. It does not take
-the lock, and it does not boot the 2x between stages, because the chain restores it once at the end.
+The chain pairs stages two at a time: k32 heads with k34 drafter, then k33 PLE graph with k35 attention
+block. An arm takes part when `~/GEN-AI/kNN/READY` exists. The optional `~/GEN-AI/kNN/prep.sh` runs first
+as its own stage, for example to build the image. Then the chain calls
+`RES=<dir> thunderdome.sh <kNN dir> [<kNN dir>]` with `GPU_LOCK_HELD=1 CHAIN_NO_RESTORE=1`, and reads
+`$RES/STATE`. The 2x recipe is not booted between pairs, because the chain restores it once at the end.
 
-A stage with two arms, or an arm and a variant, puts one on each Spark:
+A stage that wants to take part needs these in its dir:
 
-```bash
-#!/bin/bash
-# ~/GEN-AI/k3N/<x>_job.sh, run by the k31 chain
-set -u
-R=$HOME/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2; K=$HOME/GEN-AI/k3N
-st() { echo "$*" > "$RES/STATE"; }
-# 1. build the image on both Sparks; write $K/arm-a.yaml and $K/arm-b.yaml (TP=1, container: <image>)
-# 2. only if the image or a compile factor changed since the last bake:
-RES=$RES/td bash "$R/scripts/thunderdome.sh" bake "$K/arm-a.yaml" "$K/arm-b.yaml" || { st "FAILED: bake"; exit 1; }
-# 3. screen both arms in one run; PROMOTE arms are gated in the same run
-ARM_A=$K/arm-a.yaml ARM_B=$K/arm-b.yaml RES=$RES/td bash "$R/scripts/thunderdome.sh"
-case $? in 0) st "DONE: $(cat "$RES/td/verdicts.txt")" ;; 2) st "FAILED: thunderdome refused by its preflight (see the job output)" ;; *) st "FAILED: thunderdome" ;; esac
-```
+- `thunderdome.arm`.
+- A way to get its image onto both Sparks before the screen: built already, or built by `prep.sh`.
+- `READY`.
 
-If the arm's image adds code whose off path should match v3b, also pass the same-image control
-(`CONTROL_A=$K/ctl-a.yaml`, the knob off). That way the screen compares the knob and not the image.
-
-A stage with only one arm can share the run with another stage's arm, so the other Spark is not idle:
-
-1. A stage whose arm is ready (image on both Sparks, baked) publishes it as `~/GEN-AI/k3M/thunderdome-arm.yaml`,
-   plus an optional `thunderdome-ctl.yaml`. Write the file last (`mv` into place).
-2. The stage that runs first takes the next published arm that has no verdict yet:
-
-   ```bash
-   B=; for o in k33 k34 k35; do d=$HOME/GEN-AI/$o
-     [ "$d" != "$K" ] && [ -s "$d/thunderdome-arm.yaml" ] && [ ! -s "$d/thunderdome/verdict.txt" ] && { B=$d; break; }; done
-   [ -n "$B" ] && [ -s "$B/thunderdome-ctl.yaml" ] && export CONTROL_B=$B/thunderdome-ctl.yaml
-   env ARM_A=$K/thunderdome-arm.yaml OUT_A=$K/thunderdome ${B:+ARM_B=$B/thunderdome-arm.yaml OUT_B=$B/thunderdome} \
-     RES=$RES/td bash "$R/scripts/thunderdome.sh"
-   ```
-
-3. When the owning stage's turn comes, it checks `[ -s $K/thunderdome/verdict.txt ]` and skips its own
-   screen. If the arm was PROMOTE, the gate already ran into `$K/thunderdome/gate/`.
-
-Reading the result in a stage:
+Reading the result:
 
 ```bash
-v=$(sed -n 's/^VERDICT=//p' "$RES/td/dgx01/verdict.txt")   # KILL | PROMOTE | INCONCLUSIVE
-grep -E '^(reason|better):' "$RES/td/dgx01/verdict.txt"
-cat "$RES/td/dgx01/gate/summary.txt" 2>/dev/null            # only after a PROMOTE
+v=$(sed -n 's/^VERDICT=//p' "$RES/k32/verdict.txt")   # KILL | PROMOTE | INCONCLUSIVE
+grep -E '^(reason|better):' "$RES/k32/verdict.txt"
+cat "$RES/k32/gate/summary.txt" 2>/dev/null            # only after a PROMOTE
 ```
 
-On INCONCLUSIVE, read the reasons. A cold boot means bake and rerun. A cell between 1x and 2x noise
-means the full ABBA (`r8_tp1_driver.sh`) is needed for that arm.
+On INCONCLUSIVE, read the reasons. A cold boot means set `bake: yes` or bake, then rerun. A cell between
+1x and 2x noise means the full ABBA (`r8_tp1_driver.sh`) is needed for that arm. Arm-specific quality
+checks (for example the k32 held-out top-1) run through `hook` and are judged by the stage's own script
+from the boot dirs, not by Thunderdome.
 
 ## Limits
 
