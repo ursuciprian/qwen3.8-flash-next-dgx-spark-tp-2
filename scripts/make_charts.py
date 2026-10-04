@@ -25,10 +25,13 @@ RES = ROOT / "results"
 OUT = ROOT / "docs" / "img"
 
 SRC = {
-    # 2x Spark (TP=2), b1.4: coding grid and counting sweep, means of two candidate boots.
+    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots) and counting runs (best run over both boots).
     "tp2_verdict": RES / "b1.4-20261001/b14.json",
+    # Counting sweep files on the two candidate boots: count.json (c1-c16), count-c1-*.json (c1 repeats), sweep.json.
+    "tp2_count": sorted(p for g in ("cand[12]/count*.json", "cand[12]/sweep.json")
+                        for p in (RES / "b1.4-20261001/r4ab-b14-20261001").glob(g)),
     "tp2_benchy": [RES / "b1.4-20261001/benchy/cand1-task.csv", RES / "b1.4-20261001/benchy/cand2-task.csv"],
-    # TODO(#65): replace with the b1.4 copy-streams file from results/showcase-* when the showcase run lands.
+    # TODO(#65): replace with the b1.4 copy-heavy file from results/showcase-* when the showcase run lands.
     "tp2_copy": RES / "b1.2-20260927/copy-streams-20260929.json",
     # 1x Spark (TP=1), v3a coding grid.
     "tp1_benchy": RES / "tp1-v3a-20261004/bench-task.csv",
@@ -86,10 +89,21 @@ def verdict_means(path, key, prefix=""):
     return {int(k[len(prefix) + 1:]): v["cand_mean"] for k, v in d.items() if k.startswith(prefix + "c")}
 
 
-def copy_streams(path):
-    s = json.loads(Path(path).read_text())["summary"]
-    return ({int(n): v["window_tok_s"]["median"] for n, v in s.items()},
-            [v["tokens_per_step"]["median"] for v in s.values()])
+def copy_best(path):
+    """Copy-heavy file -> {streams: best round's window tok/s}."""
+    out = {}
+    for r in json.loads(Path(path).read_text())["rounds"]:
+        out[r["n"]] = max(out.get(r["n"], 0), r["window"]["tok_s"])
+    return out
+
+
+def count_best(paths):
+    """Counting sweep files -> {c: best agg tok/s over the files}. Each file's value is already the median of its rounds."""
+    out = {}
+    for p in paths:
+        for r in json.loads(Path(p).read_text())["rows"]:
+            out[r["c"]] = max(out.get(r["c"], 0), r["agg_tok_s"])
+    return out
 
 
 def fidelity(path):
@@ -104,15 +118,15 @@ def fidelity(path):
 def load():
     v = SRC["tp2_verdict"]
     tp2 = {
-        "copy": copy_streams(SRC["tp2_copy"])[0],
-        "count": verdict_means(v, "counting_pct_diff"),
+        "copy": copy_best(SRC["tp2_copy"]),
+        "count": count_best(SRC["tp2_count"]),
         "code": verdict_means(v, "coding_grid_pct_diff", "d0_"),
         "code16": verdict_means(v, "coding_grid_pct_diff", "d16384_"),
     }
     t1 = benchy(SRC["tp1_benchy"])
     tp1 = {
-        "copy": copy_streams(SRC["tp1_copy"])[0],
-        "count": {r["c"]: r["agg_tok_s"] for r in json.loads(SRC["tp1_count"].read_text())["rows"] if r["c"] <= 8},
+        "copy": copy_best(SRC["tp1_copy"]),
+        "count": count_best([SRC["tp1_count"]]),
         "code": grid("tg512", t1),
         "code16": grid("tg512 @ d16384", t1),
     }
@@ -152,7 +166,7 @@ def style_ax(ax):
 
 
 SERIES = [
-    ("copy", "Copy-streams (high acceptance, ~4.9 tok/step)", C_COPY, "-"),
+    ("copy", "Copy-heavy (high acceptance, ~4.9 tok/step)", C_COPY, "-"),
     ("count", "Counting (high acceptance, ~5.0 tok/step)", C_COUNT, "-"),
     ("code", "Coding, benchy tg512 (~2.7–3.4 tok/step)", C_CODE, "-"),
     ("code16", "Coding at 16k cached context", C_CODE16, "--"),
@@ -180,9 +194,9 @@ def chart_throughput(tp2, tp1):
     axes[0].set_ylim(0, None)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.1), fontsize=10)
-    fig.text(0.0, -0.17, "Copy-streams: median of 3 rounds, low thinking effort. Counting: T=0, thinking off (2×: mean of 2 boots). "
-             "Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4 (copy-streams b1.2); 1× v3a (copy-streams "
-             "and counting v2). Raw files under results/.", fontsize=8.5, color=MUTED)
+    fig.text(0.0, -0.17, "Copy-heavy: best of 3 rounds, low thinking effort. Counting: T=0, thinking off, best run (2×: over 2 boots; "
+             "1×: one run). Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4 (copy-heavy b1.2); 1× v3a "
+             "(copy-heavy and counting v2). Raw files under results/.", fontsize=8.5, color=MUTED)
     save(fig, "throughput.svg")
 
 

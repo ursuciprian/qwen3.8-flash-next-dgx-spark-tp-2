@@ -20,7 +20,7 @@ Workload key used below — every number carries one of these tags:
   new prompt tokens on a cached context (depth 0/16k/64k), up to 512 output
   tokens, thinking on, prefix caching; aggregate gen tok/s. Temperature
   stated per entry.
-- **[copy]** copy-streams: 1-8 concurrent copy tasks from a shared cached
+- **[copy]** copy-heavy decode: 1-8 concurrent copy tasks from a shared cached
   prefix, low reasoning effort, 1,500 tokens out, 3 rounds per stream count;
   tok/s over the window where all streams decode, ~4.9 tokens/step. Files:
   `results/b1.2-20260927/copy-streams-20260929.json` (2x Spark b1.2),

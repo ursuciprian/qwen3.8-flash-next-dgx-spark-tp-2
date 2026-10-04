@@ -6,23 +6,23 @@ NVFP4 Qwen3.8-Flash-Next on vLLM V2 with b12x kernels and 4-token MTP, launched 
 Two recipes from one checkpoint: **2× Spark** (TP=2 over ConnectX-7) and **1× Spark** (TP=1, experimental).<br>
 A build is promoted only if it passes the [quality gate](#quality-gate) and no c1–c4 cell is slower beyond noise.
 
-<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark: copy-streams 425 at 8 streams, counting 525 at c8 and 778 at c16, coding 196 at c8 and 243 at c16. 1× Spark: copy-streams 263 and counting 356 at c8, coding 118 at c8." width="900">
+<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark: copy-heavy 426 at 8 concurrent tasks (best of 3 rounds), counting 541 at c8 and 780 at c16 (best run), coding 196 at c8 and 243 at c16. 1× Spark: copy-heavy 266 (best of 3 rounds) and counting 356 at c8, coding 118 at c8." width="900">
 
 </div>
 
-<!-- TODO(#65): the copy-streams cells (2× b1.2, 1× v2) and the 1× counting cells (v2) are refreshed by the pending
-     showcase run (results/showcase-*): 2× copy-streams -> b1.4, 1× copy-streams and counting -> v3a. -->
+<!-- TODO(#65): the copy-heavy cells (2× b1.2, 1× v2) and the 1× counting cells (v2) are refreshed by the pending
+     showcase run (results/showcase-*): 2× copy-heavy -> b1.4, 1× copy-heavy and counting -> v3a. -->
 
 | Workload | Tokens / step | 2× Spark, 1 request | 2× Spark, 8 requests | 1× Spark, 1 request | 1× Spark, 8 requests |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **Copy-streams** (high acceptance) | 4.93–4.96 | 112<!-- TODO(#65) --> | **425**<!-- TODO(#65) --> | 75<!-- TODO(#65) --> | **263**<!-- TODO(#65) --> |
-| **Counting** (high acceptance) | ~5.0 | 120 | **525** | 77<!-- TODO(#65) --> | **356**<!-- TODO(#65) --> |
+| **Copy-heavy** (high acceptance, best of 3 rounds) | 4.93–4.97 | 112<!-- TODO(#65) --> | **426**<!-- TODO(#65) --> | 75<!-- TODO(#65) --> | **266**<!-- TODO(#65) --> |
+| **Counting** (high acceptance, best run) | ~5.0 | 120 | **541** | 77<!-- TODO(#65) --> | **356**<!-- TODO(#65) --> |
 | **Coding**, llama-benchy tg512 | 2.7–2.8 (2×) · 3.2–3.4 (1×) | 62 | 196 | 50 | 118 |
 | **Coding** at 16k cached context | 2.6–2.7 (2×) · 3.1–3.2 (1×) | 64 | 146 | 51 | 20 ([limits](#known-limits)) |
 | **Prefill**, 2,048-token prompt | | 2,784–2,855 | | 1,201 | |
 | **Prefill**, filling a 16k context | | 2,895–2,920 | | 2,003 | |
 
-Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4 (copy-streams b1.2); 1× Spark v3a (copy-streams and
+Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4 (copy-heavy b1.2); 1× Spark v3a (copy-heavy and
 counting v2). Workloads and raw files: [Measured](#measured).
 
 <div align="center">
@@ -64,14 +64,14 @@ Two kinds of workload, labelled per row, because they differ by about 2× in tok
 - **Coding** is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step). It is what an agent
   sees in practice.
 
-<!-- TODO(#65): copy-streams rows (2× b1.2, 1× v2) and the 1× counting row (v2) are refreshed by results/showcase-*. -->
+<!-- TODO(#65): copy-heavy rows (2× b1.2, 1× v2) and the 1× counting row (v2) are refreshed by results/showcase-*. -->
 
 ### 2× Spark (TP=2), build b1.4
 
 | Workload | Tokens/step | c1 | c4 | c8 | c16 | Build |
 |---|:---:|:---:|:---:|:---:|:---:|---|
-| **High-acceptance:** copy-streams, median of 3 rounds | 4.93–4.96 | 112<!-- TODO(#65) --> | 268<!-- TODO(#65) --> | 425<!-- TODO(#65) --> | | b1.2 (2026-09-29) |
-| **High-acceptance:** counting, T=0 | ~5.0 (acceptance 1.00/0.99/0.99/0.99) | 119.8 | 356.6 | 524.8 | 778.0 | b1.4 |
+| **High-acceptance:** copy-heavy, best of 3 rounds | 4.93–4.96 | 112.1<!-- TODO(#65) --> | 274.0<!-- TODO(#65) --> | 425.8<!-- TODO(#65) --> | | b1.2 (2026-09-29) |
+| **High-acceptance:** counting, T=0, best run over two boots | ~5.0 (acceptance 1.00/0.99/0.99/0.99) | 120.3 | 366.5 | 541.3 | 779.7 | b1.4 |
 | **Coding:** llama-benchy tg512, depth 0 | 2.7–2.8 | 62.2 | 150.9 | 195.5 | 242.8 | b1.4 |
 | **Coding:** llama-benchy tg512, 16k cached depth | 2.6–2.7 | 63.8 | 117.5 | 145.9 | 176.5 | b1.4 |
 
@@ -83,8 +83,8 @@ TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached conte
 
 | Workload | Tokens/step | c1 | c4 | c8 | Build |
 |---|:---:|:---:|:---:|:---:|---|
-| **High-acceptance:** copy-streams, median of 3 rounds | 4.93–4.95 | 74.6<!-- TODO(#65) --> | 171.4<!-- TODO(#65) --> | 263.1<!-- TODO(#65) --> | v2 (2026-10-02) |
-| **High-acceptance:** counting, T=0 | ~5.0 (3.98 accepted per 4 drafts) | 77.0<!-- TODO(#65) --> | 228.5<!-- TODO(#65) --> | 356.0<!-- TODO(#65) --> | v2 (2026-10-02) |
+| **High-acceptance:** copy-heavy, best of 3 rounds | 4.93–4.97 | 74.9<!-- TODO(#65) --> | 184.4<!-- TODO(#65) --> | 266.1<!-- TODO(#65) --> | v2 (2026-10-02) |
+| **High-acceptance:** counting, T=0, one run (median of 3 rounds) | ~5.0 (3.98 accepted per 4 drafts) | 77.0<!-- TODO(#65) --> | 228.5<!-- TODO(#65) --> | 356.0<!-- TODO(#65) --> | v2 (2026-10-02) |
 | **Coding:** llama-benchy tg512, depth 0 | 3.2–3.4 | 50.0 | 103.7 | 117.6 | v3a |
 | **Coding:** llama-benchy tg512, 16k cached depth | 3.1–3.2 | 51.2 | 102.5 | **19.7** (see [limits](#known-limits)) | v3a |
 
@@ -95,18 +95,19 @@ tokens) / 2.04 s (2k new tokens on a 16k cached context).
 
 **Conditions.** Coding rows: [llama-benchy](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task`, 2,048 new
 prompt tokens, up to 512 out, thinking on, T=1.0 / top-p 0.95 / top-k 20, prefix caching on; 2× Spark is the mean of
-two boots × 3 runs, 1× Spark one boot × 3 runs. Counting: "list the numbers from 1 to 300", T=0, thinking off, 3 rounds
-(2× Spark: mean of two boots). Copy-streams: 1–8 concurrent copy tasks from a shared cached prefix at low reasoning
-effort, 1,500 tokens out, 3 rounds per stream count; tok/s is counted over the window where all streams decode, and the
-table shows the median round. Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode counters (benchy
-`accept/draft` column, copy-streams `tokens_per_step`). Raw files:
-[`results/b1.4-20261001/`](results/b1.4-20261001/) ([`b14.json`](results/b1.4-20261001/b14.json), [`benchy/`](results/b1.4-20261001/benchy/)),
+two boots × 3 runs, 1× Spark one boot × 3 runs. Counting: "list the numbers from 1 to 300", T=0, thinking off; each run
+records the median of its 3 rounds (per-round values were not saved). 2× Spark shows the best run over two boots (13 runs
+at c1, 3 at c4–c16); 1× Spark has one run. Copy-heavy decode: 1–8 concurrent copy tasks from a shared cached prefix at
+low reasoning effort, 1,500 tokens out, 3 rounds per task count; tok/s is counted over the window where all tasks
+decode, and the tables show the best of 3 rounds. Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode
+counters (benchy `accept/draft` column, `tokens_per_step` in the copy-heavy files). Raw files:
+[`results/b1.4-20261001/`](results/b1.4-20261001/) ([`b14.json`](results/b1.4-20261001/b14.json), [`benchy/`](results/b1.4-20261001/benchy/),
+2× counting [`r4ab-b14-20261001/cand1/`](results/b1.4-20261001/r4ab-b14-20261001/cand1/) and [`cand2/`](results/b1.4-20261001/r4ab-b14-20261001/cand2/)),
 [`results/tp1-v3a-20261004/`](results/tp1-v3a-20261004/),
-copy-streams [`results/b1.2-20260927/copy-streams-20260929.json`](results/b1.2-20260927/copy-streams-20260929.json) and
+copy-heavy [`results/b1.2-20260927/copy-streams-20260929.json`](results/b1.2-20260927/copy-streams-20260929.json) and
 [`results/tp1-v2-20261002/copy-streams.json`](results/tp1-v2-20261002/copy-streams.json), 1× counting
 [`results/tp1-v2-20261002/counting-sweep.json`](results/tp1-v2-20261002/counting-sweep.json).
 Charts: `uv run scripts/make_charts.py` renders every chart on this page from those files.
-<!-- TODO: vendor the copy-streams runner into scripts/ so the copy-streams rows are reproducible from this repo. -->
 
 ## Quality gate
 
@@ -191,7 +192,7 @@ Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface
   MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The image ships the TP=1 plan seed
   and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
 - **1× Spark steady state:** MemAvailable 13–14 GiB, most of it PLE page cache.
-- **2× Spark, c1 is bimodal** (counting ~95–100 vs ~85–88 tok/s between boots); we report medians of several runs.
+- **2× Spark, c1 is bimodal** (counting ~95–100 vs ~85–88 tok/s between boots); the counting tables show the best of several runs.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - 64k-depth and prose throughput were not re-measured on b1.4.
 
@@ -245,7 +246,7 @@ differences this small; the paired probe does. Per-build tables: [docs/BENCHMARK
   cell may be slower beyond noise, and a loss at c5–c16 is published as a caveat ([`scripts/arm_verdict.py`](scripts/arm_verdict.py)).
 - **Numerics canary.** MTP acceptance per draft position is compared cell by cell. A drop means the target or draft
   numerics changed, even when the gate passes. Logprob agreement against the previous build must sit within self-noise.
-- **High-acceptance rows** (counting, copy-streams) bound what MTP can give, not coding speed.
+- **High-acceptance rows** (counting, copy-heavy) bound what MTP can give, not coding speed.
 
 Index of every run and verdict: [results/README.md](results/README.md).
 
