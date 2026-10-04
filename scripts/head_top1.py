@@ -18,9 +18,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DOCS = [("prose", REPO / "results/corpus-prose.txt", 100_000 + i * 150_000) for i in range(8)] + \
-       [("code", REPO / "results/corpus-code.txt", 2_200_000 + i * 220_000) for i in range(8)]
-CHARS, TOKENS, START, STRIDE = 6000, 768, 32, 12
+# 12 + 12 documents x range(32, 768, 8) = 24 x 92 = 2,208 positions. Code docs start past every
+# depth_decode_probe offset (< 1.6M chars); prose (1.28M chars) is not read by the screening probes.
+DOCS = [("prose", REPO / "results/corpus-prose.txt", 100_000 + i * 95_000) for i in range(12)] + \
+       [("code", REPO / "results/corpus-code.txt", 2_200_000 + i * 145_000) for i in range(12)]
+CHARS, TOKENS, START, STRIDE = 6000, 768, 32, 8
+MIN_POSITIONS = 2000
 
 
 def post(base, path, body, timeout=300):
@@ -36,6 +39,8 @@ def capture(a):
         text = path.read_text(errors="replace")[off:off + CHARS]
         ids = post(a.base, "/tokenize", {"model": a.model, "prompt": text, "add_special_tokens": False})["tokens"][:TOKENS]
         rows += [(kind, off, p, ids[:p], ids[p]) for p in range(START, len(ids), STRIDE)]
+    if len(rows) < MIN_POSITIONS:
+        sys.exit(f"only {len(rows)} positions (< {MIN_POSITIONS}): a document tokenized short")
 
     def one(r):
         kind, off, p, ctx, true = r
