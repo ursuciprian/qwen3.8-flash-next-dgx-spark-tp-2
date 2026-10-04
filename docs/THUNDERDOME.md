@@ -42,14 +42,17 @@ Per boot (estimates from the 2026-10-02/03 TP1 driver logs):
 | benchy | llama-benchy pp2048 / tg512, depth 0, c1 and c8, T=1, 2 runs | ~2 min |
 
 That is about 18.5 minutes per boot and 75 minutes for four boots. Both Sparks run in parallel, so two
-arms also take about 75 minutes. If acceptance has already moved by more than 0.03 after pass 1, the
+arms also take about 75 minutes. Worst case, when d16k c8 hits its 480 s cut on every boot, a boot takes
+about 21 minutes and the screen about 85 minutes. `bake: yes` adds about 14 minutes and a `hook` adds its
+own time. If acceptance has already moved by more than 0.03 after pass 1, the
 Spark skips pass 2 and the arm is KILL.
 
 Why d16k c8 is different: on the 6 GiB KV pool of v2/v3a/v3b, 8 requests at 16K do not fit, so the engine
 preempts and recomputes. Some requests then stall for most of their life, and per-request tok/s becomes
 meaningless (one control request read 853 tok/s with 145 stalls). One rep took 134 to 441 s when it
 finished, and 19 of 56 runs (34 %) in the last 14 TP1 driver logs hit the 900 s request timeout. So the cell runs once per boot, is cut at
-480 s, and is judged on its wall time. An unfinished run counts as the cut.
+480 s, and is judged on its wall time. A run cut by the timeout counts as the cut. A run that errors out
+counts as missing.
 
 ## Verdict
 
@@ -72,7 +75,7 @@ that finished on both sides.
 
 | verdict | when |
 |---------|------|
-| KILL | any cell worse than 2x its noise, acceptance moved by more than 0.03 at any position, or an arm boot failed |
+| KILL | any cell worse than 2x its noise; acceptance moved by more than 0.03 at any draft position both sides have; an arm boot failed; the arm server died during a boot; or an arm cell timed out or errored in a pass where the control's finished |
 | PROMOTE | every cell measured, none worse than 1x its noise, at least one better than 1x its noise |
 | INCONCLUSIVE | anything else: a cell worse than 1x but not 2x its noise, missing cells, control boot failed, a cold boot, or nothing better than noise |
 
@@ -118,7 +121,7 @@ summarized, not judged. It drops the parts of `gate_arm.sh` that are not in the 
 
 Everything runs on dgx-01, and dgx-02 is driven over ssh. Thunderdome never takes `~/GEN-AI/gpu-lock`. The
 caller holds it and sets `GPU_LOCK_HELD=1`, and the script refuses to run without that. The k31 chain does
-this for its stages. By hand, use `flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ...`.
+this for its stages. By hand, use `flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ...`.
 
 ```bash
 R=~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
@@ -130,7 +133,7 @@ RES=$R/results/thunderdome-k32-k34-20261005 bash $R/scripts/thunderdome.sh ~/GEN
 RES=/tmp/td bash $R/scripts/thunderdome.sh ~/GEN-AI/k32 ~/GEN-AI/k34 --dry-run
 
 # by hand, with recipes instead of dirs (default v3b control)
-flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ARM_A=x.yaml ARM_B=y.yaml RES=/tmp/td-xy bash $R/scripts/thunderdome.sh
+flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ARM_A=x.yaml ARM_B=y.yaml RES=/tmp/td-xy bash $R/scripts/thunderdome.sh
 
 # one-time cold boot on both Sparks; gate only
 RES=$K/td bash $R/scripts/thunderdome.sh bake $K/arm.yaml
@@ -185,7 +188,7 @@ left or a shared check fails. Even then, `$RES/STATE` says why.
 | `SHIPPED_TAG` | image tag of the 2x recipe for the restore check (default: the 2x image serving at start) |
 
 Exit codes: 0 means done (verdicts written, including KILL), 1 means failed, and 2 means refused.
-`$RES/STATE` holds the state on every path, `$RES/thunderdome.log` the log, and `$RES/verdicts.txt` one
+Once RES is known, `$RES/STATE` holds the state on every path (a usage error before that only prints), `$RES/thunderdome.log` the log, and `$RES/verdicts.txt` one
 line with every arm's verdict. To stop a run: `kill -TERM <pid>` (the pid is in the log). The script stops
 its probes and servers and restores as configured. Never `pkill -f`.
 
@@ -198,7 +201,7 @@ ctl-p1 arm-p1 arm-p2 ctl-p2/
   recipe.yaml sparkrun.log serve.log aot.txt env.txt image.txt boot.txt mem.log
   probe-<cell>.json/.log  pos-<cell>.before/.after  time-<cell>.txt   (cells: warm + 6)
   logits-a.json logits-b.json  task.csv benchy.log  hook.log
-  FAILED or COLD          when that boot did not come up warm
+  FAILED or COLD          when that boot did not come up warm; DIED when the server was gone after the pass
 acc-p1.txt               acceptance check after pass 1
 verdict.txt              report; last line VERDICT=...
 gate/                    split gate of a PROMOTE arm (dgx01/, dgx02/, summary.txt)
@@ -228,8 +231,9 @@ cat "$RES/k32/gate/summary.txt" 2>/dev/null            # only after a PROMOTE
 
 On INCONCLUSIVE, read the reasons. A cold boot means set `bake: yes` or bake, then rerun. A cell between
 1x and 2x noise means the full ABBA (`r8_tp1_driver.sh`) is needed for that arm. Arm-specific quality
-checks (for example the k32 held-out top-1) run through `hook` and are judged by the stage's own script
-from the boot dirs, not by Thunderdome.
+checks (for example the k32 held-out top-1) run through `hook`. Thunderdome does not judge them, so a
+PROMOTE does not cover them: whoever reads the verdict (or a post-screen step in the chain) must run the
+stage's own check on the boot dirs before the arm is promoted.
 
 ## Limits
 

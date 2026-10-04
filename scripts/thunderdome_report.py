@@ -11,7 +11,8 @@ ctl-pK (same prompts, same Spark). Fixed rules:
                 delta = mean paired decode tok/s change (paired_decode_ab.compare, stalls excluded)
                 noise = max(1 %, |control pass 2 vs pass 1 mean change|, half-width of the delta's 95% CI)
   wall cell     d16k-c8 (1 rep, cut at 480 s): the 6 GiB KV pool preempts and recomputes there, so per-request
-                tok/s means nothing; speed = 1 / wall time of the cell, an unfinished run counts as the cut
+                tok/s means nothing; speed = 1 / wall time of the cell. A run cut by the timeout counts as
+                the cut; an errored run is missing
                 delta = mean over passes of (control wall / arm wall - 1)
                 noise = max(1 %, |control boot 2 vs boot 1 wall change|)
   benchy cells  pp2048 (c1), tg512 (c1), tg512 (c8) (llama-benchy t/s total)
@@ -19,8 +20,9 @@ ctl-pK (same prompts, same Spark). Fixed rules:
                 noise = max(1 %, control spread between boots, mean reported sd), in % of the control mean
   acceptance    accepted/drafted per draft position, pooled over the probe cells both sides finished
 
-  KILL          a cell worse than 2x its noise, acceptance moved by more than 0.03 at any position,
-                or an arm boot failed
+  KILL          a cell worse than 2x its noise, acceptance moved by more than 0.03 at any shared position,
+                an arm boot failed, the arm server died during a boot (DIED), or an arm cell did not finish
+                (timeout or error) in a pass where the control's did
   PROMOTE       every cell measured, none worse than 1x noise, at least one better than 1x noise
   INCONCLUSIVE  anything else: control boot failed, a cold boot, missing cells, a cell worse than
                 1x but not 2x noise, or nothing better than noise
@@ -78,13 +80,33 @@ def probe_cell(C, A, cell):
     return r["mean_pct"], noise, info + (f", step {st['mean_pct']:+.2f}%" if st else "")
 
 
-def wall(p, cell):
-    """Wall seconds of a cell from time-<cell>.txt ("rc seconds cut"); an unfinished run counts as the cut."""
+def timing(p, cell):
+    """(rc, seconds, cut) from time-<cell>.txt, or None."""
     try:
         rc, w, cut = open(os.path.join(p, f"time-{cell}.txt")).read().split()[:3]
+        return int(rc), float(w), float(cut)
     except (OSError, ValueError):
         return None
-    return float(cut) if int(rc) else min(float(w), float(cut))
+
+
+def wall(p, cell):
+    """Wall seconds of a cell; a run cut by `timeout` (124/137) counts as the cut, an errored run as missing."""
+    t = timing(p, cell)
+    if t is None:
+        return None
+    rc, w, cut = t
+    return cut if rc in (124, 137) else (None if rc else min(w, cut))
+
+
+def arm_unfinished(C, A, cell):
+    """Passes where the arm's cell timed out or failed while the control's finished."""
+    out = []
+    for k in sorted(set(C) & set(A)):
+        c, a = timing(C[k], cell), timing(A[k], cell)
+        # on the wall cell a timeout is a measured outcome (scored as the cut), not a failure
+        if c and a and c[0] == 0 and a[0] != 0 and not (cell in WALL and a[0] in (124, 137)):
+            out.append(k)
+    return out
 
 
 def wall_cell(C, A, cell):
@@ -178,15 +200,16 @@ def main(d, acc_only=False):
         (kill if p.startswith("arm") else missing).append(f"{p}: boot failed")
     for p in marked(d, "COLD"):
         missing.append(f"{p}: backbone compiled at boot (cold): bake the image first")
+    for p in marked(d, "DIED"):
+        (kill if p.startswith("arm") else missing).append(f"{p}: server died during the boot's measurements")
     print("== acceptance per draft position (T=0 probe cells, pooled)")
     ca, aa = acceptance(C, A)
     if not ca or not aa:
         missing.append("acceptance: no paired data")
-    for pos in sorted(set(ca) | set(aa)):
-        c, a = ca.get(pos), aa.get(pos)
-        if c is None or a is None:
-            missing.append(f"acceptance pos {pos}: one side missing")
-            continue
+    for pos in sorted(set(ca) ^ set(aa)):   # different draft counts: compare the shared positions only
+        print(f"  pos {pos}: only on the {'control' if pos in ca else 'arm'} side (not judged)")
+    for pos in sorted(set(ca) & set(aa)):
+        c, a = ca[pos], aa[pos]
         bad = abs(a - c) > ACC_TOL
         print(f"  pos {pos}: control {c:.3f} arm {a:.3f} shift {a - c:+.3f}{'  > 0.03' if bad else ''}")
         if bad:
@@ -197,6 +220,9 @@ def main(d, acc_only=False):
     print("== cells: arm vs control % (noise = the cell's noise band, %)")
     for kind, cells, fn in (("probe", PROBES, probe_cell), ("wall", WALL, wall_cell), ("benchy", BENCHY, benchy_cell)):
         for cell in cells:
+            bad = arm_unfinished(C, A, cell)
+            if bad:
+                kill.append(f"{kind} {cell}: arm did not finish in pass {','.join(map(str, bad))}, control did")
             r = fn(C, A, cell)
             if r is None:
                 print(f"  {kind:6s} {cell:12s} missing")
@@ -231,7 +257,7 @@ def main(d, acc_only=False):
 
 
 def selftest():
-    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205)):
+    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205), ctl_wall=(300, 310)):
         """4 boots; arm tok/s x arm (or x cell_arm[cell]); control boot 2 is 0.3 % faster than boot 1;
         d16k-c8 wall: control 300/310 s, arm arm_wall (480 = cut)."""
         for who, k in (("ctl", 1), ("arm", 1), ("arm", 2), ("ctl", 2)):
@@ -241,8 +267,9 @@ def selftest():
                 open(os.path.join(p, "FAILED"), "w").write("failed")
                 continue
             f = 1.003 if (who, k) == ("ctl", 2) else 1.0
-            w = arm_wall[k - 1] if who == "arm" else (300, 310)[k - 1]
-            open(os.path.join(p, "time-d16k-c8.txt"), "w").write(f"{124 if w >= 480 else 0} {w} 480\n")
+            w = arm_wall[k - 1] if who == "arm" else ctl_wall[k - 1]   # 480 = cut by timeout, < 0 = errored
+            rc = 124 if w >= 480 else 1 if w < 0 else 0
+            open(os.path.join(p, "time-d16k-c8.txt"), "w").write(f"{rc} {abs(w)} 480\n")
             for cell in PROBES + WALL:
                 g = (cell_arm or {}).get(cell, arm) if who == "arm" else f
                 rows = [{"index": i, "inf": {"gap_ms_p50": 20.0 / g, "accept_rate": 0.6, "stalls": 0,
@@ -285,6 +312,9 @@ def selftest():
     assert run(arm=1.05, fail="ctl-p2")[0] == "INCONCLUSIVE"
     assert run(arm=1.05, arm_wall=(480, 480))[0] == "KILL"                     # cut both times: -37 % on the wall cell
     assert run(arm=1.05, arm_wall=(300, 320))[0] == "PROMOTE"                  # wall cell flat, the rest better
+    assert run(arm=1.05, arm_wall=(-5, 205))[0] == "KILL"                      # arm errored where the control finished
+    assert run(arm=1.05, ctl_wall=(300, 470), arm_wall=(480, 300))[0] != "KILL"  # arm cut once: scored, not killed
+    assert run(arm=1.0, ctl_wall=(-5, 310), arm_wall=(300, 310))[0] == "INCONCLUSIVE"  # control crash is not the cut
     print("selftest ok")
 
 
