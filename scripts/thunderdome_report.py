@@ -103,7 +103,8 @@ def arm_unfinished(C, A, cell):
     out = []
     for k in sorted(set(C) & set(A)):
         c, a = timing(C[k], cell), timing(A[k], cell)
-        if c and a and c[0] == 0 and a[0] != 0:
+        # on the wall cell a timeout is a measured outcome (scored as the cut), not a failure
+        if c and a and c[0] == 0 and a[0] != 0 and not (cell in WALL and a[0] in (124, 137)):
             out.append(k)
     return out
 
@@ -312,6 +313,7 @@ def selftest():
     assert run(arm=1.05, arm_wall=(480, 480))[0] == "KILL"                     # cut both times: -37 % on the wall cell
     assert run(arm=1.05, arm_wall=(300, 320))[0] == "PROMOTE"                  # wall cell flat, the rest better
     assert run(arm=1.05, arm_wall=(-5, 205))[0] == "KILL"                      # arm errored where the control finished
+    assert run(arm=1.05, ctl_wall=(300, 470), arm_wall=(480, 300))[0] != "KILL"  # arm cut once: scored, not killed
     assert run(arm=1.0, ctl_wall=(-5, 310), arm_wall=(300, 310))[0] == "INCONCLUSIVE"  # control crash is not the cut
     print("selftest ok")
 

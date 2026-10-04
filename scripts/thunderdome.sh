@@ -20,7 +20,7 @@
 #   ARM_A=<arm.yaml> ARM_B=<arm.yaml> RES=<dir> bash scripts/thunderdome.sh [--dry-run]
 #   RES=<dir> bash scripts/thunderdome.sh gate <recipe.yaml> [--dry-run]     -> $RES/gate-<name>
 #   RES=<dir> bash scripts/thunderdome.sh bake <recipe.yaml>... [--dry-run]  -> $RES/bake-<name>
-#   By hand: flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 RES=<dir> bash scripts/thunderdome.sh ...
+#   By hand: flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 RES=<dir> bash scripts/thunderdome.sh ...
 # Arm dir: <dir>/thunderdome.arm, "key: value" lines, # comments (docs/THUNDERDOME.md):
 #   name: <label>            default: the dir name; results go to $RES/<dir name>
 #   image: <image>           arm = base recipe on this image ...
@@ -127,7 +127,7 @@ boot() { # host recipe dir -> 0 up and warm, 1 failed, 2 cold (backbone compilin
       log "$(label "$h"): $(name "$rec") COLD: backbone compiling, boot stopped (run: thunderdome.sh bake $rec)"; return 2; fi
     if [ "$(health "$h")" = 200 ]; then
       echo "boot $(( $(date +%s) - s ))s ${m:-no AOT line}" > "$d/boot.txt"; log "$(label "$h"): up, $(cat "$d/boot.txt")"; return 0; fi
-    n=$(solo "$h") || { sleep 10; continue; }   # ssh hiccup: ask again
+    n=$(solo "$h") || n=ssh-error   # an ssh hiccup is not a failed boot; BOOT_MAX still applies
     if [ $(( $(date +%s) - s )) -gt 120 ] && { [ -z "$n" ] || cx "$h" "grep -qE 'Worker failed with error|EngineCore failed to start|Engine core initialization failed' /tmp/sparkrun_serve.log"; }; then
       log "$(label "$h"): boot FAILED after $(( $(date +%s) - s ))s"; return 1; fi
     [ $(( $(date +%s) - s )) -ge "${BOOT_MAX:-1800}" ] && { log "$(label "$h"): health timeout"; return 1; }
@@ -160,6 +160,7 @@ run_pass() { # host dir [hook]: everything measured on one boot
       --out "$d/logits-$x.json" > "$d/logits-$x.log" 2>&1 ); done
   benchy "$h" "$d"
   if [ -n "$hook" ]; then timeout -k 30 3600 bash "$hook" "$h" "$d" > "$d/hook.log" 2>&1; log "$(label "$h")/$(basename "$d"): hook exit=$?"; fi
+  local i; for i in 1 2 3; do [ "$(health "$h")" = 200 ] && break; sleep 5; done
   [ "$(health "$h")" = 200 ] || { echo "server gone after the pass" > "$d/DIED"; log "$(label "$h")/$(basename "$d"): server DIED"; }
   kill "$MP" 2>/dev/null; MP=; }
 
@@ -232,7 +233,8 @@ BAKE_A=; BAKE_B=; HOOK_A=; HOOK_B=; DROP_A=; DROP_B=
 mkrec() { # base out name image env... : base recipe with name, container and env lines replaced
   local e k out=$2; sed "s|^name: .*|name: qwen3.8-flash-next-1x-dgx-spark-$3|" "$1" > "$out"
   [ -z "$4" ] || sed -i "s|^container: .*|container: $4|" "$out"
-  shift 4; for e in "$@"; do k=${e%%=*}; sed -i -e "/^  $k:/d" -e "/^env:/a\\  $k: \"${e#*=}\"" "$out"; done; }
+  shift 4; for e in "$@"; do k=${e%%=*}; sed -i -e "/^  $k:/d" -e "/^env:/a\\  $k: \"${e#*=}\"" "$out"
+    grep -qx "  $k: \"${e#*=}\"" "$out" || return 1; done; }
 spec() { # dir A|B: sets ARM_x CTL_x OUT_x BAKE_x HOOK_x, or prints why not and returns 1
   local d=$1 x=$2 f=$1/thunderdome.arm line k v n img='' cimg='' base=$V3B rec='' crec='' bake='' hook='' envs=() cenvs=()
   n=$(basename "$d")
@@ -255,9 +257,11 @@ spec() { # dir A|B: sets ARM_x CTL_x OUT_x BAKE_x HOOK_x, or prints why not and 
   [ -z "$hook" ] || [ -s "$hook" ] || { echo "$n: hook $hook missing"; return 1; }
   [ -n "$rec$img" ] || { echo "$n: needs image: or recipe:"; return 1; }
   for v in "$base" "$rec" "$crec"; do [ -z "$v" ] || [ -s "$v" ] || { echo "$n: recipe $v missing"; return 1; }; done
-  if [ -z "$rec" ]; then rec=$RD/$n.yaml; mkrec "$base" "$rec" "$n" "$img" ${envs[@]+"${envs[@]}"}; fi
+  if [ -z "$rec" ]; then rec=$RD/$(basename "$d")-$n.yaml   # dir in the file name: two dirs may share a name
+    mkrec "$base" "$rec" "$n" "$img" ${envs[@]+"${envs[@]}"} || { echo "$n: could not write the arm recipe (env: line in $base?)"; return 1; }; fi
   if [ -z "$crec" ]; then crec=$base
-    if [ -n "$cimg" ] || [ ${#cenvs[@]} -gt 0 ]; then crec=$RD/$n-ctl.yaml; mkrec "$base" "$crec" "$n-ctl" "$cimg" ${cenvs[@]+"${cenvs[@]}"}; fi; fi
+    if [ -n "$cimg" ] || [ ${#cenvs[@]} -gt 0 ]; then crec=$RD/$(basename "$d")-$n-ctl.yaml
+      mkrec "$base" "$crec" "$n-ctl" "$cimg" ${cenvs[@]+"${cenvs[@]}"} || { echo "$n: could not write the control recipe"; return 1; }; fi; fi
   printf -v "ARM_$x" %s "$rec"; printf -v "CTL_$x" %s "$crec"; printf -v "OUT_$x" %s "$RES/$(basename "$d")"
   printf -v "BAKE_$x" %s "$bake"; printf -v "HOOK_$x" %s "$hook"; }
 
@@ -278,7 +282,7 @@ preflight() {
   ip -o -4 addr show 2>/dev/null | grep -q "inet $H1/" || refuse "run this on dgx-01 ($H1)"
   if [ "${GPU_LOCK_HELD:-}" != 1 ]; then
     if [ -n "$DRY" ]; then echo "note: GPU_LOCK_HELD=1 not set: a real run would refuse (this script never takes the gpu-lock)"
-    else refuse "GPU_LOCK_HELD=1 not set: run from a chain holding ~/GEN-AI/gpu-lock, or flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ..."; fi; fi
+    else refuse "GPU_LOCK_HELD=1 not set: run from a chain holding ~/GEN-AI/gpu-lock, or flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ..."; fi; fi
   case $MODE in
   screen)
     [ -n "$ARM_A$ARM_B$DROP_A$DROP_B" ] || refuse "no arm: pass arm dirs or set ARM_A / ARM_B"
@@ -327,7 +331,7 @@ plan() { # dry run: what would run, and how long
   esac; }
 
 if [ "$MODE" = screen ] && [ $# -gt 0 ]; then
-  [ $# -le 2 ] || { echo "at most two arm dirs" >&2; exit 2; }
+  [ $# -le 2 ] || { echo "at most two arm dirs" >&2; [ -n "$DRY" ] || { mkdir -p "$RES"; echo "FAILED: refused: at most two arm dirs" > "$RES/STATE"; }; exit 2; }
   if [ -n "$DRY" ]; then RD=$(mktemp -d); else RD=$RES/recipes; mkdir -p "$RD"; fi
   x=A; for a in "$@"; do w=$(spec "$a" $x) && spec "$a" $x > /dev/null || { printf -v "DROP_$x" %s "${w:-$(basename "$a"): spec error}"; printf -v "OUT_$x" %s "$RES/$(basename "$a")"; echo "REFUSED: ${w:-$(basename "$a"): spec error}"; }
     x=B; done; set --

@@ -121,7 +121,7 @@ summarized, not judged. It drops the parts of `gate_arm.sh` that are not in the 
 
 Everything runs on dgx-01, and dgx-02 is driven over ssh. Thunderdome never takes `~/GEN-AI/gpu-lock`. The
 caller holds it and sets `GPU_LOCK_HELD=1`, and the script refuses to run without that. The k31 chain does
-this for its stages. By hand, use `flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ...`.
+this for its stages. By hand, use `flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ...`.
 
 ```bash
 R=~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
@@ -133,7 +133,7 @@ RES=$R/results/thunderdome-k32-k34-20261005 bash $R/scripts/thunderdome.sh ~/GEN
 RES=/tmp/td bash $R/scripts/thunderdome.sh ~/GEN-AI/k32 ~/GEN-AI/k34 --dry-run
 
 # by hand, with recipes instead of dirs (default v3b control)
-flock ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ARM_A=x.yaml ARM_B=y.yaml RES=/tmp/td-xy bash $R/scripts/thunderdome.sh
+flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 ARM_A=x.yaml ARM_B=y.yaml RES=/tmp/td-xy bash $R/scripts/thunderdome.sh
 
 # one-time cold boot on both Sparks; gate only
 RES=$K/td bash $R/scripts/thunderdome.sh bake $K/arm.yaml
@@ -188,7 +188,7 @@ left or a shared check fails. Even then, `$RES/STATE` says why.
 | `SHIPPED_TAG` | image tag of the 2x recipe for the restore check (default: the 2x image serving at start) |
 
 Exit codes: 0 means done (verdicts written, including KILL), 1 means failed, and 2 means refused.
-`$RES/STATE` holds the state on every path, `$RES/thunderdome.log` the log, and `$RES/verdicts.txt` one
+Once RES is known, `$RES/STATE` holds the state on every path (a usage error before that only prints), `$RES/thunderdome.log` the log, and `$RES/verdicts.txt` one
 line with every arm's verdict. To stop a run: `kill -TERM <pid>` (the pid is in the log). The script stops
 its probes and servers and restores as configured. Never `pkill -f`.
 
@@ -231,8 +231,9 @@ cat "$RES/k32/gate/summary.txt" 2>/dev/null            # only after a PROMOTE
 
 On INCONCLUSIVE, read the reasons. A cold boot means set `bake: yes` or bake, then rerun. A cell between
 1x and 2x noise means the full ABBA (`r8_tp1_driver.sh`) is needed for that arm. Arm-specific quality
-checks (for example the k32 held-out top-1) run through `hook` and are judged by the stage's own script
-from the boot dirs, not by Thunderdome.
+checks (for example the k32 held-out top-1) run through `hook`. Thunderdome does not judge them, so a
+PROMOTE does not cover them: whoever reads the verdict (or a post-screen step in the chain) must run the
+stage's own check on the boot dirs before the arm is promoted.
 
 ## Limits
 
