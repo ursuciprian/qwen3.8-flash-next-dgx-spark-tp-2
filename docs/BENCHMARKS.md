@@ -1,5 +1,45 @@
 # Benchmarks: full tables
 
+## Single Spark v3a (2026-10-04)
+
+Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
+`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3a-20261004-5bf24021-7fa812b3-warm`, checkpoint revision `7c4f1bc1`.
+v3a = v2 + `VLLM_PLE_MMAP_KEEPALIVE_MS=50` (keeps the NVMe drive out of its power-saving state between decode steps).
+Raw files: [`results/tp1-v3a-20261004/`](../results/tp1-v3a-20261004/).
+
+**Coding**: llama-benchy `--prompt-mode task`, 2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 /
+top-p 0.95 / top-k 20, prefix caching, 3 runs, one boot. Total tok/s, mean ± sd over runs.
+
+| depth | test | c1 | c2 | c4 | c8 |
+|---|---|---|---|---|---|
+| 0 | pp2048 | 1201 ± 20 | 1583 ± 155 | 1666 ± 96 | 1947 ± 59 |
+| 0 | tg512 | 50.0 ± 1.3 | 73.3 ± 7.8 | 103.7 ± 2.4 | 117.6 ± 4.8 |
+| 16k | pp2048 | 1010 ± 40 | 1116 ± 30 | 1231 ± 3 | 99 ± 20 |
+| 16k | tg512 | 51.2 ± 4.8 | 77.6 ± 10.9 | 102.5 ± 3.4 | 19.7 ± 2.6 |
+
+16k c8: the 6 GiB KV pool fills and requests are deferred (same in v2); a fix is in progress.
+
+**Paired A/B vs v2** (ABBA, 4 passes over 2 Sparks, temperature 0, same prompts per pair).
+Change in % with 95% CI; negative step time is faster.
+
+| cell | n | step time | tok/s |
+|---|---|---|---|
+| fresh c1 | 32 | -0.7 [-1.0, -0.5] | +2.3 [+0.0, +4.1] |
+| fresh c2 | 32 | -0.6 [-1.0, -0.1] | +1.5 [-0.6, +3.5] |
+| fresh c4 | 48 | -8.4 [-8.8, -8.0] | +7.6 [+5.8, +9.4] |
+| fresh c8 | 32 | -5.1 [-5.6, -4.7] | +4.9 [+3.1, +6.8] |
+| 16k c1 | 32 | -0.9 [-1.3, -0.5] | +2.3 [+0.2, +4.4] |
+| 16k c2 | 32 | -0.6 [-1.1, -0.1] | +2.8 [+1.2, +4.4] |
+| 16k c4 | 48 | -8.0 [-8.5, -7.4] | +7.7 [+5.9, +9.4] |
+| counting c1-c4 | 32-48 | -0.6 to +0.1, within CI | +0.0 to +0.6, within CI |
+| counting c8 | 32 | -3.1 [-3.5, -2.8] | +3.6 [+3.0, +4.2] |
+
+16k c8 (n=12) is not measurable in either arm (KV pool churn). MTP acceptance per draft position is unchanged in every
+cell (e.g. fresh c4 0.80/0.63/0.49/0.39 in both).
+
+**Quality gate**: hardmode 92/100, TC-45 100/100, fidelity 20/20 at 8k/32k/64k/128k plus 128k seeds 11 and 13 at 20/20,
+batch stragglers c8-c16 with 0 preemptions (3.98-3.99 accepted per draft), min MemAvailable 13.97 GiB.
+
 ## b1.4 image (2026-10-01)
 
 The current default build.
