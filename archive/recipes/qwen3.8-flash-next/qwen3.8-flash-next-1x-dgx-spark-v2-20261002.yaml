@@ -1,20 +1,6 @@
-# Rollback since 2026-10-04: the single-Spark v3a recipe that was the default on 2026-10-04.
-# Superseded by v3b (v3a + VLLM_PLE_MMAP_PREFILL_WILLNEED=1). Shares the runtime cache.
+# Archived 2026-10-04: the single-Spark v2 recipe (default 2026-10-02 to 2026-10-04, then rollback until v3b).
+# Not listed; run by path. Superseded by v3a (v2 + VLLM_PLE_MMAP_KEEPALIVE_MS=50) and v3b.
 #
-# EXPERIMENTAL single-Spark (TP=1) recipe v3a (2026-10-04): v2 + the PLE reader NVMe keepalive.
-#   - VLLM_PLE_MMAP_KEEPALIVE_MS=50: one 4 KiB O_DIRECT read of the PLE table every 50 ms while
-#     gathers are recent, so the NVMe drive does not drop into APST (100 ms idle timeout, ~10 ms
-#     exit) between decode steps. Host-side only, same numerics.
-#   - Image: vLLM exp/v3-tp1 7fa812b3, b12x 5bf24021, TP=1 plan seed as v2, plus the torch AOT
-#     compile cache of a cold boot in /opt/b12x-seed/torch_compile_cache (copied into the runtime
-#     cache when absent, so the first boot on a new Spark skips the compile).
-#   - Paired A/B vs v2 (ABBA, 4 passes over 2 Sparks, temperature 0), decode step time:
-#     c4 -8.4%, c8 -5.1%, 16k c4 -8.0%; c1/c2 -0.5..-0.9%; acceptance per position unchanged.
-#   - Gate: hardmode 92, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20,
-#     stragglers c8-c16 0 preemptions, min MemAvailable 13.97 GiB.
-#   Results: results/tp1-v3a-20261004. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v2).
-#
-# Base: v2 header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe, v2 (2026-10-02, opus-kernel-17). One GB10, no CX-7.
 #
 # Fit: the checkpoint is 98.5 GiB, 26.8 GiB of it the PLE n-gram table, which cannot sit
@@ -39,15 +25,15 @@
 # feat/r8-mtp-gemv (off), b12x exp/r8-tp1-wm 5bf24021 (off), warm layer docker/b0-warm with the
 # TP=1 b12x plan seed. Numbers: README "Single Spark (experimental)".
 #
-# Run on one Spark: sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo
+# Run on one Spark: sparkrun run qwen3.8-flash-next-1x-dgx-spark-previous --hosts <spark> --solo
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark-previous
-description: "Rollback (v3a). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive), OpenAI-compatible API on port 8000 (2026-10-04)."
+description: "Rollback (v2). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache), OpenAI-compatible API on port 8000 (2026-10-02)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3a-20261004-5bf24021-7fa812b3-warm
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-20261002-5bf24021-884b4ff6-warm
 runtime: vllm
 
 build_args: []
@@ -74,7 +60,6 @@ defaults:
 env:
   VLLM_PLE_MMAP: "1"
   VLLM_PLE_MMAP_WILLNEED_MAX: "8192"
-  VLLM_PLE_MMAP_KEEPALIVE_MS: "50"
   VLLM_MTP_DRAFT_VOCAB: "/opt/mtp-vocab/ids-v2-K131072.txt.gz"
   VLLM_QWEN38_HC_MXFP8: "hc"
   VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
@@ -94,7 +79,6 @@ env:
 
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
-  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
   vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
     --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
     --host {host} \
