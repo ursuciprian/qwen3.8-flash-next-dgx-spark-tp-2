@@ -82,6 +82,51 @@ cell (e.g. fresh c4 0.80/0.63/0.49/0.39 in both).
 **Quality gate**: hardmode 92/100, TC-45 100/100, fidelity 20/20 at 8k/32k/64k/128k plus 128k seeds 11 and 13 at 20/20,
 batch stragglers c8-c16 with 0 preemptions (3.98-3.99 accepted per draft), min MemAvailable 13.97 GiB.
 
+## Copy-heavy and counting refresh (2026-10-04)
+
+2× Spark b1.4 (`b1.4-20261001-b7fbaf96-a7e649d8-warm`) and 1× Spark v3a (`tp1-v3a-20261004-5bf24021-7fa812b3-warm`) on
+both Sparks, one boot each. Raw files: [`results/showcase-20261004/`](../results/showcase-20261004/)
+(`A/` 2×, `B/dgx01/` and `B/dgx02/` 1×).
+
+**Copy-heavy benchmark**: 1–8 concurrent copy tasks from a shared cached prefix, low reasoning effort, 1,500 tokens out,
+3 rounds per task count; tok/s over the window where all tasks decode. Max of 3 rounds / median of 3 rounds.
+
+| build | 1 | 2 | 4 | 8 | tokens/step |
+|---|---|---|---|---|---|
+| 2× b1.4 | 117.2 / 116.4 | 187.1 / 187.0 | 290.1 / 285.9 | 439.4 / 436.8 | 4.91–4.95 |
+| 1× v3a, dgx-01 | 73.9 / 73.4 | 114.8 / 114.5 | 181.2 / 174.8 | 270.8 / 262.9 | 4.91–4.97 |
+| 1× v3a, dgx-02 | 74.9 / 74.4 | 117.0 / 115.0 | 192.8 / 184.6 | 263.1 / 260.8 | 4.91–4.97 |
+
+**Counting** ("list the numbers from 1 to 300", temperature 0, thinking off, 5 rounds). Aggregate tok/s; each file
+stores the median of its 5 rounds only.
+
+| build | c1 | c2 | c4 | c8 | c16 | tokens/step |
+|---|---|---|---|---|---|---|
+| 2× b1.4 | 119.5 | 216.6 | 362.9 | 541.2 | 770.1 | 4.95–4.97 |
+| 1× v3a, dgx-01 | 75.0 | 133.3 | 220.4 | 348.9 | | 4.94–4.97 |
+| 1× v3a, dgx-02 | 76.5 | 138.7 | 219.6 | 353.1 | | 4.93–4.98 |
+
+The 2× counting run is below the max 2026-10-01 b1.4 run in every cell (120.3 / 366.5 / 541.3 / 779.7 at c1/c4/c8/c16),
+so the README keeps the 2026-10-01 values.
+
+**Default-prompt llama-benchy, 1× v3a on dgx-02**: default book prompt, pp2048 / tg128, prefix caching, 3 runs, total
+tok/s mean ± sd. Accepted per draft 0.50–0.61 (3.0–3.4 tokens/step).
+
+| depth | pp2048 c1 | pp2048 c2 | pp2048 c5 | tg128 c1 | tg128 c2 | tg128 c5 |
+|---|---|---|---|---|---|---|
+| 0 | 1160 ± 59 | 1490 ± 65 | 2264 ± 4 | 53.6 ± 2.4 | 73.4 ± 5.6 | 107.8 ± 2.1 |
+| 4k | 1072 ± 58 | 1191 ± 71 | 1409 ± 3 | 49.6 ± 6.0 | 81.9 ± 4.8 | 99.4 ± 1.2 |
+| 8k | 950 ± 3 | 1007 ± 38 | 1054 ± 1 | 51.1 ± 1.8 | 77.5 ± 3.4 | 74.7 ± 3.7 |
+| 16k | 1095 ± 9 | 1146 ± 31 | 1267 ± 1 | 47.6 ± 2.5 | 76.9 ± 6.9 | 104.9 ± 5.0 |
+| 32k | 787 ± 4 | 841 ± 1 | 882 ± 1 | 50.3 ± 2.9 | 73.7 ± 3.7 | 70.3 ± 1.2 |
+| 64k | 774 ± 6 | 826 ± 4 | 50 ± 4 | 55.5 ± 2.7 | 73.3 ± 1.4 | 3.2 ± 0.3 |
+| 100k | 1209 ± 7 | 1297 ± 5 | not run | 53.1 ± 1.5 | 67.4 ± 9.0 | not run |
+
+64k c5: decode drops to ~3 tok/s; five ~68k-token contexts take most of the ~379k-token KV pool, the same kind of limit
+as 16k c8 in the coding grid. 100k c5 and every depth at c10 beyond 8k were skipped (KV size) or cut by the 90-minute cap; the c10
+rows that ran (max_num_seqs 8, so 2 requests queue) are in `B/benchy/g4.md.live.md`. This run predates v3b, whose
+prefill read-ahead raises pp2048 c1.
+
 ## b1.4 image (2026-10-01)
 
 The current default build.
@@ -459,7 +504,7 @@ Temperature 1.0 is the checkpoint default (1.0 / top-p 0.95 / top-k 20),
 i.e. what a client that sends no temperature gets. Probabilistic at temp 0 was
 not measured on this workload.
 
-## Default recipe (la, probabilistic MTP drafts) — measured numbers
+## Default recipe (la, probabilistic MTP drafts), measured numbers
 
 All three tables are from the current default recipe
 (`qwen3.8-flash-next-nvfp4-tp2.yaml`, `draft_sample_method: probabilistic`),
@@ -604,20 +649,20 @@ the max, not one run. One probabilistic c16 sweep read 399.5
 
 ### How to read these numbers
 
-- **Draft acceptance.** MTP proposes 4 tokens per step. On the counting
+- Draft acceptance: MTP proposes 4 tokens per step. On the counting
   prompt nearly all 4 are accepted (98.9% overall, ~3.96 per step,
   `results/profiling/README.md`). On the sampled (temp 1.0) prose and agent
   task grids with probabilistic drafts, 39-41% are accepted, ~1.6 per step
   (`results/arms/la-mtpprob/mtp_{before,after}_{prose,task}.txt` on dgx-01:
   prose 10523/26872, task 87368/213924). The same engine therefore shows
-  ~100 tok/s on counting and ~45-58 on real single-stream work.
-- **Temperature.** At temp 0 the target and draft agree more often, so
+  ~100 tok/s on counting and ~45-58 on single-stream coding and prose.
+- Temperature: at temp 0 the target and draft agree more often, so
   acceptance and throughput rise (task c1 55.3 at temp 0 vs 46.1 at 1.0,
   old la). Clients that send no temperature get 1.0.
-- **Thinking tokens.** The task and prose runs have thinking on; reasoning
+- Thinking tokens: the task and prose runs have thinking on; reasoning
   tokens are generated and counted like answer tokens. The counting
   diagnostic and the category harness run with thinking off.
-- **Cached-context prefill.** Depth runs prefill 2048 new tokens on top of a
+- Cached-context prefill: depth runs prefill 2048 new tokens on top of a
   cached context; attention and GDN cost grow with depth, so both TTFT and
   per-token decode slow down, and concurrency at depth queues prefills.
 
@@ -633,7 +678,7 @@ reflective essay). Old la + MXFP8 lm_head, peak of 3
 image 56/73/94/46, local16 58.1/71.7/87.2/45.9, la 53.5/72.3/89.6/45.5
 (code/structured/counting/prose, `results/RESULTS.md`).
 
-Category harness (tonyd2wild `tools/tony-bench/bench_categories.py`, 40 real
+Category harness (tonyd2wild `tools/tony-bench/bench_categories.py`, 40
 prompts, 5 per category, temp 0, thinking off, streaming, max 900 tokens,
 fresh context, c1, per-stream decode tok/s excluding TTFT; the coding column
 is its 5 coding prompts with hidden tests, not bench_sweep). Old = eugr's
@@ -647,42 +692,42 @@ recipe; la = own image with `use_local_argmax_reduction`. Source
 | local16 (own image) | 76.4 | 90.4 | 97.0 | 77.5 | 85.8 | 50.1 | 47.6 | 43.4 | 44.4 |
 | la (own image, argmax) | not re-run on this harness | 94.6 | 95.1 | 78.8 | 82.4 | 51.5 | 60.0 | 49.1 | 45.0 |
 
-Real-prompt concurrency lane (prompt set, temperature and thinking setting
+Mixed-prompt concurrency lane (prompt set, temperature and thinking setting
 not recorded; 2026-09-17 journal entry only), per-stream/aggregate tok/s, old
 image only (not re-measured on the own image, `results/RESULTS.md`): x2 61.9/83.2, x4
 47.8/81.0, x6 37.7/112.6, x8 33.7/124.8.
 
 ## MTP acceptance per draft position
 
-**MTP acceptance** on real prompts (old la), per draft position:
+MTP acceptance on general prompts (old la), per draft position:
 ~90/81/75/70% (`results/arms/la/mtp_metrics.txt`: overall 76767/24344
 draft-tokens*4 positions, per-position 21911/19751/18173/16932 accepted). On
-the bench_sweep counting prompt acceptance is far higher — 98.9% overall,
+the bench_sweep counting prompt acceptance is far higher: 98.9% overall,
 99.9/99.1/98.6/97.9% by position (`results/profiling/README.md`).
 
 
 ## Moved from the README (2026-09-23)
 
 The README became a short guide on 2026-09-23. These sections were in it before;
-they are kept here unchanged apart from link paths. Numbers marked (hybrid) had
+they are kept here unchanged apart from link paths and wording. Numbers marked (hybrid) had
 rank 1 on the old checkpoint revision and are superseded by the shipped-image
 results in the [README](../README.md#results-default-b1-image) and [b0 shipped image](#b0-shipped-image-2026-09-23).
 
-### Winning recipe
+### Recipe at the time
 
 [`recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml`](../recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml)
-(`B0`). What sets it apart from the other arms:
+(`B0`). How it differs from the other arms:
 
-- **Checkpoint:** `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD revision
+- Checkpoint `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` QAD revision
   `7c4f1bc1`, pinned with `model_revision` plus `--revision` so both ranks load
   exactly that revision.
-- **Speculative decoding:** MTP with 4 draft tokens and
+- Speculative decoding uses MTP with 4 draft tokens and
   `draft_sample_method: probabilistic`. Drafts are sampled from the draft
   distribution, so acceptance holds up for clients at the default temperature
   (agent coding c16 221.9 vs 186.3 agg tok/s for one-hot drafts, (hybrid)).
-- **lm_head:** the verify-head lm_head runs as online MXFP8
+- The verify-head lm_head runs as online MXFP8
   (`VLLM_MXFP8_LM_HEAD=1`); the MTP draft head is NVFP4.
-- **Image:** `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`.
+- Image `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`.
   It is vLLM fork `8e1f1e58` with b12x `a8333658`, plus a warm layer carrying the
   b12x kernel-selection cache and the TP2 startup bounded-wait patch.
 
@@ -692,7 +737,7 @@ The server uses the checkpoint's generation defaults: **temperature 1.0,
 top-p 0.95, top-k 20**. Agent clients that send no temperature (omp, pi,
 hermes) get these defaults, and that is the setting the recipe is tuned for.
 Temperature 0.6 measured the same speed within noise. Temperature 0 is only
-used for the counting diagnostic, not for real work.
+used for the counting diagnostic.
 
 #### Quality gate on the pinned checkpoint (2026-09-23)
 
@@ -764,7 +809,7 @@ per-stream = one request's rate. At c1 they are the same.
 | Agent coding, **temperature 0** (old argmax config only; not measured on the default recipe) | c1 55.3, c16 217.7 agg tok/s | [`results/benchy/la-task16-t0.md`](../results/benchy/la-task16-t0.md) |
 | Agent coding, temperature 0.6 | same speed as temperature 1.0 within noise (2026-09-23, B0, (hybrid)) | `results/benchy/` task-t06 run on dgx-01 |
 | **Prose continuation**, default recipe, default temperature (1.0), 128 output tokens | c1 56.05 ± 2.56, c16 126.72 ± 1.56 agg tok/s; 64k-cached c16 36.78 ± 2.68 | [`results/benchy/la-mtpprob-prose16.md`](../results/benchy/la-mtpprob-prose16.md) |
-| **Counting ceiling — not user throughput** (bench_sweep "List the numbers from 1 to 300", temp 0, thinking off) | c1 100.9 / 102.1 / 101.8, c8 439.4 / 434.6, c16 641.3 / 635.0 agg tok/s | `results/arms/la-mtpprob/decode_c*.json`, `sweep.json` (dgx-01) |
+| **Counting ceiling, a diagnostic for spec decode** (bench_sweep "List the numbers from 1 to 300", temp 0, thinking off) | c1 100.9 / 102.1 / 101.8, c8 439.4 / 434.6, c16 641.3 / 635.0 agg tok/s | `results/arms/la-mtpprob/decode_c*.json`, `sweep.json` (dgx-01) |
 
 The counting ceiling measures how fast the stack goes when speculation never
 misses (~3.96-4.00 of 4 drafts accepted). It is a regression diagnostic,
@@ -781,7 +826,7 @@ table and old-vs-new comparisons: [docs/BENCHMARKS.md](BENCHMARKS.md).
 | Agent coding 16k-cached c16 | 120.3 | 115.4 ± 24.3 (lower) |
 | Prose c1 | 41.1 | 56.1 |
 | Prose 64k-cached c16 | 38.15 | 36.78 (regression) |
-| Counting ceiling | — | unchanged within noise |
+| Counting ceiling | - | unchanged within noise |
 
 Sources: `results/benchy/la-task16.md` vs `la-mtpprob-task16.md`,
 `la-prose16.md` vs `la-mtpprob-prose16.md` (all in
@@ -789,7 +834,7 @@ Sources: `results/benchy/la-task16.md` vs `la-mtpprob-task16.md`,
 
 ### Quality
 
-Pinned-checkpoint gate: [Winning recipe](#quality-gate-on-the-pinned-checkpoint-2026-09-23).
+Pinned-checkpoint gate: [Recipe at the time](#quality-gate-on-the-pinned-checkpoint-2026-09-23).
 The tables below are older (hybrid) gates. Default recipe (probabilistic drafts), files in `results/arms/la-mtpprob/`.
 
 | Gate | Result | Setting | File |
@@ -811,7 +856,7 @@ Previous default (old la + MXFP8 lm_head, `results/arms/la-lmq/`): fidelity
 | Scenario | Cause | Status |
 |---|---|---|
 | TC-45 (`tool_choice=required`) | Parser bug, see [Known issues](ENGINEERING.md#known-issues--limits) | Fixed by `archive/mods/vllm-tc45-reasoning-structag-fix/` → 93/100, but that mod costs about -12% on the bench_sweep counting diagnostic at c1 (`results/arms/la-tc/sweep.json`, 85.0 vs 95.7). Not enabled by default. |
-| TC-68 | Model wraps JSON in a code fence with commentary; the scenario intentionally sends no `response_format` | Model compliance, not a server bug — not fixable without defeating the test |
+| TC-68 | Model wraps JSON in a code fence with commentary; the scenario intentionally sends no `response_format` | Model compliance; a server-side fix would defeat the test |
 
 ### How to read the numbers
 
@@ -819,7 +864,7 @@ Three workloads are used, and their numbers are not comparable with each other.
 
 | Factor | What it means here |
 |---|---|
-| **Workload** | Agent coding task (primary), prose continuation, and the counting ceiling. The same engine shows ~100 tok/s on counting and ~45-58 on real single-stream work. |
+| **Workload** | Agent coding task (primary), prose continuation, and the counting ceiling. The same engine shows ~100 tok/s on counting and ~45-58 on single-stream coding and prose. |
 | **Draft acceptance** | MTP proposes 4 tokens per step. On the counting prompt nearly all 4 are accepted (98.9% overall, ~3.96 per step, [`results/profiling/README.md`](../results/profiling/README.md)). On the sampled (temp 1.0) prose and agent task grids with probabilistic drafts, 39-41% are accepted, ~1.6 per step. |
 | **Temperature** | At temp 0 the target and draft agree more often, so acceptance and throughput rise (task c1 55.3 at temp 0 vs 46.1 at 1.0, old la). Clients that send no temperature get 1.0. |
 | **Thinking tokens** | Task and prose runs have thinking on; reasoning tokens are generated and counted like answer tokens. The counting diagnostic and the category harness run with thinking off. |

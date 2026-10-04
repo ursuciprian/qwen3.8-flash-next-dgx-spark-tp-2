@@ -25,19 +25,19 @@ RES = ROOT / "results"
 OUT = ROOT / "docs" / "img"
 
 SRC = {
-    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots) and counting runs (best run over both boots).
+    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots) and counting runs (max run over both boots).
     "tp2_verdict": RES / "b1.4-20261001/b14.json",
     # Counting sweep files on the two candidate boots: count.json (c1-c16), count-c1-*.json (c1 repeats), sweep.json.
     "tp2_count": sorted(p for g in ("cand[12]/count*.json", "cand[12]/sweep.json")
                         for p in (RES / "b1.4-20261001/r4ab-b14-20261001").glob(g)),
     "tp2_benchy": [RES / "b1.4-20261001/benchy/cand1-task.csv", RES / "b1.4-20261001/benchy/cand2-task.csv"],
-    # TODO(#65): replace with the b1.4 copy-heavy file from results/showcase-* when the showcase run lands.
-    "tp2_copy": RES / "b1.2-20260927/copy-streams-20260929.json",
+    # Copy-heavy on b1.4, 2026-10-04 showcase run.
+    "tp2_copy": [RES / "showcase-20261004/A/copy-streams.json"],
     # 1x Spark (TP=1), v3b coding grid.
     "tp1_benchy": RES / "tp1-v3b-20261004/bench-task.csv",
-    # TODO(#65): replace both with the v3a files from results/showcase-* when the showcase run lands.
-    "tp1_copy": RES / "tp1-v2-20261002/copy-streams.json",
-    "tp1_count": RES / "tp1-v2-20261002/counting-sweep.json",
+    # Copy-heavy and counting on v3a, 2026-10-04 showcase run, same image on both Sparks; max over the two.
+    "tp1_copy": [RES / f"showcase-20261004/B/{h}/copy-streams.json" for h in ("dgx01", "dgx02")],
+    "tp1_count": sorted((RES / "showcase-20261004/B").glob("dgx0[12]/count-c*.json")),
     # Promoted 2x Spark builds, in order. The first verdict's baseline is the 2026-09-23 shipped build.
     "builds": [
         ("b1", "09-25", RES / "b1-20260925/verdict-oldb12x-on.json"),
@@ -89,16 +89,17 @@ def verdict_means(path, key, prefix=""):
     return {int(k[len(prefix) + 1:]): v["cand_mean"] for k, v in d.items() if k.startswith(prefix + "c")}
 
 
-def copy_best(path):
-    """Copy-heavy file -> {streams: best round's window tok/s}."""
+def copy_best(paths):
+    """Copy-heavy files -> {streams: max round window tok/s over all files}."""
     out = {}
-    for r in json.loads(Path(path).read_text())["rounds"]:
-        out[r["n"]] = max(out.get(r["n"], 0), r["window"]["tok_s"])
+    for p in paths:
+        for r in json.loads(Path(p).read_text())["rounds"]:
+            out[r["n"]] = max(out.get(r["n"], 0), r["window"]["tok_s"])
     return out
 
 
 def count_best(paths):
-    """Counting sweep files -> {c: best agg tok/s over the files}. Each file's value is already the median of its rounds."""
+    """Counting sweep files -> {c: max agg tok/s over the files}. Each file's value is already the median of its rounds."""
     out = {}
     for p in paths:
         for r in json.loads(Path(p).read_text())["rows"]:
@@ -126,7 +127,7 @@ def load():
     t1 = benchy(SRC["tp1_benchy"])
     tp1 = {
         "copy": copy_best(SRC["tp1_copy"]),
-        "count": count_best([SRC["tp1_count"]]),
+        "count": count_best(SRC["tp1_count"]),
         "code": grid("tg512", t1),
         "code16": grid("tg512 @ d16384", t1),
     }
@@ -194,9 +195,11 @@ def chart_throughput(tp2, tp1):
     axes[0].set_ylim(0, None)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.1), fontsize=10)
-    fig.text(0.0, -0.17, "Copy-heavy: best of 3 rounds, low thinking effort. Counting: T=0, thinking off, best run (2×: over 2 boots; "
-             "1×: one run). Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4 (copy-heavy b1.2); 1× v3b "
-             "(copy-heavy and counting v2). Raw files under results/.", fontsize=8.5, color=MUTED)
+    fig.text(0.0, -0.22, "Copy-heavy: max round, low thinking effort (2×: max of 3; 1×: max of 6, 3 on each of two Sparks). "
+             "Counting: T=0, thinking off (2×: max run over 2 boots;\n1×: higher of two Sparks, each a median of 5 rounds). "
+             "Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4; 1× copy-heavy and counting v3a, "
+             "coding v3b. Raw files under results/.",
+             fontsize=8.5, color=MUTED)
     save(fig, "throughput.svg")
 
 
@@ -255,7 +258,7 @@ def chart_quality():
     rows = [
         ("Hard multi-step tool use (88 scenarios)", f"{min(v['quality_gate']['hardmode_scores'])}/100",
          f"{hard1}/100", "≥ 88"),
-        ("tool_choice=required (TC-45, 5 trials)", f"{float(tc2):.0f}/100", f"{float(tc1):.0f}/100", "—"),
+        ("tool_choice=required (TC-45, 5 trials)", f"{float(tc2):.0f}/100", f"{float(tc1):.0f}/100", "-"),
     ]
     for (tok2, ex2), (tok1, ex1) in zip(t2f[:4], t1f[:4]):
         rows.append((f"Tool-call retrieval at {round(tok2, -3) / 1000:.0f}k tokens", f"{ex2}/20", f"{ex1}/20",

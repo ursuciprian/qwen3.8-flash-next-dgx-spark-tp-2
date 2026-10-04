@@ -6,24 +6,22 @@ NVFP4 Qwen3.8-Flash-Next on vLLM V2 with b12x kernels and 4-token MTP, launched 
 Two recipes from one checkpoint: **2× Spark** (TP=2 over ConnectX-7) and **1× Spark** (TP=1, experimental).<br>
 A build is promoted only if it passes the [quality gate](#quality-gate) and no c1–c4 cell is slower beyond noise.
 
-<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark: copy-heavy 426 at 8 concurrent tasks (best of 3 rounds), counting 541 at c8 and 780 at c16 (best run), coding 196 at c8 and 243 at c16. 1× Spark: copy-heavy 266 (best of 3 rounds) and counting 356 at c8, coding 130 at c8." width="900">
+<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark: copy-heavy 439 at 8 concurrent tasks (max of 3 rounds), counting 541 at c8 and 780 at c16 (max run), coding 196 at c8 and 243 at c16. 1× Spark: copy-heavy 271 at 8 (max of 6 rounds over two Sparks) and counting 353 at c8 (median of 5 rounds), both v3a; coding 130 at c8 (v3b)." width="900">
 
 </div>
 
-<!-- TODO(#65): the copy-heavy cells (2× b1.2, 1× v2) and the 1× counting cells (v2) are refreshed by the pending
-     showcase run (results/showcase-*): 2× copy-heavy -> b1.4, 1× copy-heavy and counting -> v3a. -->
-
 | Workload | Tokens / step | 2× Spark, 1 request | 2× Spark, 8 requests | 1× Spark, 1 request | 1× Spark, 8 requests |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **Copy-heavy** (high acceptance, best of 3 rounds) | 4.93–4.97 | 112<!-- TODO(#65) --> | **426**<!-- TODO(#65) --> | 75<!-- TODO(#65) --> | **266**<!-- TODO(#65) --> |
-| **Counting** (high acceptance, best run) | ~5.0 | 120 | **541** | 77<!-- TODO(#65) --> | **356**<!-- TODO(#65) --> |
+| **Copy-heavy** (high acceptance, max round) | 4.91–4.97 | 117 | **439** | 75 | **271** |
+| **Counting** (high acceptance; 2× max run, 1× median of 5 rounds) | 4.93–4.98 | 120 | **541** | 77 | **353** |
 | **Coding**, llama-benchy tg512 | 2.7–2.8 (2×) · 3.3–3.4 (1×) | 62 | 196 | 55 | 130 |
 | **Coding** at 16k cached context | 2.6–2.7 (2×) · 3.2–3.3 (1×) | 64 | 146 | 55 | 22 ([limits](#known-limits)) |
 | **Prefill**, 2,048-token prompt | | 2,784–2,855 | | 1,767 | |
 | **Prefill**, filling a 16k context | | 2,895–2,920 | | 2,103 | |
 
-Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4 (copy-heavy b1.2); 1× Spark v3b (copy-heavy and
-counting v2). Workloads and raw files: [Measured](#measured).
+Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3b, except copy-heavy and counting,
+which are v3a (2026-10-04). Copy-heavy is the max of 3 rounds (2×) or of 6 rounds over two Sparks (1×). Workloads,
+dates and raw files: [Measured](#measured).
 
 <div align="center">
 
@@ -53,27 +51,22 @@ Then [verify](#verify) the server. Base URL `http://<head>:8000/v1`, model `qwen
 
 [Measured](#measured) · [Quality gate](#quality-gate) · [Verify](#verify) · [Requirements](#requirements) · [Known limits](#known-limits) · [Recipes](#recipes) · [Changelog](#changelog) · [How we measure](#how-we-measure) · [Troubleshooting](#troubleshooting)
 
----
-
 ## Measured
 
 Two kinds of workload, labelled per row, because they differ by about 2× in tokens per decode step:
 
-- **High-acceptance** workloads (copying, counting) accept nearly every MTP draft (~4.9–5.0 tokens per step). They show
+- High-acceptance workloads (copying, counting) accept nearly every MTP draft (~4.9–5.0 tokens per step). They show
   the decode rate when drafts land, which bounds what MTP can give.
-- **Coding** is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step). It is what an agent
-  sees in practice.
-
-<!-- TODO(#65): copy-heavy rows (2× b1.2, 1× v2) and the 1× counting row (v2) are refreshed by results/showcase-*. -->
+- Coding is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the rate an agent sees.
 
 ### 2× Spark (TP=2), build b1.4
 
 | Workload | Tokens/step | c1 | c4 | c8 | c16 | Build |
 |---|:---:|:---:|:---:|:---:|:---:|---|
-| **High-acceptance:** copy-heavy, best of 3 rounds | 4.93–4.96 | 112.1<!-- TODO(#65) --> | 274.0<!-- TODO(#65) --> | 425.8<!-- TODO(#65) --> | | b1.2 (2026-09-29) |
-| **High-acceptance:** counting, T=0, best run over two boots | ~5.0 (acceptance 1.00/0.99/0.99/0.99) | 120.3 | 366.5 | 541.3 | 779.7 | b1.4 |
-| **Coding:** llama-benchy tg512, depth 0 | 2.7–2.8 | 62.2 | 150.9 | 195.5 | 242.8 | b1.4 |
-| **Coding:** llama-benchy tg512, 16k cached depth | 2.6–2.7 | 63.8 | 117.5 | 145.9 | 176.5 | b1.4 |
+| **High-acceptance:** copy-heavy, max of 3 rounds | 4.91–4.95 | 117.2 | 290.1 | 439.4 | | b1.4 (2026-10-04) |
+| **High-acceptance:** counting, T=0, max run over two boots | ~5.0 (acceptance 1.00/0.99/0.99/0.99) | 120.3 | 366.5 | 541.3 | 779.7 | b1.4 (2026-10-01) |
+| **Coding:** llama-benchy tg512, depth 0 | 2.7–2.8 | 62.2 | 150.9 | 195.5 | 242.8 | b1.4 (2026-10-01) |
+| **Coding:** llama-benchy tg512, 16k cached depth | 2.6–2.7 | 63.8 | 117.5 | 145.9 | 176.5 | b1.4 (2026-10-01) |
 
 Prefill (c1): 2,784–2,855 tok/s for a 2,048-token prompt; 2,895–2,920 tok/s filling a 16k context (two boots).
 TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached context). c2/c5/c10 cells:
@@ -83,10 +76,13 @@ TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached conte
 
 | Workload | Tokens/step | c1 | c4 | c8 | Build |
 |---|:---:|:---:|:---:|:---:|---|
-| **High-acceptance:** copy-heavy, best of 3 rounds | 4.93–4.97 | 74.9<!-- TODO(#65) --> | 184.4<!-- TODO(#65) --> | 266.1<!-- TODO(#65) --> | v2 (2026-10-02) |
-| **High-acceptance:** counting, T=0, one run (median of 3 rounds) | ~5.0 (3.98 accepted per 4 drafts) | 77.0<!-- TODO(#65) --> | 228.5<!-- TODO(#65) --> | 356.0<!-- TODO(#65) --> | v2 (2026-10-02) |
-| **Coding:** llama-benchy tg512, depth 0 | 3.3–3.4 | 55.0 | 99.8 | 130.2 | v3b |
-| **Coding:** llama-benchy tg512, 16k cached depth | 3.2–3.3 | 54.6 | 99.0 | **22.1** (see [limits](#known-limits)) | v3b |
+| **High-acceptance:** copy-heavy, max of 6 rounds (3 on each of two Sparks) | 4.91–4.97 | 74.9 | 192.8 | 270.8 | v3a (2026-10-04) |
+| **High-acceptance:** counting, T=0, median of 5 rounds, higher of two Sparks | 4.93–4.98 (3.93–3.98 accepted per 4 drafts) | 76.5 | 220.4 | 353.1 | v3a (2026-10-04) |
+| **Coding:** llama-benchy tg512, depth 0 | 3.3–3.4 | 55.0 | 99.8 | 130.2 | v3b (2026-10-04) |
+| **Coding:** llama-benchy tg512, 16k cached depth | 3.2–3.3 | 54.6 | 99.0 | **22.1** (see [limits](#known-limits)) | v3b (2026-10-04) |
+
+v3b only adds prefill read-ahead to v3a; its paired A/B found no decode cell worse, so the v3a copy-heavy and counting
+rows have not been repeated on v3b.
 
 Prefill (c1): 1,767 tok/s for a 2,048-token prompt; 2,103 tok/s filling a 16k context. TTFT at c1: 1.19 s (2k new
 tokens) / 1.97 s (2k new tokens on a 16k cached context). In a 6-boot A/B against v3a settings, pp2048 was +50% at c1,
@@ -94,25 +90,26 @@ tokens) / 1.97 s (2k new tokens on a 16k cached context). In a 6-boot A/B agains
 
 <img src="docs/img/prefill.svg" alt="Prefill tok/s at one request: 2× Spark 2,784–2,855 for a 2,048-token prompt and 2,895–2,920 filling a 16k context; 1× Spark 1,767 and 2,103." width="620">
 
-**Conditions.** Coding rows: [llama-benchy](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task`, 2,048 new
+Conditions. Coding rows: [llama-benchy](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task`, 2,048 new
 prompt tokens, up to 512 out, thinking on, T=1.0 / top-p 0.95 / top-k 20, prefix caching on; 2× Spark is the mean of
 two boots × 3 runs, 1× Spark one boot × 3 runs. Counting: "list the numbers from 1 to 300", T=0, thinking off; each run
-records the median of its 3 rounds (per-round values were not saved). 2× Spark shows the best run over two boots (13 runs
-at c1, 3 at c4–c16); 1× Spark has one run. Copy-heavy decode: 1–8 concurrent copy tasks from a shared cached prefix at
-low reasoning effort, 1,500 tokens out, 3 rounds per task count; tok/s is counted over the window where all tasks
-decode, and the tables show the best of 3 rounds. Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode
+records the median of its rounds (per-round values were not saved). 2× Spark shows the max run over two b1.4 boots on
+2026-10-01 (13 runs at c1, 3 at c4–c16, 3 rounds each); a 2026-10-04 repeat on b1.4 (5 rounds) measured 119.5 / 362.9 /
+541.2 / 770.1 at c1/c4/c8/c16, lower in every cell. 1× Spark ran once on each of two Sparks with the same v3a image
+(5 rounds each); the table shows the higher Spark per cell. Copy-heavy benchmark: 1–8 concurrent copy tasks from a
+shared cached prefix at low reasoning effort, 1,500 tokens out, 3 rounds per task count; tok/s is counted over the
+window where all tasks decode, and the tables show the max round (2×: of 3; 1×: of 6 over the two Sparks, so a row
+can combine both Sparks). Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode
 counters (benchy `accept/draft` column, `tokens_per_step` in the copy-heavy files). Raw files:
 [`results/b1.4-20261001/`](results/b1.4-20261001/) ([`b14.json`](results/b1.4-20261001/b14.json), [`benchy/`](results/b1.4-20261001/benchy/),
 2× counting [`r4ab-b14-20261001/cand1/`](results/b1.4-20261001/r4ab-b14-20261001/cand1/) and [`cand2/`](results/b1.4-20261001/r4ab-b14-20261001/cand2/)),
-[`results/tp1-v3b-20261004/`](results/tp1-v3b-20261004/),
-copy-heavy [`results/b1.2-20260927/copy-streams-20260929.json`](results/b1.2-20260927/copy-streams-20260929.json) and
-[`results/tp1-v2-20261002/copy-streams.json`](results/tp1-v2-20261002/copy-streams.json), 1× counting
-[`results/tp1-v2-20261002/counting-sweep.json`](results/tp1-v2-20261002/counting-sweep.json).
+[`results/tp1-v3b-20261004/`](results/tp1-v3b-20261004/), and the 2026-10-04 copy-heavy and counting run
+[`results/showcase-20261004/`](results/showcase-20261004/) (`A/` 2× b1.4, `B/dgx01/` and `B/dgx02/` 1× v3a).
 Charts: `uv run scripts/make_charts.py` renders every chart on this page from those files.
 
 ## Quality gate
 
-A build ships only if it passes every check. A faster build that fails one is not promoted.
+A build ships only if it passes every check.
 
 <img src="docs/img/quality-gate.svg" alt="Quality gate: hardmode 92/100 (2× b1.4) and 91/100 (1× v3b), TC-45 100/100, tool-call retrieval 20/20 at 16k, 62k, 123k and 245k tokens, no batch stragglers." width="820">
 
@@ -154,7 +151,7 @@ print('content  :', (m.get('content') or '')[:300])"
 Empty `content` with long reasoning means `max_tokens` ran out inside thinking; garbled text means a checkpoint
 mismatch (see [Troubleshooting](#troubleshooting)).
 
-**Optional long-context check** (stdlib Python): expect `exact 20` at both depths.
+Optional long-context check (stdlib Python), expect `exact 20` at both depths.
 
 ```sh
 git clone https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2 && cd qwen3.8-flash-next-dgx-spark-tp-2
@@ -165,7 +162,7 @@ The server binds 0.0.0.0 with no API key: keep it on a trusted network or put a 
 Stop with `sparkrun stop --all`.
 <!-- TODO: document --api-key through sparkrun. -->
 
-> **Upgrading:** sparkrun caches registries and does not refresh them on `run`. Run `sparkrun registry update qwen38-flashnext`
+> To upgrade, note that sparkrun caches registries and does not refresh them on `run`. Run `sparkrun registry update qwen38-flashnext`
 > first, or the previous recipe revision boots.
 
 ## Requirements
@@ -176,7 +173,7 @@ Stop with `sparkrun stop --all`.
 | **Launcher** | sparkrun ≥ 0.3.6 with a two-node cluster defined | sparkrun ≥ 0.3.6 |
 | **Disk** | ~125 GB per node (98.5 GiB checkpoint + ~25 GB image) | ~125 GB |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
-| **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | — |
+| **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
 | **Boot** | ~4 min warm, ~9.5 min cold | not yet measured with the shipped plan seed |
 | **Concurrency** | `max_num_seqs` 16 | `max_num_seqs` 8, KV pool 6 GiB |
 
@@ -187,13 +184,13 @@ Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface
 
 ## Known limits
 
-- **1× Spark, 8 concurrent requests at 16k context: ~20–22 tok/s.** The 6 GiB KV pool fills and requests are deferred.
+- 1× Spark, 8 concurrent requests at 16k context, runs at ~20–22 tok/s. The 6 GiB KV pool fills and requests are deferred.
   Keep long-context concurrency at 4 or less on one Spark. A fix is in progress.
-- **1× Spark, first boot without a usable plan seed** autotunes and compiles every kernel: ~30 min, with host
+- 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host
   MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The image ships the TP=1 plan seed
   and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
-- **1× Spark steady state:** MemAvailable 13–14 GiB, most of it PLE page cache.
-- **2× Spark, c1 is bimodal** (counting ~95–100 vs ~85–88 tok/s between boots); the counting tables show the best of several runs.
+- 1× Spark in steady state has 13–14 GiB MemAvailable, most of it PLE page cache.
+- 2× Spark c1 is bimodal (counting ~95–100 vs ~85–88 tok/s between boots); the counting tables show the max of several runs.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - 64k-depth and prose throughput were not re-measured on b1.4.
 
@@ -220,8 +217,8 @@ step time at T=0 with 95% CIs. Every row passed the gate.
 | Build | Date | Coding c1 d0 | Coding c16 16k | TTFT c1 16k | What changed | Measured delta |
 |---|---|:---:|:---:|:---:|---|---|
 | b1 | 2026-09-25 | 54 | 139 | 2.6 s | Deferred GDN checkpoints, TC-45 fix | d0 c8 186.6 vs 166.8, c16 241.1 vs 218.6 |
-| b1.1 | 2026-09-26 | 53.4 | 175.9 | — | Exact prefix hits under MTP, `NULL_BLOCK_ID` padding fix, compile-worker cap | 16k c16 176.5 vs 139.4; cached-prefix TTFT 16k −37% |
-| b1.2 | 2026-09-27 | 58.2–61.8 | 173.3–176.1 | — | HC mixers in online MXFP8 | step −9.9% c1 fresh, −4.4 to −7.6% c2–c4 |
+| b1.1 | 2026-09-26 | 53.4 | 175.9 | - | Exact prefix hits under MTP, `NULL_BLOCK_ID` padding fix, compile-worker cap | 16k c16 176.5 vs 139.4; cached-prefix TTFT 16k −37% |
+| b1.2 | 2026-09-27 | 58.2–61.8 | 173.3–176.1 | - | HC mixers in online MXFP8 | step −9.9% c1 fresh, −4.4 to −7.6% c2–c4 |
 | b1.3 | 2026-09-29 | 62.2 | 178.5 | 1.71 s | GDN uniform-decode metadata skip (~350 launches/step) | step −1.9 to −3.1% c1, −2.5 to −3.0% c2 |
 | **b1.4** | **2026-10-01** | **62.2** | **176.4** | **1.70 s** | 131k-id MTP draft vocab, QSA race + recompile fixes, thinking effort `medium` | step −2 to −5% c1–c8; d0 c5 +4.2%; counting c1 +4.9% |
 
@@ -238,31 +235,31 @@ differences this small; the paired probe does. Per-build tables: [docs/BENCHMARK
 
 ## How we measure
 
-- **Grid.** llama-benchy task mode (above) at c1–c16 and depths 0 / 16k, 3 runs per boot, two boots per build on the
+- The coding grid runs llama-benchy task mode (above) at c1–c16 and depths 0 / 16k, 3 runs per boot, two boots per build on the
   2× Spark. A cell counts as changed only if the difference is larger than its own boot-to-boot noise.
-- **Paired A/B.** Candidate and previous build on the same prompts at temperature 0, booted in ABBA order (2× Spark:
+- The paired A/B runs the candidate and the previous build on the same prompts at temperature 0, booted in ABBA order (2× Spark:
   two boots per build; 1× Spark: 4 passes over 2 Sparks). We report decode step time, tokens per step and tok/s per cell with 95% CIs.
   Example: [`results/tp1-v3a-20261004/ab-report-v3a-vs-v2.txt`](results/tp1-v3a-20261004/ab-report-v3a-vs-v2.txt).
   <!-- TODO: commit the script that produces these reports. -->
-- **Promotion rule.** The gate must pass; at least one coding or counting cell must be faster beyond noise; no c1–c4
+- To be promoted, a build must pass the gate; at least one coding or counting cell must be faster beyond noise; no c1–c4
   cell may be slower beyond noise, and a loss at c5–c16 is published as a caveat ([`scripts/arm_verdict.py`](scripts/arm_verdict.py)).
-- **Numerics canary.** MTP acceptance per draft position is compared cell by cell. A drop means the target or draft
+- MTP acceptance per draft position is compared cell by cell as a numerics canary. A drop means the target or draft
   numerics changed, even when the gate passes. Logprob agreement against the previous build must sit within self-noise.
-- **High-acceptance rows** (counting, copy-heavy) bound what MTP can give, not coding speed.
+- High-acceptance rows (counting, copy-heavy) give an upper bound for MTP decode; the coding rows give agent speed.
 
 Index of every run and verdict: [results/README.md](results/README.md).
 
 ## How it works
 
-- **2× Spark: TP=2 over RoCE.** One rank per GB10; all-reduces over the CX-7 link take ~4% of a c1 decode step.
-- **1× Spark: PLE table through the page cache.** The 26.8 GiB PLE n-gram table is read from the checkpoint files
+- 2× Spark runs TP=2 over RoCE, one rank per GB10; all-reduces over the CX-7 link take ~4% of a c1 decode step.
+- 1× Spark reads the 26.8 GiB PLE n-gram table through the page cache from the checkpoint files
   (`VLLM_PLE_MMAP=1`) with a WILLNEED pass before each decode gather and a 50 ms NVMe keepalive, so ~72 GiB of other
   weights plus a 6 GiB KV pool fit on one GB10.
-- **b12x kernels** for NVFP4 MoE, MXFP8 linears, GDN (36 layers) and QSA sparse attention (12 layers), with an
+- b12x kernels cover NVFP4 MoE, MXFP8 linears, GDN (36 layers) and QSA sparse attention (12 layers), with an
   autotuned plan cache baked into each image.
-- **MTP ×4 with probabilistic drafts** over a 131k-id draft vocabulary. Rejection sampling keeps the output
-  distribution unchanged.
-- **Where the 2× Spark c1 step (~43 ms) goes:** MoE 30%, dense MXFP8 31%, MTP draft + head 19%, idle 6%,
+- MTP ×4 uses probabilistic drafts over a 131k-id draft vocabulary; rejection sampling keeps the output distribution
+  unchanged.
+- The 2× Spark c1 step (~43 ms) splits into MoE 30%, dense MXFP8 31%, MTP draft + head 19%, idle 6%,
   all-reduce 4%, GDN 3%. MoE reads ~175 GB/s of the ~250 GB/s the GB10 reaches.
 
 Flags, environment variables and the reason for each: [docs/REFERENCE.md](docs/REFERENCE.md). Kernel and engine notes,
