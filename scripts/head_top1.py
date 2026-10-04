@@ -13,7 +13,7 @@ contexts, unlike free-running greedy text that diverges after the first differen
 diff: top-1 agreement, top-5 set overlap, mean |dlogprob| of A's top-1 token where B lists
 it, and each side's accuracy against the true next token.
 """
-import argparse, json, sys, urllib.request
+import argparse, json, sys, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -26,11 +26,17 @@ CHARS, TOKENS, START, STRIDE = 6000, 768, 32, 8
 MIN_POSITIONS = 2000
 
 
-def post(base, path, body, timeout=300):
+def post(base, path, body, timeout=300, tries=3):
     req = urllib.request.Request(base.rstrip("/") + path, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    for i in range(tries):  # one transient HTTP error must not lose a whole capture
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read())
+        except (OSError, ValueError):
+            if i == tries - 1:
+                raise
+            time.sleep(5)
 
 
 def capture(a):
@@ -62,13 +68,15 @@ def compare(x, y):
     out = {}
     for kind in ("all", "prose", "code"):
         pairs = [(p, q) for p, q in zip(x["records"], y["records"]) if kind in ("all", p["kind"])]
+        if not pairs:
+            continue
         assert all((p["doc"], p["pos"]) == (q["doc"], q["pos"]) for p, q in pairs), "captures differ in layout"
         top1 = lambda r: max(r["top5"], key=r["top5"].get)
         agree = sum(top1(p) == top1(q) for p, q in pairs)
         overlap = sum(len(set(p["top5"]) & set(q["top5"])) for p, q in pairs) / (5 * len(pairs))
         dl = [abs(p["top5"][top1(p)] - q["top5"][top1(p)]) for p, q in pairs if top1(p) in q["top5"]]
         out[kind] = {"n": len(pairs), "top1_agree": agree / len(pairs), "top5_overlap": overlap,
-                     "mean_abs_dlogprob_top1": sum(dl) / len(dl),
+                     "mean_abs_dlogprob_top1": sum(dl) / len(dl) if dl else None,
                      "acc_true_a": sum(top1(p) == p["true"] for p, _ in pairs) / len(pairs),
                      "acc_true_b": sum(top1(q) == q["true"] for _, q in pairs) / len(pairs)}
     return out
