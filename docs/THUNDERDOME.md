@@ -42,14 +42,17 @@ Per boot (estimates from the 2026-10-02/03 TP1 driver logs):
 | benchy | llama-benchy pp2048 / tg512, depth 0, c1 and c8, T=1, 2 runs | ~2 min |
 
 That is about 18.5 minutes per boot and 75 minutes for four boots. Both Sparks run in parallel, so two
-arms also take about 75 minutes. If acceptance has already moved by more than 0.03 after pass 1, the
+arms also take about 75 minutes. Worst case, when d16k c8 hits its 480 s cut on every boot, a boot takes
+about 21 minutes and the screen about 85 minutes. `bake: yes` adds about 14 minutes and a `hook` adds its
+own time. If acceptance has already moved by more than 0.03 after pass 1, the
 Spark skips pass 2 and the arm is KILL.
 
 Why d16k c8 is different: on the 6 GiB KV pool of v2/v3a/v3b, 8 requests at 16K do not fit, so the engine
 preempts and recomputes. Some requests then stall for most of their life, and per-request tok/s becomes
 meaningless (one control request read 853 tok/s with 145 stalls). One rep took 134 to 441 s when it
 finished, and 19 of 56 runs (34 %) in the last 14 TP1 driver logs hit the 900 s request timeout. So the cell runs once per boot, is cut at
-480 s, and is judged on its wall time. An unfinished run counts as the cut.
+480 s, and is judged on its wall time. A run cut by the timeout counts as the cut. A run that errors out
+counts as missing.
 
 ## Verdict
 
@@ -72,7 +75,7 @@ that finished on both sides.
 
 | verdict | when |
 |---------|------|
-| KILL | any cell worse than 2x its noise, acceptance moved by more than 0.03 at any position, or an arm boot failed |
+| KILL | any cell worse than 2x its noise; acceptance moved by more than 0.03 at any draft position both sides have; an arm boot failed; the arm server died during a boot; or an arm cell timed out or errored in a pass where the control's finished |
 | PROMOTE | every cell measured, none worse than 1x its noise, at least one better than 1x its noise |
 | INCONCLUSIVE | anything else: a cell worse than 1x but not 2x its noise, missing cells, control boot failed, a cold boot, or nothing better than noise |
 
@@ -198,7 +201,7 @@ ctl-p1 arm-p1 arm-p2 ctl-p2/
   recipe.yaml sparkrun.log serve.log aot.txt env.txt image.txt boot.txt mem.log
   probe-<cell>.json/.log  pos-<cell>.before/.after  time-<cell>.txt   (cells: warm + 6)
   logits-a.json logits-b.json  task.csv benchy.log  hook.log
-  FAILED or COLD          when that boot did not come up warm
+  FAILED or COLD          when that boot did not come up warm; DIED when the server was gone after the pass
 acc-p1.txt               acceptance check after pass 1
 verdict.txt              report; last line VERDICT=...
 gate/                    split gate of a PROMOTE arm (dgx01/, dgx02/, summary.txt)

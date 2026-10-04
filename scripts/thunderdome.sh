@@ -69,7 +69,7 @@ EST_BOOT=180 EST_WARM=25 EST_LOGITS=30 EST_BENCHY=120 EST_LOGS=15 EST_GATE_BOOT=
 DRY=; ARGS=()
 for a in "$@"; do if [ "$a" = --dry-run ]; then DRY=1; else ARGS+=("$a"); fi; done
 set -- ${ARGS[@]+"${ARGS[@]}"}
-MODE=screen
+MODE=screen; MP=
 case "${1:-}" in screen|gate|bake) MODE=$1; shift ;; "") ;; *) [ -d "$1" ] || { echo "usage: see the header of $0" >&2; exit 2; } ;; esac
 abs() { case $1 in ""|/*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }   # recipes are booted from their own dir
 P=(); for a in "$@"; do P+=("$(abs "$a")"); done; set -- ${P[@]+"${P[@]}"}
@@ -81,7 +81,7 @@ LOG=$RES/thunderdome.log
 
 log() { local m; m="[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*"; if [ -n "$DRY" ]; then echo "$m"; else echo "$m" >> "$LOG"; fi; }
 st() { echo "$*" > "$RES/STATE"; log "STATE: $*"; }
-on() { local h=$1; shift; if [ "$h" = "$H1" ]; then bash -c "$*" < /dev/null; else ssh -n -o ConnectTimeout=10 "$h" "$*"; fi; }
+on() { local h=$1; shift; if [ "$h" = "$H1" ]; then bash -c "$*" < /dev/null; else ssh -n -o ConnectTimeout=10 "$h" "$*" 9>&-; fi; }
 label() { [ "$1" = "$H1" ] && echo dgx01 || echo dgx02; }
 name() { basename "$1" .yaml | sed 's/^qwen3\.8-flash-next-1x-dgx-spark-//'; }
 image() { sed -n 's/^container: *//p' "$1" | head -1 | tr -d "\"' "; }
@@ -103,6 +103,7 @@ memlog() { if [ "$1" = "$H1" ]; then bash -c "$MEMLOOP" > "$2" 2>&1 < /dev/null 
   else ssh -n "$1" "$MEMLOOP" > "$2" 2>&1 9>&- & fi; echo $!; }
 minmem() { sort -k2 -n "$1" 2>/dev/null | head -1; }
 tree() { local c; echo "$1"; for c in $(pgrep -P "$1"); do tree "$c"; done; }
+norestore() { [ "${NO_RESTORE:-}" = 1 ] || [ "${CHAIN_NO_RESTORE:-}" = 1 ]; }
 kill_tree() { kill -TERM $(tree "$1") 2>/dev/null; }   # whole tree at once, so nothing new is spawned in between
 
 keep_logs() { # host dir: serve log, AOT lines, env, image (also after a failed boot)
@@ -126,7 +127,7 @@ boot() { # host recipe dir -> 0 up and warm, 1 failed, 2 cold (backbone compilin
       log "$(label "$h"): $(name "$rec") COLD: backbone compiling, boot stopped (run: thunderdome.sh bake $rec)"; return 2; fi
     if [ "$(health "$h")" = 200 ]; then
       echo "boot $(( $(date +%s) - s ))s ${m:-no AOT line}" > "$d/boot.txt"; log "$(label "$h"): up, $(cat "$d/boot.txt")"; return 0; fi
-    n=$(solo "$h")
+    n=$(solo "$h") || { sleep 10; continue; }   # ssh hiccup: ask again
     if [ $(( $(date +%s) - s )) -gt 120 ] && { [ -z "$n" ] || cx "$h" "grep -qE 'Worker failed with error|EngineCore failed to start|Engine core initialization failed' /tmp/sparkrun_serve.log"; }; then
       log "$(label "$h"): boot FAILED after $(( $(date +%s) - s ))s"; return 1; fi
     [ $(( $(date +%s) - s )) -ge "${BOOT_MAX:-1800}" ] && { log "$(label "$h"): health timeout"; return 1; }
@@ -151,19 +152,22 @@ benchy() { # host dir: pp2048 tg512 at c1 and c8, depth 0, T=1 (as the driver gr
       --save-result "$d/task.csv" > "$d/benchy.log" 2>&1 ); rc=$?
   log "$(label "$h")/$(basename "$d"): benchy exit=$rc"; }
 run_pass() { # host dir [hook]: everything measured on one boot
-  local h=$1 d=$2 hook=${3:-} mp spec tag depth c r off t e x
-  mp=$(memlog "$h" "$d/mem.log")
+  local h=$1 d=$2 hook=${3:-} spec tag depth c r off t e x
+  MP=$(memlog "$h" "$d/mem.log")   # parent is init: killed by name in node_run's TERM trap
   probe "$h" "$d" warm 4096 1 1 900000 300
   for spec in $CELLS; do IFS=: read -r tag depth c r off t e <<< "$spec"; probe "$h" "$d" "$tag" "$depth" "$c" "$r" "$off" "$t"; done
   for x in a b; do ( cd "$R" && timeout 300 python3 scripts/logits_equiv.py capture --base-url "http://$h:8000" \
       --out "$d/logits-$x.json" > "$d/logits-$x.log" 2>&1 ); done
   benchy "$h" "$d"
   if [ -n "$hook" ]; then timeout -k 30 3600 bash "$hook" "$h" "$d" > "$d/hook.log" 2>&1; log "$(label "$h")/$(basename "$d"): hook exit=$?"; fi
-  kill "$mp" 2>/dev/null; }
+  [ "$(health "$h")" = 200 ] || { echo "server gone after the pass" > "$d/DIED"; log "$(label "$h")/$(basename "$d"): server DIED"; }
+  kill "$MP" 2>/dev/null; MP=; }
 
 node_run() { # host control arm outdir bake(yes|"") hook: [bake,] ABBA on one Spark, then its verdict
   local h=$1 ctl=$2 arm=$3 out=$4 bake=$5 hook=$6 item who k d rc order=$ORDER
-  trap 'exit 143' TERM
+  trap 'kill $MP 2>/dev/null; exit 143' TERM
+  # a rerun into the same dir must not pool boots or verdicts of an earlier run
+  rm -rf "$out"/ctl-p[0-9] "$out"/arm-p[0-9] "$out"/bake-ctl "$out"/bake-arm "$out"/gate "$out"/acc-p1.txt "$out"/verdict.txt
   mkdir -p "$out"; echo "arm $(name "$arm") $arm" > "$out/arms.txt"; echo "ctl $(name "$ctl") $ctl" >> "$out/arms.txt"
   if [ "$bake" = yes ]; then   # one cold boot per recipe on this Spark fills its compile cache
     for who in ctl arm; do d=$out/bake-$who; rm -rf "$d"; mkdir -p "$d"
@@ -188,7 +192,7 @@ gate() { # recipe outdir: split gate on both Sparks
   mkdir -p "$G/dgx01" "$G/dgx02"; cp "$rec" "$G/recipe.yaml"
   # the gate is not timed: a boot that compiles (arm baked only on its own Spark) is fine here
   ALLOW_COLD=1 BOOT_MAX=5400 boot $H1 "$rec" "$G/dgx01" 9>&- & n1=$!; ALLOW_COLD=1 BOOT_MAX=5400 boot $H2 "$rec" "$G/dgx02" 9>&- & n2=$!; BG="$BG $n1 $n2"
-  wait $n1; r1=$?; wait $n2; r2=$?
+  wait $n1; r1=$?; wait $n2; r2=$?; BG=
   if [ $r1 -ne 0 ] || [ $r2 -ne 0 ]; then keep_logs $H1 "$G/dgx01"; keep_logs $H2 "$G/dgx02"; stop_host $H1; stop_host $H2
     echo "gate boot failed (dgx01 rc=$r1, dgx02 rc=$r2; 2 = cold)" > "$G/summary.txt"; log "gate $(name "$rec"): boot failed"; return 1; fi
   m1=$(memlog $H1 "$G/dgx01/mem.log"); m2=$(memlog $H2 "$G/dgx02/mem.log")
@@ -201,7 +205,7 @@ gate() { # recipe outdir: split gate on both Sparks
       --depths 8000,32000,64000,128000 --out "$G/dgx02/fidelity.json" > "$G/dgx02/fidelity.txt" 2>&1
     for sd in 11 13; do timeout 2700 python3 scripts/fidelity_probe.py --base "http://$H2:8000" --model $MODEL \
       --depths 128000 --seed $sd --out "$G/dgx02/fidelity-seed$sd.json" > "$G/dgx02/fidelity-seed$sd.txt" 2>&1; done ) 9>&- & p2=$!
-  BG="$BG $m1 $m2 $p1 $p2"; wait $p1; wait $p2; kill $m1 $m2 2>/dev/null
+  BG="$BG $m1 $m2 $p1 $p2"; wait $p1; wait $p2; kill $m1 $m2 2>/dev/null; BG=
   keep_logs $H1 "$G/dgx01"; keep_logs $H2 "$G/dgx02"; stop_host $H1; stop_host $H2
   { echo "gate $(name "$rec") $(image "$rec")"
     grep -hE "Quality:" "$G/dgx01/hardmode.log"; grep -hE "Pass\^5|Score:" "$G/dgx01/tc45.log" | head -2
@@ -212,8 +216,10 @@ gate() { # recipe outdir: split gate on both Sparks
 
 # ---- 2x restore (k31 pattern) ----
 E=
-is_shipped() { [ "$(health localhost)" = 200 ] && docker ps --format '{{.Image}}' | grep -q ":$E\$" \
-  && on $H2 "docker ps --format '{{.Image}}'" | grep -q ":$E\$"; }
+is_shipped() { # 2x up with the tag seen at start (SHIPPED_TAG) or, if the pair was idle then, the same 2x image on both
+  local e=${E:-$(docker ps --format '{{.Names}} {{.Image}}' | awk '/node_0/ && /spark-vllm-b12x/ {print $2; exit}' | sed 's|.*:||')}
+  [ -n "$e" ] && [ "$(health localhost)" = 200 ] && docker ps --format '{{.Image}}' | grep -q ":$e\$" \
+  && on $H2 "docker ps --format '{{.Image}}'" | grep -q ":$e\$"; }
 restore() {
   if is_shipped && pong localhost | grep -qi pong; then log "restore: 2x already serving"; return 0; fi
   stop_all; timeout -k 60 3600 sparkrun run qwen3.8-flash-next-2x-dgx-spark --no-follow >> "$LOG" 2>&1 9>&-
@@ -299,7 +305,7 @@ plan() { # dry run: what would run, and how long
   echo "== Thunderdome $MODE, dry run: nothing is locked, stopped or booted"
   echo "repo      $R"; echo "results   $RES"
   echo "lock      $([ "${GPU_LOCK_HELD:-}" = 1 ] && echo "held by the caller (GPU_LOCK_HELD=1)" || echo "NOT held: a real run refuses (never takes it)")"
-  echo "on exit   $([ -n "${NO_RESTORE:-}${CHAIN_NO_RESTORE:-}" ] && echo "pair left idle (NO_RESTORE/CHAIN_NO_RESTORE)" || echo "boots qwen3.8-flash-next-2x-dgx-spark and checks image + pong (~$((EST_RESTORE / 60)) min)")"
+  echo "on exit   $(norestore && echo "pair left idle (NO_RESTORE/CHAIN_NO_RESTORE)" || echo "boots qwen3.8-flash-next-2x-dgx-spark and checks image + pong (~$((EST_RESTORE / 60)) min)")"
   case $MODE in
   screen)
     [ -n "$ARM_A" ] && { echo "dgx01     arm $(name "$ARM_A") ($(image "$ARM_A")) vs ctl $(name "$CTL_A") ($(image "$CTL_A")), boots: ${BAKE_A:+bake ctl+arm (cold, ~7 min each), }$ORDER${HOOK_A:+, hook $HOOK_A} -> $OUT_A"; n=1; }
@@ -339,25 +345,27 @@ mkdir -p "$RES"
 BG=; OWNS=0; FINAL="FAILED: $MODE"
 cleanup() {
   trap '' TERM INT HUP
-  local p; for p in $BG; do kill_tree "$p"; done
+  local p i a; for p in $BG; do kill_tree "$p"; done
+  for i in $(seq 1 30); do a=; for p in $BG; do kill -0 "$p" 2>/dev/null && a=1; done; [ -z "$a" ] && break; sleep 1; done
+  for p in $BG; do kill -KILL $(tree "$p") 2>/dev/null; done
   [ "$OWNS" = 1 ] || { st "$FINAL (stopped before taking the pair)"; return; }
-  if [ -n "${NO_RESTORE:-}${CHAIN_NO_RESTORE:-}" ]; then stop_host $H1; stop_host $H2; log "restore: skipped, pair left idle"
-  else restore || FINAL="FAILED: restore -- $FINAL"; fi
+  if norestore; then stop_host $H1; stop_host $H2; log "restore: skipped, pair left idle"
+  else restore || { FINAL="FAILED: restore -- $FINAL"; st "$FINAL"; exit 1; }; fi
   st "$FINAL"; }
 trap cleanup EXIT
 trap 'log "signal: stopping"; FINAL="FAILED: stopped by signal during $MODE"; exit 143' TERM INT HUP
 log "==== thunderdome $MODE pid $$ pgid $(ps -o pgid= $$ | tr -d ' ') ARM_A=$ARM_A ARM_B=$ARM_B CTL_A=$CTL_A CTL_B=$CTL_B $*"
 log "gpu-lock held by the caller (GPU_LOCK_HELD=1)"
 E=${SHIPPED_TAG:-$(docker ps --format '{{.Names}} {{.Image}}' | awk '/node_0/ && /spark-vllm-b12x/ {print $2; exit}' | sed 's|.*:||')}
-{ [ -n "$E" ] && on $H2 "docker ps --format '{{.Image}}'" | grep -q ":$E\$"; } || E=${SHIPPED_TAG:-b1.4-20261001-b7fbaf96-a7e649d8-warm}
-log "2x image tag for the restore check: $E"
+{ [ -n "$E" ] && on $H2 "docker ps --format '{{.Image}}'" | grep -q ":$E\$"; } || E=${SHIPPED_TAG:-}
+log "2x image tag for the restore check: ${E:-none serving at start: the restored 2x must run one image on both Sparks}"
 OWNS=1; stop_all
 
 case $MODE in
 bake)
   for rec in "$@"; do d=$RES/bake-$(name "$rec"); mkdir -p "$d/dgx01" "$d/dgx02"; st "running: bake $(name "$rec")"
     ALLOW_COLD=1 BOOT_MAX=5400 boot $H1 "$rec" "$d/dgx01" 9>&- & n1=$!; ALLOW_COLD=1 BOOT_MAX=5400 boot $H2 "$rec" "$d/dgx02" 9>&- & n2=$!
-    BG="$BG $n1 $n2"; wait $n1; r1=$?; wait $n2; r2=$?
+    BG="$BG $n1 $n2"; wait $n1; r1=$?; wait $n2; r2=$?; BG=
     for h in $H1 $H2; do keep_logs $h "$d/$(label $h)"; stop_host $h; done
     log "bake $(name "$rec"): dgx01 rc=$r1 dgx02 rc=$r2; AOT saved: $(cat "$d"/dgx0?/aot.txt | grep -c 'saved AOT')"
     [ $r1 -eq 0 ] && [ $r2 -eq 0 ] || { FINAL="FAILED: bake $(name "$rec") (dgx01 rc=$r1, dgx02 rc=$r2)"; exit 1; }; done
@@ -369,7 +377,7 @@ screen)
   st "running: screen"; PA=; PB=
   [ -n "$ARM_A" ] && { node_run $H1 "$CTL_A" "$ARM_A" "$OUT_A" "$BAKE_A" "$HOOK_A" 9>&- & PA=$!; }
   [ -n "$ARM_B" ] && { node_run $H2 "$CTL_B" "$ARM_B" "$OUT_B" "$BAKE_B" "$HOOK_B" 9>&- & PB=$!; }
-  BG="$BG $PA $PB"; [ -n "$PA" ] && wait $PA; [ -n "$PB" ] && wait $PB
+  BG="$BG $PA $PB"; [ -n "$PA" ] && wait $PA; [ -n "$PB" ] && wait $PB; BG=
   SUM=; for x in A B; do drop=DROP_$x; out=OUT_$x; [ -z "${!drop}" ] || SUM="$SUM $(basename "${!out}")=INCONCLUSIVE(refused)"; done
   for x in A B; do arm=ARM_$x; out=OUT_$x; [ -n "${!arm}" ] || continue
     v=$(sed -n 's/^VERDICT=//p' "${!out}/verdict.txt" 2>/dev/null); v=${v:-ERROR}; SUM="$SUM $(name "${!arm}")=$v"
