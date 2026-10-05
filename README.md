@@ -230,7 +230,7 @@ Checkpoints:
 - 2× Spark: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
   @ `7c4f1bc1`. NVFP4 experts; MXFP8 dense, GDN and attention; 98.5 GiB.
 - 1× Spark: [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
-  @ `f35e321b`. The same checkpoint with the GDN projections in weight-only NVFP4.
+  @ `244cb6fe`. The same checkpoint with the GDN projections in weight-only NVFP4.
   - Its model card covers what changed, how it was built and the license, Qwen Community License 1.0.
   - The recipe also fetches shard 35 and the index of `7c4f1bc1` (2.6 GiB) for the MXFP8 prefill copy.
   - Checkpoint size: 97.7 GiB.

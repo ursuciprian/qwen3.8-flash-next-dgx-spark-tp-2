@@ -6,7 +6,7 @@ Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
 `ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm`
 (digest `sha256:32012ffd1629a931b087877d8b29588c2fc8ae4c28b4cedbdd94c89d6cbc2c13`), checkpoint
 [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
-@ `f35e321b`.
+@ `244cb6fe` (weights identical to the first upload `f35e321b`; only the model card changed).
 
 The checkpoint is `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1` with one change: the GDN `in_proj_qkv`,
 `in_proj_z` and `out_proj` weights of all 36 GDN layers are requantized from the BF16 base to weight-only NVFP4, with a

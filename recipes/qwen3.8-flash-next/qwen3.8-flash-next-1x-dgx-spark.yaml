@@ -94,7 +94,7 @@ name: qwen3.8-flash-next-1x-dgx-spark
 description: "Experimental (v3d). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
-model_revision: f35e321b8d47a755c5af24ea053ae823a53abc81
+model_revision: 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
 container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm
 runtime: vllm
 
@@ -150,7 +150,7 @@ command: |
   A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
-    --revision f35e321b8d47a755c5af24ea053ae823a53abc81 \
+    --revision 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b \
     --host {host} \
     --port {port} \
     --trust-remote-code \
