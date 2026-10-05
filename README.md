@@ -48,6 +48,16 @@ sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo   # 1× Spar
 
 Then [verify](#verify) the server. Base URL `http://<head>:8000/v1`, model `qwen3.8-flash-next`.
 
+The 1× recipe serves a different checkpoint from the 2× recipe, about 98 GB. A fresh download took about 3 h 15 min
+on our link (~8.6 MB/s). Download it on the Spark before the first boot, together with the two files of the base
+checkpoint that the recipe uses for prefill (2.6 GiB):
+
+```sh
+hf download ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE --revision 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
+hf download local-inference-lab/Qwen3.8-Flash-Next-NVFP4 --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
+  model-00035-of-00036.safetensors model.safetensors.index.json
+```
+
 [Measured](#measured) · [Quality gate](#quality-gate) · [Verify](#verify) · [Requirements](#requirements) · [Known limits](#known-limits) · [Recipes](#recipes) · [Changelog](#changelog) · [How we measure](#how-we-measure) · [Troubleshooting](#troubleshooting)
 
 ## Measured
