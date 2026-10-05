@@ -12,7 +12,7 @@ A build is promoted only if it passes the [quality gate](#quality-gate) and no c
 
 | Workload | Tokens / step | 2× Spark, 1 request | 2× Spark, 8 requests | 1× Spark, 1 request | 1× Spark, 8 requests |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **Copy-heavy** (high acceptance, max of 3 rounds) | 4.91–4.97 | 117 | **439** | 75 | **265** |
+| **Copy-heavy** (high acceptance, max of 3 rounds) | 4.91–4.95 | 117 | **439** | 75 | **265** |
 | **Counting** (high acceptance, max of 5 rounds) | 4.86–5.00 | 122 | **558** | 77 | **360** |
 | **Coding**, llama-benchy tg512 | 2.7–2.8 (2×) · 3.2–3.4 (1×) | 62 | 196 | 52 | 125 |
 | **Coding** at 16k cached context | 2.6–2.7 (2×) · 3.2–3.3 (1×) | 64 | 146 | 52 | 109 |
@@ -80,11 +80,11 @@ TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached conte
 | **Coding:** llama-benchy tg512, depth 0 | 3.2–3.4 | 51.8 | 95.3 | 125.1 | v3c (2026-10-05) |
 | **Coding:** llama-benchy tg512, 16k cached depth | 3.2–3.3 | 52.4 | 106.4 | 109.3 | v3c (2026-10-05) |
 
-v3c frees ~9 GiB of GPU buffers and gives it to the KV pool (6 → 14 GiB, 379,362 → 993,754 tokens), so 8 requests
+v3c frees ~8.8 GiB of GPU buffers and gives it to the KV pool (6 → 14 GiB, 379,362 → 993,754 tokens), so 8 requests
 at 16k no longer wait for KV space: the 16k c8 coding cell went from 22.1 (v3b) to 109.3 tok/s. In the paired screen
 against v3b (same Spark, T=0), counting c8 was +3.1% and fresh c4 +2.5%; every other cell was within noise
-([report](results/tp1-v3c-20261005/screen-v3c-kv14-vs-v3b.txt)). The depth-0 coding cells here are 4–5% under the v3b
-grid, inside that grid's run-to-run spread (c8 ± 13.5).
+([report](results/tp1-v3c-20261005/screen-v3c-kv14-vs-v3b.txt)). The depth-0 coding cells here are 4–6% under the v3b
+grid; single cells of this grid vary by up to ~10% between runs (c8 sd: v3b ± 9.1, v3c ± 13.5).
 
 Prefill (c1): 1,799 tok/s for a 2,048-token prompt; 2,142 tok/s filling a 16k context. TTFT at c1: 1.17 s (2k new
 tokens) / 1.93 s (2k new tokens on a 16k cached context).
@@ -95,8 +95,8 @@ tokens) / 1.93 s (2k new tokens on a 16k cached context).
 | 64K + 512 out | 4.2 | 14.1 |
 | 128K + 512 out | 2.6 | 7.5 |
 
-From the serve log block counts: a block holds 3,024 tokens; a request takes 13 attention blocks per 3,024 tokens plus
-37 GDN state blocks (185 before compact records). `max_num_seqs` is 8, so v3c runs 8 requests at 16K and 64K without
+Per 3,024 tokens of context a request takes one KV page in each of 13 attention groups, plus 37 GDN state pages
+(185 before compact records); method and serve-log token counts: [`kv-capacity.txt`](results/tp1-v3c-20261005/kv-capacity.txt). `max_num_seqs` is 8, so v3c runs 8 requests at 16K and 64K without
 waiting.
 
 <img src="docs/img/prefill.svg" alt="Prefill tok/s at one request: 2× Spark 2,784–2,855 for a 2,048-token prompt and 2,895–2,920 filling a 16k context; 1× Spark v3c 1,799 and 2,142." width="620">
@@ -116,7 +116,7 @@ sampling, thinking on; one boot per setup (2026-10-05). Aggregate tok/s:
 
 Same run, other checks: standalone prefill of an 8K prompt 2,857 tok/s (2×) and 2,157 tok/s (1× v3c; 2,209 / 2,174 /
 2,085 / 1,899 at 16K / 32K / 64K / 128K). The hotel-lights reasoning check (8 runs at c8) gave 8/8 on 2× b1.4, 7/8 on
-v3b and 5/8 on v3c; the three v3c misses were answers the scorer could not parse (one stated 49, the expected value is
+v3b and 5/8 on v3c; of the three v3c misses, two gave no final number the scorer could read and one gave 49 (expected
 48), and 8 runs cannot separate 5/8 from 7/8 (Fisher exact p = 0.57). Accepted tokens per step vary with the sampled
 text: in this v3c run, c1 averaged 2.67 against 2.86 for v3b, and decode tok/s per step was the same in both. The v3b
 64K c8 cell was skipped because 8 × 64K did not fit its 379,362-token pool. Raw files:
@@ -221,7 +221,7 @@ Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface
   MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The image ships the TP=1 plan seed
   and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
 - 1× Spark in steady state has ~15 GiB MemAvailable (lowest 14.7 GiB in the benchmark run), most of it PLE page cache.
-- 2× Spark c1 is bimodal (counting ~95–100 vs ~85–88 tok/s between boots); the counting tables show the max of several runs.
+- 2× Spark c1 varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting); the counting tables show the max of 5 rounds from one boot.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - Prose throughput was not re-measured on b1.4.
 

@@ -4,11 +4,11 @@
 #   - VLLM_GDN_COMPACT_RECORDS=1: MTP draft-step GDN records live in a 4.3 MiB per-layer side buffer, so a request
 #     holds 1 mamba block per group (2 at a boundary step) instead of 5-6. Compact records change the compile key;
 #     the image carries the matching torch AOT compile cache.
-#   - KV pool 6 GiB -> 14 GiB: 993,754 tokens (v3b 379,362). Blocks of 3,024 tokens; a request holds 13 per 3,024
-#     tokens plus 37 mamba blocks. Requests that fit at once: ~40 at 16K, ~14 at 64K, ~7.5 at 128K (max_num_seqs 8).
+#   - KV pool 6 GiB -> 14 GiB: 993,754 tokens (v3b 379,362). Per 3,024 tokens a request takes one page in each of
+#     13 attention groups, plus 37 GDN state pages. Requests that fit at once: ~40 at 16K, ~14 at 64K, ~7.5 at 128K (max_num_seqs 8).
 #   - Image: vLLM exp/v3c 50330171 (= exp/r18-mem 3152b385, which contains exp/r13-ple-prefill, plus
 #     exp/gdn-compact), b12x exp/gdn-compact 21e0b201, plan seed + AOT compile cache in /opt/b12x-seed.
-#   - Screen vs v3b (A/B/A/B on one Spark, T=0): fresh c4 +2.45% (noise 1.57%), counting c8 +3.13% (noise 1.00%),
+#   - Screen vs v3b (boots v3b, v3c, v3c, v3b on one Spark, T=0): fresh c4 +2.45% (noise 1.57%), counting c8 +3.13% (noise 1.00%),
 #     16K with 8 requests 347-370 s -> 125-126 s per run, every other cell within noise, acceptance per draft
 #     position unchanged, T=0 output identity check passed. A 16 GiB pool lost 2.0% at 16K c4 (noise 1.5%).
 #   - Gate: hardmode 93, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20, stragglers c8-c16

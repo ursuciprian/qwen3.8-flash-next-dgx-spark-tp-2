@@ -38,16 +38,17 @@ task count, low effort).
 
 Copy-heavy at 3/5/6/7 tasks: 147.9 / 220.1 / 223.0 / 244.3.
 
-**KV capacity**, from the serve log block counts (3,024 tokens per block; a request takes 13 attention blocks per
-3,024 tokens plus 37 GDN state blocks with compact records, 185 without):
+**KV capacity**: per 3,024 tokens of context a request takes one KV page in each of 13 attention groups, plus 37 GDN
+state pages with compact records (185 without). Method and serve-log token counts:
+[`kv-capacity.txt`](../results/tp1-v3c-20261005/kv-capacity.txt).
 
-| context + 512 out | v3b (6 GiB, 1,958 blocks) | v3c (14 GiB, 4,568 blocks) |
+| context + 512 out | v3b (6 GiB, 1,958 pages) | v3c (14 GiB, 4,568 pages) |
 |---|---|---|
 | 16K | 7.4 requests | 39.7 |
 | 64K | 4.2 | 14.1 |
 | 128K | 2.6 | 7.5 |
 
-`max_num_seqs` is 8. A 16 GiB pool (5,221 blocks, 8.6 requests at 128K) was screened on the other Spark and ended
+`max_num_seqs` is 8. A 16 GiB pool (5,221 pages, 8.6 requests at 128K) was screened on the other Spark and ended
 INCONCLUSIVE: 16K c4 -2.0% (noise 1.5%), lowest MemAvailable 12.6 GiB
 ([report](../results/tp1-v3c-20261005/screen-v3c-kv16-vs-v3b.txt)).
 
@@ -99,8 +100,8 @@ Tokens per step follow the sampled text and differ between runs; decode tok/s di
 | 1× v3b | 2,162 | 2,207 | 2,169 | 2,087 | 1,901 |
 | 1× v3c | 2,157 | 2,209 | 2,174 | 2,085 | 1,899 |
 
-hotel-lights x8: 2× b1.4 8/8, 1× v3b 7/8, 1× v3c 5/8. The three v3c misses were final answers the scorer could not
-parse (one stated 49, the expected answer is 48); with 8 runs the difference from v3b is not significant (Fisher exact
+hotel-lights x8: 2× b1.4 8/8, 1× v3b 7/8, 1× v3c 5/8. Of the three v3c misses, two gave no final number the scorer
+could read and one gave 49 (expected 48); with 8 runs the difference from v3b is not significant (Fisher exact
 p = 0.57).
 
 Counting sweep in the same run (5 rounds per level, every round saved), max / median of 5 rounds:
