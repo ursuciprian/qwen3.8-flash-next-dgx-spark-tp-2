@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-05: single-Spark v3c promoted
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-1x-dgx-spark` | v3c: v3b + shared GDN prefill staging + compact GDN records, KV pool 14 GiB, image `tp1-v3c-20261005-21e0b201-50330171-warm` (experimental) |
+| `qwen3.8-flash-next-1x-dgx-spark-previous` | the v3b recipe that was `qwen3.8-flash-next-1x-dgx-spark` from 2026-10-04 to 2026-10-05 |
+| (was `-previous`, v3a) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-v3a-20261004.yaml` (not listed; run by path) |
+
 ## 2026-10-04: single-Spark v3b promoted
 
 | name | content now |
