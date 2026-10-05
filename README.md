@@ -124,14 +124,14 @@ sampling, thinking on; one boot per setup (2026-10-05). Aggregate tok/s:
 Same runs, other checks:
 
 - Standalone prefill of an 8K prompt: 2,857 tok/s on 2×, 2,137 tok/s on 1× v3d. v3d gave 2,182 / 2,147 / 2,066 /
-  1,880 at 16K / 32K / 64K / 128K, within 1% of v3c.
+  1,880 at 16K / 32K / 64K / 128K, 0.9–1.2% below v3c.
 - Hotel-lights reasoning check, 32 runs per recipe at c8 on the 1× recipes: v3c 21/32 (66%), v3b 23/32 (72%). The
   difference is not significant (Fisher exact p = 0.79; [#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87)).
   - Every run finished on its own stop token. The unscored runs are long answers whose final number the scorer could
     not read, not truncations.
-  - Both recipes miss about 1 in 4, mostly by answering 49 or 47 instead of 48.
+  - v3c missed 11/32 (8 wrong, 3 unscored), v3b 9/32; the wrong answers are mostly 49 or 47 instead of 48. Raw runs:
+    [`results/hotel-ab-20261005/runs.jsonl`](results/hotel-ab-20261005/runs.jsonl).
   - The 8-run checks in these benchmark runs gave 8/8 on 2× b1.4 and 6/8 on 1× v3d.
-- Accepted tokens per step vary with the sampled text, so compare decode tok/s per step between runs.
 - The v3b 64K c8 cell was skipped because 8 × 64K did not fit its 379,362-token pool.
 
 Raw files: [`results/lib-bench-20261005/`](results/lib-bench-20261005/) (2× b1.4, v3b),
@@ -217,10 +217,10 @@ Stop with `sparkrun stop --all`.
 |---|---|---|
 | **Hardware** | 2× DGX Spark (GB10, 128 GB unified), CX-7 ports cabled back-to-back | 1× DGX Spark; checkpoint on local NVMe (the PLE table is read through the page cache) |
 | **Launcher** | sparkrun ≥ 0.3.6 with a two-node cluster defined | sparkrun ≥ 0.3.6 |
-| **Disk** | ~125 GB per node (98.5 GiB checkpoint + ~25 GB image) | ~128 GB (98.5 GiB checkpoint + 2.6 GB MXFP8 shard + image) |
+| **Disk** | ~125 GB per node (98.5 GiB checkpoint + ~25 GB image) | ~128 GB (97.7 GiB checkpoint + 2.6 GiB MXFP8 shard + image) |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
-| **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (169 s) with the compile cache from the image and a warm page cache; see [Known limits](#known-limits) for the first boot |
+| **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (169 s, measured on the same files at a local path) with the compile cache from the image and a warm page cache; the first boot from the HF repo is slow, see [Known limits](#known-limits) |
 | **Concurrency** | `max_num_seqs` 16 | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens) |
 
 <!-- TODO: 1x kernel/linger requirements and the cold first-boot time with the shipped seed. -->
@@ -232,7 +232,8 @@ Checkpoints:
 - 1× Spark: [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
   @ `f35e321b`. The same checkpoint with the GDN projections in weight-only NVFP4.
   - Its model card covers what changed, how it was built and the license, Qwen Community License 1.0.
-  - The recipe also fetches shard 35 and the index of `7c4f1bc1` (2.6 GB) for the MXFP8 prefill copy.
+  - The recipe also fetches shard 35 and the index of `7c4f1bc1` (2.6 GiB) for the MXFP8 prefill copy.
+  - Checkpoint size: 97.7 GiB.
 
 Image and video input are not tested on these builds.
 
@@ -241,12 +242,15 @@ Image and video input are not tested on these builds.
 - 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
   8 × 64K fits.
 - 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host
-  MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The image ships the TP=1 plan seed
-  and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
+  MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The v3c image ships the TP=1 plan
+  seed and compile cache, so its first boot skips this; the v3d image does not yet (next bullet). Close other
+  memory-heavy work during the first boot.
 - 1× Spark in steady state has ~14 GiB MemAvailable (lowest 13.3 GiB in the benchmark run), most of it PLE page cache.
 - 1× Spark v3d, first boot from the Hugging Face repo: the image's compile seed was built from boots of the same files at
-  a local path. The b12x plan and the torch compile key both include the model path, so this first boot can compile and
-  autotune instead of loading the seed. Later boots are warm. A re-seeded image is in progress.
+  a local path. The b12x plan and the torch compile key both include the model path, so until the image is re-seeded
+  the first boot of this recipe takes the autotune path above (~30 min, low host memory for about a minute), with
+  ~1 GiB less headroom than v3c. This boot path, including the fetch of shard 35, has not been measured yet. The
+  `-previous` recipe (v3c) boots from its seed.
 - 2× Spark c1 varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting); the counting tables show the max of 5 rounds from one boot.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - Prose throughput was not re-measured on b1.4.
@@ -372,3 +376,4 @@ Earlier experiments drew on other projects too, and [docs/ENGINEERING.md](docs/E
 ## License
 
 Apache-2.0, see [`LICENSE`](LICENSE). The vLLM overlays under `archive/mods/` keep their upstream Apache-2.0 headers.
+Model weights are not part of this repo and keep their own license (Qwen Community License 1.0; see each checkpoint's model card).

@@ -2,7 +2,7 @@
 # with plain `sparkrun run`, with no mods and no host mounts:
 #  - preparation/: b12x plan-selection caches for checkpoint 7c4f1bc1 at TP=2 (8ccf4799) and TP=1
 #    (54b3e768, the 1x v3c recipe; added 2026-10-02), and TP=1 for ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ f35e321b
-#    (c20eecfb, the 1x v3d recipe; added 2026-10-05) on
+#    (c20eecfb, for the re-seeded 1x v3d image, pending; added 2026-10-05) on
 #    GB10. Its identity is device name + namespace (model snapshot path, TP, dtype,
 #    spec method), not host or GPU UUID, so it hits on any GB10 pair. The recipe's
 #    command copies it into sparkrun's runtime cache ($XDG_CACHE_HOME) when that

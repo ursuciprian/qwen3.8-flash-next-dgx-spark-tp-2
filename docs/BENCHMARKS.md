@@ -22,7 +22,9 @@ v3d = v3c + `VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`:
 Versions: vLLM `exp/v3d` (= `exp/v3c` 50330171 + the dispatch), b12x 21e0b201.
 
 The bench below booted the same checkpoint files from a local snapshot path (sha256 identical to the HF repo, all 49
-checkpoint files). That boot loaded its compile cache from the image in 169 s.
+checkpoint files). That boot loaded its compile cache from the image in 169 s. The recipe as committed (HF snapshot
+path, shard 35 fetched at start) has not been booted yet: the image's b12x plan and compile cache are keyed by the
+local path, so its first boot autotunes and compiles. A re-seeded image is being built.
 
 Raw files: [`results/tp1-v3d-20261005/`](../results/tp1-v3d-20261005/) (gate, screen) and
 [`bench/`](../results/tp1-v3d-20261005/bench/) (every table below; one boot on dgx-01).
@@ -39,7 +41,8 @@ top-p 0.95 / top-k 20, prefix caching, 3 runs, one boot. Total tok/s, mean ± sd
 | 16k | tg512 | 62.6 ± 7.4 | 80.5 ± 5.6 | 101.4 ± 5.9 | 111.0 ± 1.2 |
 
 Tokens per step 3.1–3.5 (accept/draft 0.53–0.63). Against the v3c grid: tg512 c1 51.8 → 59.8, c4 95.3 → 111.4,
-c8 125.1 → 139.5; prefill within 2%.
+c8 125.1 → 139.5. Prefill cells are 0–5% lower than in the v3c grid; single cells of this grid vary by up to ~10%
+between runs, and the paired screen measured pp2048 c1 at −0.9% (noise 1.0%).
 
 **High-acceptance**: counting (T=0, thinking off, 5 rounds per level, every round saved) and copy-heavy (3 rounds per
 task count, low effort). The v3c copy-heavy row was rerun in the same window on the other Spark, with the shipped v3c
@@ -62,8 +65,8 @@ Copy-heavy at 3/5/6/7 tasks: v3d 156.3 / 211.0 / 224.9 / 258.7, v3c 143.8 / 203.
 | 16K | 51.2 (2.85) | 112.6 (2.95) | 191.5 (3.45) |
 | 64K | 56.9 (3.21) | 111.8 (2.89) | 179.5 (3.27) |
 
-Standalone prefill 8K / 16K / 32K / 64K / 128K: 2,137 / 2,182 / 2,147 / 2,066 / 1,880 tok/s (v3c 2,157 / 2,209 /
-2,174 / 2,085 / 1,899). hotel-lights x8: 6/8. The KV pool is 14 GiB as in v3c, 993,754 tokens. Lowest
+Standalone prefill 8K / 16K / 32K / 64K / 128K: 2,137 / 2,182 / 2,147 / 2,066 / 1,880 tok/s, 0.9–1.2% below v3c
+(2,157 / 2,209 / 2,174 / 2,085 / 1,899). hotel-lights x8: 6/8. The KV pool is 14 GiB as in v3c, 993,754 tokens. Lowest
 MemAvailable 13.30 GiB over the run, with 0 preemptions.
 
 **Screen vs v3c** (one Spark, boots in the order v3c, v3d, v3d, v3c, T=0 probes; noise is the cell's own band).
@@ -89,8 +92,7 @@ A second arm on the other Spark served calls of up to 127 rows from NVFP4 (cutof
 **Quality gate**:
 
 - hardmode 91/100 (v3c 93; run-to-run band 86-93), TC-45 100/100.
-- Fidelity 20/20 at 8k/32k/64k/128k, plus 128k seeds 11 and 13 at 20/20. Earlier builds on this checkpoint had missed
-  2 or 3 of the 60 at 128k.
+- Fidelity 20/20 at 8k/32k/64k/128k, plus 128k seeds 11 and 13 at 20/20.
 - Batch stragglers c8/c12/c16: 0 preemptions, 3.98-3.99 accepted per 4 drafts.
 - Min MemAvailable 14.51 GiB (dgx-01) / 14.04 GiB (dgx-02).
 
@@ -199,7 +201,8 @@ Tokens per step follow the sampled text and differ between runs; decode tok/s di
 hotel-lights x8: 2× b1.4 8/8, 1× v3b 7/8, 1× v3c 5/8. Of the three v3c misses, two gave no final number the scorer
 could read and one gave 49 (expected 48); with 8 runs the difference from v3b is not significant (Fisher exact
 p = 0.57). A 32-run rerun per recipe ([#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87))
-gave v3c 21/32 and v3b 23/32 (Fisher exact p = 0.79), with every run ending on its own stop token.
+gave v3c 21/32 and v3b 23/32 (Fisher exact p = 0.79), with every run ending on its own stop token
+([`results/hotel-ab-20261005/runs.jsonl`](../results/hotel-ab-20261005/runs.jsonl)).
 
 Counting sweep in the same run (5 rounds per level, every round saved), max / median of 5 rounds:
 
