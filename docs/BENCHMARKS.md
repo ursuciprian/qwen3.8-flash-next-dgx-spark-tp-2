@@ -1,5 +1,101 @@
 # Benchmarks: full tables
 
+## Single Spark v3d (2026-10-05)
+
+Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
+`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm`
+(digest `sha256:32012ffd1629a931b087877d8b29588c2fc8ae4c28b4cedbdd94c89d6cbc2c13`), checkpoint
+[`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
+@ `f35e321b`.
+
+The checkpoint is `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1` with one change: the GDN `in_proj_qkv`,
+`in_proj_z` and `out_proj` weights of all 36 GDN layers are requantized from the BF16 base to weight-only NVFP4, with a
+per-block MSE scale search. Every other tensor is byte-identical to the base.
+
+v3d = v3c + `VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`:
+
+- Each of those layers also holds the base checkpoint's MXFP8 weights, read from shard 35 of `7c4f1bc1`. The recipe
+  fetches that shard before the server starts if the HF cache does not have it.
+- Calls of 41 or more rows (prefill) use the MXFP8 copy; decode steps (at most 8 × 5 = 40 rows) use NVFP4.
+- The copy costs about 1.1 GiB.
+
+Versions: vLLM `exp/v3d` (= `exp/v3c` 50330171 + the dispatch), b12x 21e0b201.
+
+The bench below booted the same checkpoint files from a local snapshot path (sha256 identical to the HF repo, all 49
+checkpoint files). That boot loaded its compile cache from the image in 169 s.
+
+Raw files: [`results/tp1-v3d-20261005/`](../results/tp1-v3d-20261005/) (gate, screen) and
+[`bench/`](../results/tp1-v3d-20261005/bench/) (every table below; one boot on dgx-01).
+
+**Coding**: llama-benchy `--prompt-mode task`, 2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 /
+top-p 0.95 / top-k 20, prefix caching, 3 runs, one boot. Total tok/s, mean ± sd over runs.
+
+| depth | test | c1 | c2 | c4 | c8 |
+|---|---|---|---|---|---|
+| 0 | pp2048 | 1788 ± 5 | 1976 ± 100 | 2095 ± 29 | 2202 ± 11 |
+| 0 | tg512 | 59.8 ± 4.6 | 80.2 ± 2.7 | 111.4 ± 0.8 | 139.5 ± 2.9 |
+| 16k | ctx_pp (fill) | 2088 ± 50 | 2075 ± 55 | 2161 ± 22 | 2174 ± 17 |
+| 16k | pp2048 | 1056 ± 10 | 1142 ± 3 | 1178 ± 46 | 1262 ± 0 |
+| 16k | tg512 | 62.6 ± 7.4 | 80.5 ± 5.6 | 101.4 ± 5.9 | 111.0 ± 1.2 |
+
+Tokens per step 3.1–3.5 (accept/draft 0.53–0.63). Against the v3c grid: tg512 c1 51.8 → 59.8, c4 95.3 → 111.4,
+c8 125.1 → 139.5; prefill within 2%.
+
+**High-acceptance**: counting (T=0, thinking off, 5 rounds per level, every round saved) and copy-heavy (3 rounds per
+task count, low effort). The v3c copy-heavy row was rerun in the same window on the other Spark, with the shipped v3c
+recipe.
+
+| workload | c1 | c2 | c4 | c8 | tokens/step |
+|---|---|---|---|---|---|
+| counting, max of 5 rounds | 84.8 | 154.9 | 239.8 | 377.8 | 4.82–5.00 per round |
+| counting, median of 5 rounds | 83.0 | 145.1 | 235.3 | 368.3 | |
+| copy-heavy, max of 3 rounds | 80.8 | 132.0 | 188.5 | 281.5 | 4.90–4.96 |
+| copy-heavy, v3c same window | 74.8 | 122.3 | 189.6 | 268.4 | 4.91–4.96 |
+
+Copy-heavy at 3/5/6/7 tasks: v3d 156.3 / 211.0 / 224.9 / 258.7, v3c 143.8 / 203.2 / 218.5 / 246.0.
+
+**llm-inference-bench** (decode 30 s per cell, server default sampling), aggregate tok/s (tokens per step):
+
+| ctx | c1 | c4 | c8 |
+|---|---|---|---|
+| 0 | 47.4 (2.63) | 116.6 (2.99) | 173.4 (3.14) |
+| 16K | 51.2 (2.85) | 112.6 (2.95) | 191.5 (3.45) |
+| 64K | 56.9 (3.21) | 111.8 (2.89) | 179.5 (3.27) |
+
+Standalone prefill 8K / 16K / 32K / 64K / 128K: 2,137 / 2,182 / 2,147 / 2,066 / 1,880 tok/s (v3c 2,157 / 2,209 /
+2,174 / 2,085 / 1,899). hotel-lights x8: 6/8. The KV pool is 14 GiB as in v3c, 993,754 tokens. Lowest
+MemAvailable 13.30 GiB over the run, with 0 preemptions.
+
+**Screen vs v3c** (one Spark, boots in the order v3c, v3d, v3d, v3c, T=0 probes; noise is the cell's own band).
+Report: [`screen-v3d-c41-vs-v3c.txt`](../results/tp1-v3d-20261005/screen-v3d-c41-vs-v3c.txt).
+
+| cell | change | noise |
+|---|---|---|
+| fresh c1 | +7.9% | 8.1% |
+| fresh c4 | +2.2% | 3.0% |
+| fresh c8 | +4.4% (CI +2.5, +6.3) | 1.9% |
+| 16K c4 | +5.9% (CI +2.9, +8.8) | 3.0% |
+| counting c8 | +7.8% (CI +6.2, +9.3) | 2.1% |
+| 16K c8, wall time per run | 127 / 127 s -> 126 / 126 s | |
+| pp2048 c1 | -0.9% | 1.0% |
+| tg512 c1 / c8 | 50.0 -> 59.7 (+19.3%) / +3.9% | 4.3% / 5.1% |
+
+Acceptance per draft position: v3c 0.820 / 0.667 / 0.544 / 0.442, v3d 0.816 / 0.667 / 0.540 / 0.440. The weights
+change, so there is no output identity check. Logprobs vs v3c: mean |Δ| 0.034–0.048, self-noise 0.033–0.042.
+
+A second arm on the other Spark served calls of up to 127 rows from NVFP4 (cutoff 128). It lost 2.3% on pp2048
+(noise 1.0%) and was dropped ([report](../results/tp1-v3d-20261005/screen-v3d-c128-vs-v3c.txt)).
+
+**Quality gate**:
+
+- hardmode 91/100 (v3c 93; run-to-run band 86-93), TC-45 100/100.
+- Fidelity 20/20 at 8k/32k/64k/128k, plus 128k seeds 11 and 13 at 20/20. Earlier builds on this checkpoint had missed
+  2 or 3 of the 60 at 128k.
+- Batch stragglers c8/c12/c16: 0 preemptions, 3.98-3.99 accepted per 4 drafts.
+- Min MemAvailable 14.51 GiB (dgx-01) / 14.04 GiB (dgx-02).
+
+Files: `gate-*` in the results directory.
+
 ## Single Spark v3c (2026-10-05)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
@@ -102,7 +198,8 @@ Tokens per step follow the sampled text and differ between runs; decode tok/s di
 
 hotel-lights x8: 2× b1.4 8/8, 1× v3b 7/8, 1× v3c 5/8. Of the three v3c misses, two gave no final number the scorer
 could read and one gave 49 (expected 48); with 8 runs the difference from v3b is not significant (Fisher exact
-p = 0.57).
+p = 0.57). A 32-run rerun per recipe ([#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87))
+gave v3c 21/32 and v3b 23/32 (Fisher exact p = 0.79), with every run ending on its own stop token.
 
 Counting sweep in the same run (5 rounds per level, every round saved), max / median of 5 rounds:
 

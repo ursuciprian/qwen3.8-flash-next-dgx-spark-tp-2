@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "results"
 OUT = ROOT / "docs" / "img"
 
-T1 = RES / "tp1-v3c-20261005"   # single-Spark v3c: gate files and bench/ (one boot on dgx-01)
+T1 = RES / "tp1-v3d-20261005"   # single-Spark v3d: gate files and bench/ (one boot on dgx-01)
 LIB = RES / "lib-bench-20261005"
 
 SRC = {
@@ -37,7 +37,7 @@ SRC = {
     "tp2_copy": [RES / "showcase-20261004/A/copy-streams.json"],
     # llm-inference-bench decode, 30 s per cell, c1/c4/c8 at 0/16K/64K context.
     "tp2_lib": LIB / "tp2-b1.4/lib-decode.json",
-    # 1x Spark (TP=1), v3c: coding grid, copy-heavy, counting (5 rounds, every round saved), llm-inference-bench.
+    # 1x Spark (TP=1), v3d: coding grid, copy-heavy, counting (5 rounds, every round saved), llm-inference-bench.
     "tp1_benchy": T1 / "bench/task.csv",
     "tp1_copy": [T1 / "bench/copy-streams.json"],
     "tp1_count": sorted((T1 / "bench").glob("count-c*.json")),
@@ -55,7 +55,8 @@ SRC = {
         ("v2", "10-02", RES / "tp1-v2-20261002/bench-task.csv"),
         ("v3a", "10-04", RES / "tp1-v3a-20261004/bench-task.csv"),
         ("v3b", "10-04", RES / "tp1-v3b-20261004/bench-task.csv"),
-        ("v3c", "10-05", T1 / "bench/task.csv"),
+        ("v3c", "10-05", RES / "tp1-v3c-20261005/bench/task.csv"),
+        ("v3d", "10-05", T1 / "bench/task.csv"),
     ],
     "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
     "tp2_tc45": RES / "b1.4-20261001/gate/tc45-cand1.txt",
@@ -171,7 +172,7 @@ def load():
         g = benchy(path)
         hist1.append((name, date, g["tg512 (c1)"][0], g["tg512 (c8)"][0],
                       g["tg512 @ d16384 (c1)"][0], g["tg512 @ d16384 (c8)"][0]))
-    lib = {"2× Spark (TP=2), b1.4": lib_decode(SRC["tp2_lib"]), "1× Spark (TP=1), v3c": lib_decode(SRC["tp1_lib"])}
+    lib = {"2× Spark (TP=2), b1.4": lib_decode(SRC["tp2_lib"]), "1× Spark (TP=1), v3d": lib_decode(SRC["tp1_lib"])}
     for name, data in (("tp2", tp2), ("tp1", tp1), ("lib", lib)):
         for k, s in data.items():
             assert s, f"{name}.{k}: no data parsed"
@@ -196,7 +197,7 @@ def style_ax(ax):
 SERIES = [
     ("copy", "Copy-heavy (high acceptance, ~4.9 tok/step)", C_COPY, "-"),
     ("count", "Counting (high acceptance, ~5.0 tok/step)", C_COUNT, "-"),
-    ("code", "Coding, benchy tg512 (~2.7–3.4 tok/step)", C_CODE, "-"),
+    ("code", "Coding, benchy tg512 (~2.7–3.5 tok/step)", C_CODE, "-"),
     ("code16", "Coding at 16k cached context", C_CODE16, "--"),
 ]
 
@@ -226,7 +227,7 @@ def chart_throughput(tp2, tp1):
     fig.text(0.0, -0.22, "Copy-heavy: max of 3 rounds per task count, low thinking effort. "
              "Counting: T=0, thinking off, max of 5 rounds per level.\n"
              "Coding: llama-benchy task mode, T=1.0, thinking on (2×: mean of two boots; 1×: one boot), 3 runs.\n"
-             "Builds: 2× b1.4; 1× v3c (one Spark, one boot). Raw files under results/.",
+             "Builds: 2× b1.4; 1× v3d (one Spark, one boot). Raw files under results/.",
              fontsize=8.5, color=MUTED)
     save(fig, "throughput.svg")
 
@@ -248,7 +249,7 @@ def chart_prefill(prefill):
     ax.set_ylim(0, 3500)
     ax.legend(loc="upper left", ncol=2, fontsize=10)
     fig.text(0.0, -0.06, "llama-benchy pp2048 and ctx_pp at depth 16,384. 2× Spark b1.4 (two boots, range shown); "
-             "1× Spark v3c.", fontsize=8.5, color=MUTED)
+             "1× Spark v3d.", fontsize=8.5, color=MUTED)
     save(fig, "prefill.svg")
 
 
@@ -269,8 +270,10 @@ def chart_builds(hist, hist1):
                 ys = [h[idx] for h in data]
                 ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=name,
                         ls="--" if color == C_CODE16 else "-")
-                below = color == C_CODE16   # keeps the 16k labels clear of the depth-0 ones
                 for x, y in ((0, ys[0]), (len(ys) - 1, ys[-1])):
+                    # the lower of the two series at this point is labelled below its marker, so labels never cross
+                    below = any(h2[x] > y or (h2[x] == y and color == C_CODE16)
+                                for h2 in ([h[i] for h in data] for i, _, _ in series if i != idx))
                     ax.annotate(f"{y:.0f}", (x, y), xytext=(0, -16 if below else 8), textcoords="offset points",
                                 ha="center", fontsize=10, color=INK, fontweight="bold")
             ax.set_xticks(list(xs), labels, fontsize=9)
@@ -282,7 +285,7 @@ def chart_builds(hist, hist1):
     fig.text(0.0, -0.05, "Promoted builds in order (2026). 2× Spark: each value is that build's A/B, mean of two boots; "
              "'shipped' is the baseline boots of the b1 A/B.\n1× Spark: each build's llama-benchy coding grid "
              "(one boot, 3 runs, T=1.0); single cells vary by up to ~10% between runs. "
-             "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c has 14 GiB. "
+             "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c and v3d have 14 GiB. "
              "Every build passed the quality gate.",
              fontsize=8.5, color=MUTED)
     save(fig, "build-history.svg")
@@ -312,7 +315,7 @@ def chart_depth(lib):
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.08), fontsize=10)
     fig.text(0.0, -0.14, "llm-inference-bench, 30 s of sustained decode per cell, server default sampling, "
-             "one boot per setup. Raw files: results/lib-bench-20261005/ and results/tp1-v3c-20261005/bench/.",
+             "one boot per setup. Raw files: results/lib-bench-20261005/ and results/tp1-v3d-20261005/bench/.",
              fontsize=8.5, color=MUTED)
     save(fig, "depth.svg")
 
@@ -340,7 +343,7 @@ def chart_quality():
     ax.axis("off")
     fig.subplots_adjust(left=0.01, right=0.99)
     cols = (0.0, 0.45, 0.65, 0.87)
-    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3c", "Threshold")):
+    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3d", "Threshold")):
         ax.text(x, len(rows), h, fontweight="bold", fontsize=11, color=INK, va="center")
     for i, (name, a, b, thr) in enumerate(rows):
         y = len(rows) - 1 - i

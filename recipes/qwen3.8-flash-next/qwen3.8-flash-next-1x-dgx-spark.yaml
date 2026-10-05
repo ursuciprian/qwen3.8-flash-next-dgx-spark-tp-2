@@ -1,3 +1,21 @@
+# EXPERIMENTAL single-Spark (TP=1) recipe v3d (2026-10-05): v3c + NVFP4 GDN weights for decode, MXFP8 for prefill.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE = local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1 with
+#     the GDN in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16 base to weight-only
+#     NVFP4 (per-block MSE scale search); every other tensor is byte-identical. Qwen Community License 1.0.
+#   - VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41: those layers also hold the MXFP8 weights of the base checkpoint (shard 35 of
+#     7c4f1bc1, fetched before the server starts when it is not in the HF cache) and serve calls of 41+ rows (prefill)
+#     with them; decode steps (at most 8 x 5 = 40 rows) use NVFP4. +~1.1 GiB.
+#   - Image: vLLM exp/v3d (= exp/v3c 50330171 + the GDN dispatch), b12x 21e0b201, plan seed + AOT compile cache.
+#   - Screen vs v3c (boots v3c, v3d, v3d, v3c on one Spark, T=0): fresh c8 +4.4% (noise 1.9%), 16K c4 +5.9% (noise 3.0%),
+#     counting c8 +7.8% (noise 2.1%), tg512 c1 50.0 -> 59.7 tok/s, pp2048 c1 -0.9% (noise 1.0%), other cells within noise,
+#     acceptance per draft position within 0.005. A 128-row cutoff lost 2.3% on pp2048 (noise 1.0%) and was dropped.
+#   - Gate: hardmode 91, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20, stragglers c8-c16
+#     0 preemptions, min MemAvailable 14.04 GiB.
+#   - The image's compile seed was built from boots of the same files at a local path; the b12x plan and the torch
+#     compile key include the model path, so a first boot from the HF repo compiles until the image is re-seeded.
+#   Results: results/tp1-v3d-20261005. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3c).
+#
+# Base: v3c header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3c (2026-10-05): v3b + two GPU memory cuts, spent on a larger KV pool.
 #   - VLLM_GDN_SHARED_PREFILL_STAGING=1: one 257.5 MiB GDN prefill staging buffer for all 36 GDN layers instead of
 #     one per layer (frees ~8.8 GiB).
@@ -72,11 +90,11 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark
-description: "Experimental (v3c). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
+description: "Experimental (v3d). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
 
-model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
-model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3c-20261005-21e0b201-50330171-warm
+model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
+model_revision: f35e321b8d47a755c5af24ea053ae823a53abc81
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm
 runtime: vllm
 
 build_args: []
@@ -101,6 +119,8 @@ defaults:
   gpu_memory_utilization: 0.01
 
 env:
+  VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
+  VLLM_B12X_NVFP4_MXFP8_CHECKPOINT: "/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
   VLLM_GDN_SHARED_PREFILL_STAGING: "1"
   VLLM_GDN_COMPACT_RECORDS: "1"
   VLLM_PLE_MMAP: "1"
@@ -127,12 +147,13 @@ env:
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
   A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
-  vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
-    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
+  M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
+  vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
+    --revision f35e321b8d47a755c5af24ea053ae823a53abc81 \
     --host {host} \
     --port {port} \
     --trust-remote-code \
-    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --served-model-name qwen3.8-flash-next ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \
