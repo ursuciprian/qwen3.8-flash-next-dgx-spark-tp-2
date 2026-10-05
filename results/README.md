@@ -26,9 +26,14 @@ Workload key used below — every number carries one of these tags:
   `results/showcase-20261004/A/copy-streams.json` (2x Spark b1.4) and
   `B/dgx0{1,2}/copy-streams.json` (1x Spark v3a on each Spark), with the
   counting files of the same run; earlier: `results/b1.2-20260927/copy-streams-20260929.json`
-  (2x b1.2), `results/tp1-v2-20261002/copy-streams.json` (1x v2). The README
-  charts (`docs/img/`) are rendered from the showcase files, `b14.json`,
-  `b1.4-20261001/benchy/` and `tp1-v3b-20261004/` by `scripts/make_charts.py`.
+  (2x b1.2), `results/tp1-v2-20261002/copy-streams.json` (1x v2); 1x v3c:
+  `results/tp1-v3c-20261005/bench/copy-streams.json`. The README charts
+  (`docs/img/`) are rendered by `scripts/make_charts.py` from `b14.json`,
+  `b1.4-20261001/benchy/`, `showcase-20261004/A/`, `lib-bench-20261005/`, the
+  1x build grids (`tp1-v2-*`, `tp1-v3a-*`, `tp1-v3b-*`) and `tp1-v3c-20261005/`.
+- **[lib]** llm-inference-bench 0.7.6: 30 s sustained decode per cell at
+  c1/c4/c8 with 0/16K/64K context, standalone prefill 8K-128K, hotel-lights x8,
+  server default sampling.
 - **[prose]** llama-benchy 0.4.0 default book continuation, 2048 new prompt
   tokens, 128 output tokens, default temperature 1.0; aggregate gen tok/s. "File" points at the primary
 doc for that entry; most arms also have raw JSON/logs alongside it that
@@ -38,6 +43,9 @@ aren't summarized here.
 
 | date | recipe / arm | key numbers | verdict | file |
 |---|---|---|---|---|
+| 2026-10-05 | 1x v3c (v3b + shared GDN prefill staging + compact GDN records, KV 14 GiB) vs v3b, Thunderdome screen + gate | screen: fresh c4 +2.45%, [count] c8 +3.13%, 16K c8 wall 347/370 -> 125/126 s, rest within noise, acceptance unchanged, T=0 identity pass; kv16 arm INCONCLUSIVE (16K c4 -2.0%); gate hardmode 93, TC-45 100, fidelity 20/20 x4 + 128k seeds 11/13, no stragglers, min MemAvailable 15.01 GiB; [task] tg512 c1 51.8, c8 125.1, 16k c8 109.3 (v3b 22.1); [count] max of 5 c8 360.1; [copy] max of 3 c8 265.3; [lib] c8 0/16K/64K 165.7/165.6/160.4 | **promoted, 1x default** (Jev ship 0.72) | `results/tp1-v3c-20261005/` |
+| 2026-10-05 | [lib] on 2x b1.4 and 1x v3b (#74), counting with every round saved (#82) | b1.4 c1/c4/c8 at 0/16K/64K: 64.8/73.3/77.8, 171.2/175.0/165.4, 248.6/254.9/257.4; v3b 46.9/45.3/44.3, 116.5/112.0/106.3, 168.4/174.8/did not fit; prefill 8K 2,857 / 2,162; hotel-lights 8/8, 7/8 | reference | `results/lib-bench-20261005/` |
+| 2026-10-04 | 2x r9-pin (b12x block-scaled pinned plan 2560x3072@16) vs same image off, 2 passes ABBA | tok/s [count] c2 +2.3% [+1.1, +3.7], [count] c8 -3.1% [-5.3, -0.8] (step +2.8%), other cells within CI, acceptance unchanged | **rejected** (count c8 worse beyond noise; #69) | `results/r9-pin-20261003/report.txt` |
 | 2026-10-01 | b1.4 (`b14`) vs b1.3, 2 boots each, same day | [task] temp 1.0 d0: c1 62.2 (b1.3 63.9, noise 9.6%), c2 105.1 (99.1), c5 160.6 (154.1) *; 16k c1 63.8 (64.8), c16 176.4 (175.8); [count] c1 119.8 (114.2) *, c2 214.3 (207.8) *, c5 407.7 (390.4) *; paired step time -2..-5% c1-c8, 16k c16 +1.3%; acceptance within +-0.03; hardmode 92/92, TC-45 5/5, no stragglers, fidelity 20/20 x4 on the re-gate (A/B boot 32k 19/20) + 32k seeds 21/22 + 128k seeds 11/13; logits within self-noise. DevOps 42 at medium: 95.9% checks, 29/42 clean, 0/42 runaway | **promoted, now default** (Jev ship 0.78; default effort medium 1.00) | `results/b1.4-20261001/` |
 | 2026-09-29 | b1.3 (`b13`, gdnmeta baked) vs b1.2, 2 boots each, same day | [task] temp 1.0 d0: c1 62.2 (b1.2 58.2), c2 101.8 (97.8), c5 144.7 (151.9, caveat); 16k c1 63.5 (60.4); [count] c1 114.0 (109.7), c8 525.4 (499.1); paired step time c1 -1.9..-3.1%, c2 -2.5..-3.0%; hardmode 88/90, fidelity 20/20 x4 + 128k seeds 11/13, TC-45 5/5, no stragglers; logits within self-noise | **promoted** (Jev ship_with_caveat 1.00; mod A/B 2026-09-28 ship 0.99) | `results/b1.3-20260929/` |
 | 2026-09-27 | b1.2 (`hcq`) vs b1.1, 2 boots each | [task] temp 1.0 d0: c1 61.8 (b1.1 53.4), c2 96.3 (87.5), c4 142.2 (135.6); 16k c1 57.6 (55.0), c2 87.2 (82.6), c4 114.1 (109.8); [count] c1 111.9 (100.7), c2 199.9 (176.4), c5 386.1 (349.7); paired step time -9.9% c1 fresh / -10.0% c1 16k / -7.6..-4.4% c2-c4; hardmode 90/92, fidelity 20/20 x4, TC-45 5/5, no stragglers | **promoted** (Jev ship 0.97) | `results/b1.2-20260927/` |

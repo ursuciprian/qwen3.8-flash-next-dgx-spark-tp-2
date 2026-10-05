@@ -24,20 +24,24 @@ ROOT = Path(__file__).resolve().parent.parent
 RES = ROOT / "results"
 OUT = ROOT / "docs" / "img"
 
+T1 = RES / "tp1-v3c-20261005"   # single-Spark v3c: gate files and bench/ (one boot on dgx-01)
+LIB = RES / "lib-bench-20261005"
+
 SRC = {
-    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots) and counting runs (max run over both boots).
+    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots).
     "tp2_verdict": RES / "b1.4-20261001/b14.json",
-    # Counting sweep files on the two candidate boots: count.json (c1-c16), count-c1-*.json (c1 repeats), sweep.json.
-    "tp2_count": sorted(p for g in ("cand[12]/count*.json", "cand[12]/sweep.json")
-                        for p in (RES / "b1.4-20261001/r4ab-b14-20261001").glob(g)),
+    # Counting on b1.4, 2026-10-05: one file per level, 5 rounds each, every round saved (max round is drawn).
+    "tp2_count": sorted((LIB / "tp2-b1.4").glob("count-c*.json")),
     "tp2_benchy": [RES / "b1.4-20261001/benchy/cand1-task.csv", RES / "b1.4-20261001/benchy/cand2-task.csv"],
     # Copy-heavy on b1.4, 2026-10-04 showcase run.
     "tp2_copy": [RES / "showcase-20261004/A/copy-streams.json"],
-    # 1x Spark (TP=1), v3b coding grid.
-    "tp1_benchy": RES / "tp1-v3b-20261004/bench-task.csv",
-    # Copy-heavy and counting on v3a, 2026-10-04 showcase run, same image on both Sparks; max over the two.
-    "tp1_copy": [RES / f"showcase-20261004/B/{h}/copy-streams.json" for h in ("dgx01", "dgx02")],
-    "tp1_count": sorted((RES / "showcase-20261004/B").glob("dgx0[12]/count-c*.json")),
+    # llm-inference-bench decode, 30 s per cell, c1/c4/c8 at 0/16K/64K context.
+    "tp2_lib": LIB / "tp2-b1.4/lib-decode.json",
+    # 1x Spark (TP=1), v3c: coding grid, copy-heavy, counting (5 rounds, every round saved), llm-inference-bench.
+    "tp1_benchy": T1 / "bench/task.csv",
+    "tp1_copy": [T1 / "bench/copy-streams.json"],
+    "tp1_count": sorted((T1 / "bench").glob("count-c*.json")),
+    "tp1_lib": T1 / "bench/lib-decode.json",
     # Promoted 2x Spark builds, in order. The first verdict's baseline is the 2026-09-23 shipped build.
     "builds": [
         ("b1", "09-25", RES / "b1-20260925/verdict-oldb12x-on.json"),
@@ -46,16 +50,24 @@ SRC = {
         ("b1.3", "09-29", RES / "b1.3-20260929/b13.json"),
         ("b1.4", "10-01", RES / "b1.4-20261001/b14.json"),
     ],
+    # Promoted 1x Spark builds, in order: each build's own llama-benchy coding grid (one boot, 3 runs).
+    "tp1_builds": [
+        ("v2", "10-02", RES / "tp1-v2-20261002/bench-task.csv"),
+        ("v3a", "10-04", RES / "tp1-v3a-20261004/bench-task.csv"),
+        ("v3b", "10-04", RES / "tp1-v3b-20261004/bench-task.csv"),
+        ("v3c", "10-05", T1 / "bench/task.csv"),
+    ],
     "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
     "tp2_tc45": RES / "b1.4-20261001/gate/tc45-cand1.txt",
-    "tp1_fidelity": RES / "tp1-v3b-20261004/gate-fidelity_probe.txt",
-    "tp1_gate": RES / "tp1-v3b-20261004/gate-summary.txt",
+    "tp1_fidelity": T1 / "gate-summary.txt",
+    "tp1_gate": T1 / "gate-summary.txt",
 }
 
 # Neutral ink that keeps >= 3:1 contrast on both #ffffff and #0d1117; series hues are mid-tone.
 INK, MUTED, GRID = "#768390", "#8b949e", "#8b949e40"
 C_COPY, C_COUNT, C_CODE, C_CODE16 = "#3987e5", "#1baf7a", "#e0662f", "#d4a017"
 C_TP2, C_TP1 = "#3987e5", "#e0662f"
+C_C1, C_C4, C_C8 = "#3987e5", "#1baf7a", "#e0662f"
 
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 11, "text.color": INK, "axes.labelcolor": INK,
@@ -99,11 +111,20 @@ def copy_best(paths):
 
 
 def count_best(paths):
-    """Counting sweep files -> {c: max agg tok/s over the files}. Each file's value is already the median of its rounds."""
+    """Counting sweep files -> {c: max round agg tok/s}. Files that saved every round carry agg_tok_s_max."""
     out = {}
     for p in paths:
         for r in json.loads(Path(p).read_text())["rows"]:
-            out[r["c"]] = max(out.get(r["c"], 0), r["agg_tok_s"])
+            out[r["c"]] = max(out.get(r["c"], 0), r.get("agg_tok_s_max", r["agg_tok_s"]))
+    return out
+
+
+def lib_decode(path):
+    """llm-inference-bench JSON -> {c: {context tokens: aggregate tok/s}} over the cells that ran."""
+    out = {}
+    for r in json.loads(Path(path).read_text())["results"]:
+        if r.get("aggregate_tps") and not r.get("failure_reason"):
+            out.setdefault(r["concurrency"], {})[r["context_tokens"]] = r["aggregate_tps"]
     return out
 
 
@@ -145,10 +166,16 @@ def load():
         hist.append((name, date,
                      d["coding_grid_pct_diff"]["d0_c1"][col], d["coding_grid_pct_diff"]["d0_c8"][col],
                      d["counting_pct_diff"]["c1"][col], d["counting_pct_diff"]["c8"][col]))
-    for name, data in (("tp2", tp2), ("tp1", tp1)):
+    hist1 = []
+    for name, date, path in SRC["tp1_builds"]:
+        g = benchy(path)
+        hist1.append((name, date, g["tg512 (c1)"][0], g["tg512 (c8)"][0],
+                      g["tg512 @ d16384 (c1)"][0], g["tg512 @ d16384 (c8)"][0]))
+    lib = {"2× Spark (TP=2), b1.4": lib_decode(SRC["tp2_lib"]), "1× Spark (TP=1), v3c": lib_decode(SRC["tp1_lib"])}
+    for name, data in (("tp2", tp2), ("tp1", tp1), ("lib", lib)):
         for k, s in data.items():
             assert s, f"{name}.{k}: no data parsed"
-    return tp2, tp1, prefill, hist
+    return tp2, tp1, prefill, hist, hist1, lib
 
 
 # ---------- charts ----------
@@ -183,7 +210,8 @@ def chart_throughput(tp2, tp1):
             xs, ys = zip(*pts)
             ax.plot(xs, ys, ls, color=color, lw=2.2, marker="o", ms=5, label=label)
             note = " (KV pool full)" if key == "code16" and ys[-1] < ys[-2] / 2 else ""
-            ax.annotate(f"{ys[-1]:.0f}{note}", (xs[-1], ys[-1]), xytext=(6, 0), textcoords="offset points",
+            dy = {"code": 5, "code16": -6}.get(key, 0)   # the two coding end points can sit close together
+            ax.annotate(f"{ys[-1]:.0f}{note}", (xs[-1], ys[-1]), xytext=(6, dy), textcoords="offset points",
                         va="center", fontsize=10, color=INK, fontweight="bold")
         ax.set_xscale("log", base=2)
         ticks = [1, 2, 4, 8, 16][: 5 if cmax == 16 else 4]
@@ -195,10 +223,10 @@ def chart_throughput(tp2, tp1):
     axes[0].set_ylim(0, None)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.1), fontsize=10)
-    fig.text(0.0, -0.22, "Copy-heavy: max round, low thinking effort (2×: max of 3; 1×: max of 6, 3 on each of two Sparks). "
-             "Counting: T=0, thinking off (2×: max run over 2 boots;\n1×: higher of two Sparks, each a median of 5 rounds). "
-             "Coding: llama-benchy task mode, T=1.0, thinking on.\nBuilds: 2× b1.4; 1× copy-heavy and counting v3a, "
-             "coding v3b. Raw files under results/.",
+    fig.text(0.0, -0.22, "Copy-heavy: max of 3 rounds per task count, low thinking effort. "
+             "Counting: T=0, thinking off, max of 5 rounds per level.\n"
+             "Coding: llama-benchy task mode, T=1.0, thinking on (2×: mean of two boots; 1×: one boot), 3 runs.\n"
+             "Builds: 2× b1.4; 1× v3c (one Spark, one boot). Raw files under results/.",
              fontsize=8.5, color=MUTED)
     save(fig, "throughput.svg")
 
@@ -220,32 +248,73 @@ def chart_prefill(prefill):
     ax.set_ylim(0, 3500)
     ax.legend(loc="upper left", ncol=2, fontsize=10)
     fig.text(0.0, -0.06, "llama-benchy pp2048 and ctx_pp at depth 16,384. 2× Spark b1.4 (two boots, range shown); "
-             "1× Spark v3b.", fontsize=8.5, color=MUTED)
+             "1× Spark v3c.", fontsize=8.5, color=MUTED)
     save(fig, "prefill.svg")
 
 
-def chart_builds(hist):
-    fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
-    labels = [f"{n}\n{d}" for n, d, *_ in hist]
-    xs = range(len(hist))
-    for ax, (title, ci, ki) in zip(axes, (("1 request", 2, 4), ("8 concurrent requests", 3, 5))):
-        style_ax(ax)
-        for idx, name, color in ((ki, "Counting", C_COUNT), (ci, "Coding, benchy tg512", C_CODE)):
-            ys = [h[idx] for h in hist]
-            ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=name)
-            for x, y in ((0, ys[0]), (len(ys) - 1, ys[-1])):
-                ax.annotate(f"{y:.0f}", (x, y), xytext=(0, 8), textcoords="offset points", ha="center",
-                            fontsize=10, color=INK, fontweight="bold")
-        ax.set_xticks(list(xs), labels, fontsize=9)
-        ax.set_ylim(0, None)
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
-    axes[0].set_ylabel("Aggregate decode tok/s")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.08), fontsize=10)
-    fig.text(0.0, -0.14, "2× Spark, promoted builds in order (2026). Each value: that build's A/B, mean of two boots; "
-             "'shipped' is the baseline boots of the b1 A/B.\nEvery build passed the quality gate.",
+def chart_builds(hist, hist1):
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7.6))
+    rows = (
+        (hist, "2× Spark", ((4, "Counting", C_COUNT), (2, "Coding, benchy tg512", C_CODE)),
+                           ((5, "Counting", C_COUNT), (3, "Coding, benchy tg512", C_CODE))),
+        (hist1, "1× Spark", ((2, "Coding, benchy tg512", C_CODE), (4, "Coding at 16k cached context", C_CODE16)),
+                            ((3, "Coding, benchy tg512", C_CODE), (5, "Coding at 16k cached context", C_CODE16))),
+    )
+    for r, (data, setup, s1, s8) in enumerate(rows):
+        labels = [f"{n}\n{d}" for n, d, *_ in data]
+        xs = range(len(data))
+        for ax, title, series in ((axes[r][0], "1 request", s1), (axes[r][1], "8 concurrent requests", s8)):
+            style_ax(ax)
+            for idx, name, color in series:
+                ys = [h[idx] for h in data]
+                ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=name,
+                        ls="--" if color == C_CODE16 else "-")
+                below = color == C_CODE16   # keeps the 16k labels clear of the depth-0 ones
+                for x, y in ((0, ys[0]), (len(ys) - 1, ys[-1])):
+                    ax.annotate(f"{y:.0f}", (x, y), xytext=(0, -16 if below else 8), textcoords="offset points",
+                                ha="center", fontsize=10, color=INK, fontweight="bold")
+            ax.set_xticks(list(xs), labels, fontsize=9)
+            ax.set_ylim(0, None)
+            ax.set_title(f"{setup}, {title}", loc="left", fontsize=13, fontweight="bold", color=INK)
+        axes[r][0].set_ylabel("Aggregate decode tok/s")
+        axes[r][1].legend(loc="center right" if r == 0 else "center left", fontsize=9.5)
+    fig.tight_layout(h_pad=2.2)
+    fig.text(0.0, -0.05, "Promoted builds in order (2026). 2× Spark: each value is that build's A/B, mean of two boots; "
+             "'shipped' is the baseline boots of the b1 A/B.\n1× Spark: each build's llama-benchy coding grid "
+             "(one boot, 3 runs, T=1.0); single cells vary by up to ~10% between runs. "
+             "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c has 14 GiB. "
+             "Every build passed the quality gate.",
              fontsize=8.5, color=MUTED)
     save(fig, "build-history.svg")
+
+
+def chart_depth(lib):
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.4), sharey=True)
+    ctx = [0, 16384, 65536]
+    for ax, (title, data) in zip(axes, lib.items()):
+        style_ax(ax)
+        for c, color in ((8, C_C8), (4, C_C4), (1, C_C1)):
+            pts = [(i, data.get(c, {}).get(x)) for i, x in enumerate(ctx)]
+            pts = [(i, y) for i, y in pts if y]
+            if not pts:
+                continue
+            xs, ys = zip(*pts)
+            ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=f"{c} request{'s' if c > 1 else ''}")
+            for x, y in pts:
+                ax.annotate(f"{y:.0f}", (x, y), xytext=(0, 8), textcoords="offset points", ha="center",
+                            fontsize=9.5, color=INK, fontweight="bold")
+        ax.set_xticks(range(len(ctx)), ["0", "16K", "64K"])
+        ax.set_xlim(-0.3, len(ctx) - 0.7)
+        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
+        ax.set_xlabel("Context already in the prompt (tokens)")
+    axes[0].set_ylabel("Aggregate decode tok/s")
+    axes[0].set_ylim(0, None)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.08), fontsize=10)
+    fig.text(0.0, -0.14, "llm-inference-bench, 30 s of sustained decode per cell, server default sampling, "
+             "one boot per setup. Raw files: results/lib-bench-20261005/ and results/tp1-v3c-20261005/bench/.",
+             fontsize=8.5, color=MUTED)
+    save(fig, "depth.svg")
 
 
 def chart_quality():
@@ -271,7 +340,7 @@ def chart_quality():
     ax.axis("off")
     fig.subplots_adjust(left=0.01, right=0.99)
     cols = (0.0, 0.45, 0.65, 0.87)
-    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3b", "Threshold")):
+    for x, h in zip(cols, ("Check", "2× Spark b1.4", "1× Spark v3c", "Threshold")):
         ax.text(x, len(rows), h, fontweight="bold", fontsize=11, color=INK, va="center")
     for i, (name, a, b, thr) in enumerate(rows):
         y = len(rows) - 1 - i
@@ -290,8 +359,9 @@ def chart_quality():
 
 
 if __name__ == "__main__":
-    tp2, tp1, prefill, hist = load()
+    tp2, tp1, prefill, hist, hist1, lib = load()
     chart_throughput(tp2, tp1)
     chart_prefill(prefill)
-    chart_builds(hist)
+    chart_builds(hist, hist1)
+    chart_depth(lib)
     chart_quality()

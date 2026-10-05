@@ -1,3 +1,21 @@
+# EXPERIMENTAL single-Spark (TP=1) recipe v3c (2026-10-05): v3b + two GPU memory cuts, spent on a larger KV pool.
+#   - VLLM_GDN_SHARED_PREFILL_STAGING=1: one 257.5 MiB GDN prefill staging buffer for all 36 GDN layers instead of
+#     one per layer (frees ~8.8 GiB).
+#   - VLLM_GDN_COMPACT_RECORDS=1: MTP draft-step GDN records live in a 4.3 MiB per-layer side buffer, so a request
+#     holds 1 mamba block per group (2 at a boundary step) instead of 5-6. Compact records change the compile key;
+#     the image carries the matching torch AOT compile cache.
+#   - KV pool 6 GiB -> 14 GiB: 993,754 tokens (v3b 379,362). Per 3,024 tokens a request takes one page in each of
+#     13 attention groups, plus 37 GDN state pages. Requests that fit at once: ~40 at 16K, ~14 at 64K, ~7.5 at 128K (max_num_seqs 8).
+#   - Image: vLLM exp/v3c 50330171 (= exp/r18-mem 3152b385, which contains exp/r13-ple-prefill, plus
+#     exp/gdn-compact), b12x exp/gdn-compact 21e0b201, plan seed + AOT compile cache in /opt/b12x-seed.
+#   - Screen vs v3b (boots v3b, v3c, v3c, v3b on one Spark, T=0): fresh c4 +2.45% (noise 1.57%), counting c8 +3.13% (noise 1.00%),
+#     16K with 8 requests 347-370 s -> 125-126 s per run, every other cell within noise, acceptance per draft
+#     position unchanged, T=0 output identity check passed. A 16 GiB pool lost 2.0% at 16K c4 (noise 1.5%).
+#   - Gate: hardmode 93, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20, stragglers c8-c16
+#     0 preemptions, min MemAvailable 15.01 GiB.
+#   Results: results/tp1-v3c-20261005. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3b).
+#
+# Base: v3b header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3b (2026-10-04): v3a + read-ahead for prefill-sized PLE gathers.
 #   - VLLM_PLE_MMAP_PREFILL_WILLNEED=1: gathers larger than VLLM_PLE_MMAP_WILLNEED_MAX (prefill chunks)
 #     get fadvise WILLNEED on their rows from a helper thread before the copy, so rows evicted from the
@@ -54,11 +72,11 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark
-description: "Experimental (v3b). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive, prefill read-ahead), OpenAI-compatible API on port 8000 (2026-10-04)."
+description: "Experimental (v3c). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3b-20261004-5bf24021-0632e506-warm
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3c-20261005-21e0b201-50330171-warm
 runtime: vllm
 
 build_args: []
@@ -77,12 +95,14 @@ defaults:
   max_num_seqs: 8
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
-  # 6 GiB. With explicit KV bytes vLLM skips memory profiling; the utilization only gates
+  # 14 GiB (v3c). With explicit KV bytes vLLM skips memory profiling; the utilization only gates
   # startup (free >= util x total), which the page cache would otherwise trip.
-  kv_cache_memory_bytes: 6442450944
+  kv_cache_memory_bytes: 15032385536
   gpu_memory_utilization: 0.01
 
 env:
+  VLLM_GDN_SHARED_PREFILL_STAGING: "1"
+  VLLM_GDN_COMPACT_RECORDS: "1"
   VLLM_PLE_MMAP: "1"
   VLLM_PLE_MMAP_WILLNEED_MAX: "8192"
   VLLM_PLE_MMAP_KEEPALIVE_MS: "50"

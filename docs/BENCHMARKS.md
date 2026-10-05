@@ -1,5 +1,120 @@
 # Benchmarks: full tables
 
+## Single Spark v3c (2026-10-05)
+
+Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
+`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3c-20261005-21e0b201-50330171-warm`
+(digest `sha256:ba140406cabf0fbbbd13d0f605c42881c2442079619aa2fa7297eed2e0e31bff`), checkpoint revision `7c4f1bc1`.
+v3c = v3b + `VLLM_GDN_SHARED_PREFILL_STAGING=1` (one GDN prefill staging buffer for all 36 GDN layers, frees ~8.8 GiB)
++ `VLLM_GDN_COMPACT_RECORDS=1` (MTP draft-step GDN records in a 4.3 MiB per-layer side buffer; a request holds 37 GDN
+state blocks instead of 185) + KV pool 14 GiB (993,754 tokens; v3b 6 GiB, 379,362 tokens). vLLM `exp/v3c` 50330171,
+b12x 21e0b201. The image carries the torch compile cache for the compact-records compile key; a boot from the published
+image with those cache entries removed loaded them from the image (186 s to healthy).
+Raw files: [`results/tp1-v3c-20261005/`](../results/tp1-v3c-20261005/) (gate, screen) and
+[`bench/`](../results/tp1-v3c-20261005/bench/) (every table below; one boot on dgx-01).
+
+**Coding**: llama-benchy `--prompt-mode task`, 2048 new prompt tokens, up to 512 out, thinking on, temperature 1.0 /
+top-p 0.95 / top-k 20, prefix caching, 3 runs, one boot. Total tok/s, mean ± sd over runs.
+
+| depth | test | c1 | c2 | c4 | c8 |
+|---|---|---|---|---|---|
+| 0 | pp2048 | 1799 ± 7 | 2034 ± 87 | 2097 ± 11 | 2197 ± 23 |
+| 0 | tg512 | 51.8 ± 1.0 | 80.3 ± 2.8 | 95.3 ± 1.9 | 125.1 ± 13.5 |
+| 16k | ctx_pp (fill) | 2142 ± 12 | 2175 ± 11 | 2229 ± 5 | 2215 ± 0 |
+| 16k | pp2048 | 1065 ± 9 | 1145 ± 3 | 1238 ± 2 | 1276 ± 1 |
+| 16k | tg512 | 52.4 ± 7.7 | 78.7 ± 6.7 | 106.4 ± 1.3 | 109.3 ± 4.3 |
+
+16k c8: 109.3 tok/s (v3b 22.1, v3a 19.7). The 14 GiB pool holds all 8 requests, so none wait for KV space.
+Tokens per step 3.2–3.4 (accept/draft 0.54–0.60).
+
+**High-acceptance**: counting (T=0, thinking off, 5 rounds per level, every round saved) and copy-heavy (3 rounds per
+task count, low effort).
+
+| workload | c1 | c2 | c4 | c8 | tokens/step |
+|---|---|---|---|---|---|
+| counting, max of 5 rounds | 76.9 | 142.4 | 243.8 | 360.1 | 4.86–5.00 per round |
+| counting, median of 5 rounds | 76.4 | 135.1 | 232.5 | 357.8 | |
+| copy-heavy, max of 3 rounds | 74.7 | 123.4 | 183.8 | 265.3 | 4.93–4.95 |
+
+Copy-heavy at 3/5/6/7 tasks: 147.9 / 220.1 / 223.0 / 244.3.
+
+**KV capacity**: per 3,024 tokens of context a request takes one KV page in each of 13 attention groups, plus 37 GDN
+state pages with compact records (185 without). Method and serve-log token counts:
+[`kv-capacity.txt`](../results/tp1-v3c-20261005/kv-capacity.txt).
+
+| context + 512 out | v3b (6 GiB, 1,958 pages) | v3c (14 GiB, 4,568 pages) |
+|---|---|---|
+| 16K | 7.4 requests | 39.7 |
+| 64K | 4.2 | 14.1 |
+| 128K | 2.6 | 7.5 |
+
+`max_num_seqs` is 8. A 16 GiB pool (5,221 pages, 8.6 requests at 128K) was screened on the other Spark and ended
+INCONCLUSIVE: 16K c4 -2.0% (noise 1.5%), lowest MemAvailable 12.6 GiB
+([report](../results/tp1-v3c-20261005/screen-v3c-kv16-vs-v3b.txt)).
+
+**Screen vs v3b** (one Spark, boots in the order v3b, v3c, v3c, v3b, T=0 probes; noise is the cell's own band).
+Report: [`screen-v3c-kv14-vs-v3b.txt`](../results/tp1-v3c-20261005/screen-v3c-kv14-vs-v3b.txt).
+
+| cell | change | noise |
+|---|---|---|
+| fresh c1 | +0.8% | 6.5% |
+| fresh c4 | +2.5% (CI +0.9, +4.1) | 1.6% |
+| fresh c8 | -0.5% | 1.9% |
+| 16K c4 | +2.4% | 3.6% |
+| counting c8 | +3.1% (CI +2.3, +4.1) | 1.0% |
+| 16K c8, wall time per run | 347 / 370 s -> 125 / 126 s | |
+| pp2048 c1 | +0.7% | 3.3% |
+| tg512 c1 / c8 | -0.3% / +2.2% | 9.8% / 7.8% |
+
+Acceptance per draft position: v3b 0.818 / 0.667 / 0.545 / 0.447, v3c 0.818 / 0.667 / 0.542 / 0.446. T=0 output
+identity check passed. Logprobs vs v3b: mean |Δ| 0.033–0.036, self-noise 0.036–0.041.
+
+**Quality gate**: hardmode 93/100 (v3b 91; run-to-run band 86-93), TC-45 100/100, fidelity 20/20 at
+8k/32k/64k/128k plus 128k seeds 11 and 13 at 20/20, batch stragglers c8/c12/c16 with 0 preemptions (3.98-3.99 accepted
+per 4 drafts), min MemAvailable 15.62 GiB (dgx-01) / 15.01 GiB (dgx-02). Files: `gate-*` in the results directory.
+
+## llm-inference-bench, 2× b1.4 and 1× v3b / v3c (2026-10-05)
+
+llm-inference-bench 0.7.6: decode 30 s per cell at c1/c4/c8 with 0 / 16K / 64K tokens of context in each prompt,
+standalone cold prefill 8K-128K, hotel-lights (8 runs at c8), server default sampling. One boot per setup. Aggregate
+decode tok/s, with tokens per step from the server's spec-decode counters.
+
+| setup | ctx | c1 | c4 | c8 |
+|---|---|---|---|---|
+| 2× b1.4 | 0 | 64.8 (2.69) | 171.2 (2.79) | 248.6 (2.82) |
+| 2× b1.4 | 16K | 73.3 (2.86) | 175.0 (2.92) | 254.9 (2.97) |
+| 2× b1.4 | 64K | 77.8 (3.08) | 165.4 (2.85) | 257.4 (3.01) |
+| 1× v3c | 0 | 43.7 (2.67) | 106.2 (2.87) | 165.7 (3.12) |
+| 1× v3c | 16K | 43.0 (2.66) | 116.9 (3.16) | 165.6 (3.28) |
+| 1× v3c | 64K | 43.3 (2.68) | 113.9 (3.12) | 160.4 (3.18) |
+| 1× v3b | 0 | 46.9 (2.86) | 116.5 (3.08) | 168.4 (3.18) |
+| 1× v3b | 16K | 45.3 (2.78) | 112.0 (3.07) | 174.8 (3.30) |
+| 1× v3b | 64K | 44.3 (2.76) | 106.3 (2.94) | not run: 8 × 64K does not fit 379,362 tokens |
+
+Tokens per step follow the sampled text and differ between runs; decode tok/s divided by tokens per step is within
+3% between v3b and v3c in every c1 and c4 cell.
+
+| standalone prefill, tok/s | 8K | 16K | 32K | 64K | 128K |
+|---|---|---|---|---|---|
+| 2× b1.4 | 2,857 | 2,931 | 2,829 | 2,664 | 2,384 |
+| 1× v3b | 2,162 | 2,207 | 2,169 | 2,087 | 1,901 |
+| 1× v3c | 2,157 | 2,209 | 2,174 | 2,085 | 1,899 |
+
+hotel-lights x8: 2× b1.4 8/8, 1× v3b 7/8, 1× v3c 5/8. Of the three v3c misses, two gave no final number the scorer
+could read and one gave 49 (expected 48); with 8 runs the difference from v3b is not significant (Fisher exact
+p = 0.57).
+
+Counting sweep in the same run (5 rounds per level, every round saved), max / median of 5 rounds:
+
+| setup | c1 | c2 | c4 | c8 | c16 |
+|---|---|---|---|---|---|
+| 2× b1.4 | 122.4 / 119.5 | 221.7 / 211.1 | 389.8 / 350.0 | 558.0 / 544.1 | 795.3 / 787.3 |
+| 1× v3b | 77.1 / 76.4 | 138.9 / 133.7 | 243.6 / 220.5 | 348.7 / 344.9 | |
+| 1× v3c | 76.9 / 76.4 | 142.4 / 135.1 | 243.8 / 232.5 | 360.1 / 357.8 | |
+
+Raw files: [`results/lib-bench-20261005/`](../results/lib-bench-20261005/) and
+[`results/tp1-v3c-20261005/bench/`](../results/tp1-v3c-20261005/bench/).
+
 ## Single Spark v3b (2026-10-04)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image

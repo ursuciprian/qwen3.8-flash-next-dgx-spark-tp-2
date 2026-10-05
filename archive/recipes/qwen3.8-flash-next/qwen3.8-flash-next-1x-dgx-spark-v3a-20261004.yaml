@@ -1,20 +1,6 @@
-# Rollback since 2026-10-05: the single-Spark v3b recipe that was the default from 2026-10-04 to 2026-10-05.
-# Superseded by v3c (v3b + shared GDN prefill staging + compact GDN records + 14 GiB KV pool). Shares the runtime cache.
+# Archived 2026-10-05: the single-Spark v3a recipe (default on 2026-10-04, then rollback until v3c).
+# Not listed; run by path. Superseded by v3b (prefill read-ahead) and v3c.
 #
-# EXPERIMENTAL single-Spark (TP=1) recipe v3b (2026-10-04): v3a + read-ahead for prefill-sized PLE gathers.
-#   - VLLM_PLE_MMAP_PREFILL_WILLNEED=1: gathers larger than VLLM_PLE_MMAP_WILLNEED_MAX (prefill chunks)
-#     get fadvise WILLNEED on their rows from a helper thread before the copy, so rows evicted from the
-#     page cache no longer fault in one at a time. Host-side only, same numerics; not a compile factor,
-#     so the v3a AOT and plan seed in the image stay valid.
-#   - Image: v3a warm + vLLM exp/r13-ple-prefill 0632e506 (ple_mmap.py, envs.py), b12x 5bf24021.
-#   - A/B vs v3a settings on the same image (6 fresh boots per arm over 2 Sparks, llama-benchy T=0,
-#     3 runs per cell): pp2048 c1 +50.2%, c4 +19.3%, c8 +9.3%; 16k prefill c1 +4.6%; pp2048 c1 sd
-#     32.0 -> 14.9 tok/s; no decode cell worse.
-#   - Gate: hardmode 91, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20,
-#     stragglers c8-c16 0 preemptions, min MemAvailable 14.01 GiB.
-#   Results: results/tp1-v3b-20261004. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3a).
-#
-# Base: v3a header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3a (2026-10-04): v2 + the PLE reader NVMe keepalive.
 #   - VLLM_PLE_MMAP_KEEPALIVE_MS=50: one 4 KiB O_DIRECT read of the PLE table every 50 ms while
 #     gathers are recent, so the NVMe drive does not drop into APST (100 ms idle timeout, ~10 ms
@@ -57,11 +43,11 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark-previous
-description: "Rollback (v3b). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive, prefill read-ahead), OpenAI-compatible API on port 8000 (2026-10-04)."
+description: "Rollback (v3a). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive), OpenAI-compatible API on port 8000 (2026-10-04)."
 
 model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3b-20261004-5bf24021-0632e506-warm
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3a-20261004-5bf24021-7fa812b3-warm
 runtime: vllm
 
 build_args: []
@@ -89,7 +75,6 @@ env:
   VLLM_PLE_MMAP: "1"
   VLLM_PLE_MMAP_WILLNEED_MAX: "8192"
   VLLM_PLE_MMAP_KEEPALIVE_MS: "50"
-  VLLM_PLE_MMAP_PREFILL_WILLNEED: "1"
   VLLM_MTP_DRAFT_VOCAB: "/opt/mtp-vocab/ids-v2-K131072.txt.gz"
   VLLM_QWEN38_HC_MXFP8: "hc"
   VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
