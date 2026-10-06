@@ -161,21 +161,86 @@ def is_heldout(pid, fraction):
 
 
 # ---------------------------------------------------------------- commands
+def _write_atomic(path, text):
+    with open(path + ".tmp", "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(path + ".tmp", path)
+
+
+def _sha256(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def validate_prompts(out, mix):
+    """Errors in a prompts dir against the mix: every category written whole (MANIFEST.json count and sha256,
+    the wanted count, every line valid JSON with the fields gen run needs, ids unique). [] = complete."""
+    errs, ids = [], set()
+    try:
+        man = json.load(open(os.path.join(out, "MANIFEST.json")))["categories"]
+    except (OSError, ValueError, KeyError) as e:
+        return [f"MANIFEST.json: {e}"]
+    for cat, spec in mix["categories"].items():
+        path, m = os.path.join(out, f"{cat}.jsonl"), man.get(cat)
+        want = round(mix["total"] * spec["share"])
+        if m is None or not os.path.exists(path):
+            errs.append(f"{cat}: missing")
+            continue
+        if _sha256(path) != m["sha256"]:
+            errs.append(f"{cat}: sha256 differs from MANIFEST.json")
+        n = 0
+        for i, line in enumerate(open(path)):
+            try:
+                p = json.loads(line)
+                assert p["category"] == cat and p["split"] in ("train", "heldout") and p["messages"], "fields"
+            except (ValueError, KeyError, AssertionError) as e:
+                errs.append(f"{cat}:{i + 1}: {e}")
+                break
+            if p["id"] in ids:
+                errs.append(f"{cat}:{i + 1}: duplicate id {p['id']}")
+            ids.add(p["id"])
+            n += 1
+        if n != m["count"] or n != want:
+            errs.append(f"{cat}: {n} lines, MANIFEST {m['count']}, mix wants {want}")
+    return errs
+
+
 def cmd_prompts(a):
+    """Atomic per-category files plus MANIFEST.json, resumable: a rerun keeps categories already written
+    whole. Exits through os._exit after validating, so the streaming readers' threads never reach
+    interpreter shutdown (datasets/pyarrow abort there: PyGILState_Release while finalizing)."""
     import yaml
+
+    os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
+    os.environ.setdefault("HF_HUB_ETAG_TIMEOUT", "60")
+    import datasets.config
     from datasets import load_dataset
 
+    datasets.config.STREAMING_READ_MAX_RETRIES = 60  # flaky HF CDN reads (k: "peer closed connection")
+    datasets.config.STREAMING_READ_RETRY_INTERVAL = 10
     mix = yaml.safe_load(open(a.mix))
     excl = exclusion_set(mix.get("exclude", []))
     max_chars = int(mix.get("max_prompt_tokens", 24000) * 3.5)
     os.makedirs(a.out, exist_ok=True)
+    man_path = os.path.join(a.out, "MANIFEST.json")
+    try:
+        man = json.load(open(man_path))
+    except (OSError, ValueError):
+        man = {"categories": {}}
     rng = random.Random(mix["seed"])
     for cat, spec in mix["categories"].items():
+        path = os.path.join(a.out, f"{cat}.jsonl")
+        m = man["categories"].get(cat)
+        if m and os.path.exists(path) and _sha256(path) == m["sha256"]:
+            print(f"{cat}: kept ({m['count']} prompts)", flush=True)
+            continue
         want = round(mix["total"] * spec["share"])
         per_source = -(-want // len(spec["sources"]))
         out, dropped = [], 0
         for src in spec["sources"]:
-            ds = load_dataset(src["dataset"], src.get("config"), split=src["split"], streaming=True)
+            ds = load_dataset(src["dataset"], src.get("config"), split=src["split"], streaming=True,
+                              revision=src.get("revision"))
             ds = ds.shuffle(seed=mix["seed"], buffer_size=10_000)
             extra = {"field": src["field"]} if "field" in src else {}
             got = 0
@@ -192,10 +257,23 @@ def cmd_prompts(a):
                 p.update(id=pid, category=cat, split="heldout" if is_heldout(pid, mix["heldout_fraction"]) else "train")
                 out.append(p)
                 got += 1
-        with open(os.path.join(a.out, f"{cat}.jsonl"), "w") as f:
-            for p in out[:want]:
-                f.write(json.dumps(p) + "\n")
-        print(f"{cat}: {min(len(out), want)} prompts ({dropped} excluded by {NGRAM}-gram overlap)")
+        _write_atomic(path, "".join(json.dumps(p) + "\n" for p in out[:want]))
+        man["categories"][cat] = {"count": len(out[:want]), "sha256": _sha256(path),
+                                  "sources": [f"{x['dataset']}@{x.get('revision')}" for x in spec["sources"]]}
+        _write_atomic(man_path, json.dumps(man, indent=1))
+        print(f"{cat}: {len(out[:want])} prompts ({dropped} excluded by {NGRAM}-gram overlap)", flush=True)
+    errs = validate_prompts(a.out, mix)
+    print("\n".join(errs) or "prompts: complete", flush=True)
+    sys.stderr.flush()
+    os._exit(1 if errs else 0)
+
+
+def cmd_validate(a):
+    import yaml
+
+    errs = validate_prompts(a.out, yaml.safe_load(open(a.mix)))
+    print("\n".join(errs) or "prompts: complete")
+    raise SystemExit(1 if errs else 0)
 
 
 def _post(url, body, timeout):
@@ -268,9 +346,10 @@ def cmd_run(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("prompts")
-    p.add_argument("--mix", default=os.path.join(os.path.dirname(__file__), "mix.yaml"))
-    p.add_argument("--out", required=True)
+    for name in ("prompts", "validate"):
+        p = sub.add_parser(name)
+        p.add_argument("--mix", default=os.path.join(os.path.dirname(__file__), "mix.yaml"))
+        p.add_argument("--out", required=True)
     r = sub.add_parser("run")
     r.add_argument("--server", default="http://localhost:8000")
     r.add_argument("--model", default="qwen3.8-flash-next")
@@ -288,7 +367,7 @@ def main():
     r.add_argument("--timeout", type=float, default=1800)
     r.add_argument("--metrics", action="store_true", help="save vllm:* /metrics before and after the run")
     a = ap.parse_args()
-    {"prompts": cmd_prompts, "run": cmd_run}[a.cmd](a)
+    {"prompts": cmd_prompts, "validate": cmd_validate, "run": cmd_run}[a.cmd](a)
 
 
 if __name__ == "__main__":

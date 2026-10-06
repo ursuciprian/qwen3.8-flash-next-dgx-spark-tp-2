@@ -390,3 +390,20 @@ def test_stitch_dedupes_recomputed_rows():
     assert not _complete([piece([2, 3, 5], 1)], length=6, start=2)
     doc = _stitch(pieces)
     assert doc["positions"].tolist() == [2, 3, 4, 5] and doc["tokens"].tolist() == [1, 1, 2, 2]
+
+
+def test_validate_prompts(tmp_path):
+    mix = {"total": 4, "categories": {"a": {"share": 0.5}, "b": {"share": 0.5}}}
+    rows = {c: [{"id": f"{c}{i}", "category": c, "split": "train", "messages": [{"role": "user", "content": "x"}]}
+                for i in range(2)] for c in "ab"}
+    for c, ps in rows.items():
+        gen._write_atomic(str(tmp_path / f"{c}.jsonl"), "".join(json.dumps(p) + "\n" for p in ps))
+    assert gen.validate_prompts(str(tmp_path), mix) == ["MANIFEST.json: [Errno 2] No such file or directory: '"
+                                                        + str(tmp_path / "MANIFEST.json") + "'"]
+    man = {"categories": {c: {"count": 2, "sha256": gen._sha256(str(tmp_path / f"{c}.jsonl"))} for c in "ab"}}
+    gen._write_atomic(str(tmp_path / "MANIFEST.json"), json.dumps(man))
+    assert gen.validate_prompts(str(tmp_path), mix) == []
+    with open(tmp_path / "b.jsonl", "a") as f:  # a torn write
+        f.write('{"id": "b9", "categ')
+    errs = gen.validate_prompts(str(tmp_path), mix)
+    assert any("sha256" in e for e in errs) and any("b:3" in e for e in errs)
