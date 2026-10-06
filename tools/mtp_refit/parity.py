@@ -10,9 +10,12 @@ capture hook (input tokens: the sampled token, then the drafter's earlier drafts
 and its argmax must equal vLLM's draft at every depth. Pass: agreement >= --min-agree at each depth.
 This compares argmaxes, not logits: vLLM does not expose draft logits outside its CUDA graphs.
 
-live: offline per-position acceptance (eval_offline.py JSON, "all") against the live per-position
-counters of the generation run that produced the same documents (gen.py run --metrics). Pass:
-|offline - live| <= --tol at every served position.
+live: offline per-position acceptance against the live per-position counters of the generation run
+that produced the same documents (gen.py run --metrics). The offline side is eval_offline's "replay"
+(the serving step process: counters count steps, and a step starts right after a rejection), not its
+anchor-averaged per_position, which over-states position 1 by ~0.035 at T=0 on the p2 live set. T=1
+uses the top-k lower bound and reports the upper bound next to it. Pass: |offline - live| <= --tol at
+every served position.
 """
 from __future__ import annotations
 
@@ -84,13 +87,16 @@ def live_rates(metrics_dir):
 
 
 def live(a):
-    off = json.load(open(a.offline))["all"][a.key]["per_position"]
+    rep = json.load(open(a.offline))["all"]["replay"]
+    off = rep[a.key]["per_position"]
     lv = live_rates(a.metrics)
     k = min(len(lv), len(off))
     diff = [round(off[i] - lv[i], 4) for i in range(k)]
     ok = k > 0 and max(abs(x) for x in diff) <= a.tol
     res = {"key": a.key, "offline": off[:k], "live": [round(x, 4) for x in lv[:k]], "diff": diff, "tol": a.tol,
            "pass": ok}
+    if a.key == "t1" and "t1_hi" in rep:
+        res["offline_hi"] = rep["t1_hi"]["per_position"][:k]
     json.dump(res, open(a.out, "w"), indent=1)
     print(json.dumps(res))
     return 0 if ok else 1

@@ -304,6 +304,9 @@ def test_eval_and_refit_overlay(snap, tmp_path):
     assert set(res) == {"math", "all"} and res["all"]["anchors"] == [9, 8, 7]
     t1 = res["all"]["t1"]
     assert all(0 <= x <= 1 for x in t1["per_draft"]) and t1["per_position"][0] == t1["per_draft"][0]
+    rep = res["all"]["replay"]  # one whole document: the step replay runs
+    assert set(rep) == {"t0", "t1", "t1_hi"} and rep["t0"]["steps"] >= 1
+    assert all(lo <= hi + 1e-6 for lo, hi in zip(rep["t1"]["per_position"], rep["t1_hi"]["per_position"]))
     p = tmp_path / "r.safetensors"
     save_file({"mtp.fc_hidden.weight": torch.zeros(H, H).bfloat16()}, p)
     assert load_refit(m, str(p)) == 1 and not m.fc_hidden.weight.any()
@@ -470,3 +473,21 @@ def test_metrics_files(snap, tmp_path):
     assert m[f'mtp_refit_p2_captured_docs{{{lab},set="main"}}'] == 1 and m[f"mtp_refit_p2_done{{{lab}}}"] == 1
     assert m[f'mtp_refit_parity_pass{{{lab},check="live_t1"}}'] == 0
     assert any(k.startswith('mtp_refit_acceptance{run="res",phase="p2",drafter="shipped"') for k in m)
+
+
+def test_replay_counts_steps_not_anchors():
+    from tools.mtp_refit.eval_offline import replay
+
+    # T=0: anchor 0 accepts 2 of 3 drafts -> next step at anchor 3 accepts all 3 -> next at 7 (past the end: done)
+    acc = torch.zeros(7, 3)
+    acc[0, :2] = 1
+    acc[3] = 1
+    acc[1:3] = 1  # anchors the steps skip over never count
+    steps, hits = replay(acc, 0)
+    assert steps == 2 and hits == [2, 2, 1]
+    # expectation over a stochastic step: anchor 0 accepts depth 0 w.p. 0.5, then 1 or 2 continue
+    acc = torch.tensor([[0.5, 0.0], [1.0, 0.0], [0.0, 0.0]])
+    steps, hits = replay(acc, 0)
+    # 0 -> 1 (rejected, p .5: accepts depth 0) or 2 (accepted 1, p .5: accepts none) -> 3 ends
+    assert steps == 2.0 and hits == [1.0, 0.0]
+    assert replay(torch.zeros(2, 3), 5) == (0.0, [0.0] * 3)

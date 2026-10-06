@@ -15,7 +15,10 @@ VLLM_LM_HEAD_A16=1).
 Known gaps, settled by the phase 2 GPU parity test, not here:
 - served HC mixers of the drafter run online MXFP8 (VLLM_QWEN38_HC_MXFP8=hc); trained BF16
 - QSA sparse selection is skipped: windows <= indexer_budget tokens make it dense and exact
-- K/V go through the fp8 e4m3 round trip of the served KV cache (scale 1.0; the parity test confirms)
+- K/V go through the fp8 e4m3 round trip of the served KV cache (scale 1.0). Phase 2 (#97) did NOT confirm it:
+  the T=0 step replay on the live set gives per position 0.854/0.692/0.550/0.427 with the round trip and
+  0.856/0.724/0.612/0.518 without it (K is what matters, V is neutral), live 0.856/0.710/0.585/0.485 sits in
+  between; the served K precision is unresolved
 - the frozen head and experts are BF16 copies of fp4 x e4m3 values (~2^-9 extra rounding per weight)
 - draft step k of anchor t runs at position t + k against depth-0 keys at their own positions; RoPE
   only sees relative positions, so a constant offset in vLLM's draft positions would not matter
