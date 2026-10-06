@@ -135,13 +135,17 @@ Same runs, other checks:
 
 - Standalone prefill of an 8K prompt: 2,857 tok/s on 2×, 2,137 tok/s on 1× v3d. v3d gave 2,182 / 2,147 / 2,066 /
   1,880 at 16K / 32K / 64K / 128K, 0.9–1.2% below v3c.
-- Hotel-lights reasoning check, 32 runs per recipe at c8 on the 1× recipes: v3c 21/32 (66%), v3b 23/32 (72%). The
-  difference is not significant (Fisher exact p = 0.79; [#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87)).
-  - Every run finished on its own stop token. The unscored runs are long answers whose final number the scorer could
-    not read, not truncations.
-  - v3c missed 11/32 (8 wrong, 3 unscored), v3b 9/32; the wrong answers are mostly 49 or 47 instead of 48. Raw runs:
+- Hotel-lights reasoning check (8 concurrent runs per batch, 1× v3c). At the recipe default `reasoning_effort: medium`
+  it answered 21/32 correctly. With `xhigh` sent per request it answered 31/31 completed runs, at a median of 39.6K
+  reasoning tokens ([#88](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/88)). The default
+  stays `medium` because `xhigh` led to runaway thinking on validator-gated tasks (see [Thinking effort](#thinking-effort)).
+  - For hard reasoning problems, send `"reasoning_effort": "xhigh"` per request with a long client timeout: most `xhigh`
+    answers took over 30 minutes at 8 concurrent requests.
+  - At `medium`, v3b gave 23/32 in the same comparison (Fisher exact p = 0.79 vs v3c,
+    [#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87)). The misses are mostly 49 or 47
+    instead of 48. Every run ended on its own stop token. Raw runs:
     [`results/hotel-ab-20261005/runs.jsonl`](results/hotel-ab-20261005/runs.jsonl).
-  - The 8-run checks in these benchmark runs gave 8/8 on 2× b1.4 and 6/8 on 1× v3d.
+  - The 8-run checks in these benchmark runs (default effort) gave 8/8 on 2× b1.4 and 6/8 on 1× v3d.
 - The v3b 64K c8 cell was skipped because 8 × 64K did not fit its 379,362-token pool.
 
 Raw files: [`results/lib-bench-20261005/`](results/lib-bench-20261005/) (2× b1.4, v3b),
@@ -346,6 +350,9 @@ Both recipes set the server default to `reasoning_effort: medium`. On our DevOps
 template default `xhigh` passed 42.5% of checks with 23/42 runaway-thinking runs and a 246 s median per task; b1.4 at
 `medium` passed 95.9% with 0/42 runaway and 33 s. A request can still ask for `xhigh` or `low`; `"reasoning_effort": "none"`
 turns thinking off. Override table and measurements: [docs/REFERENCE.md](docs/REFERENCE.md#thinking-effort).
+For hard reasoning problems `xhigh` per request helps: on the hotel-lights check, 1× v3c went from 21/32 at `medium` to 31/31
+completed runs ([#88](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/88)). Allow a long client timeout, since most
+of those answers took over 30 minutes at 8 concurrent requests.
 
 ## Troubleshooting
 
