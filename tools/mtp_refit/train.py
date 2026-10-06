@@ -8,7 +8,8 @@
 
 Writes runs/<name>/mtp_refit.safetensors (the trainable tensors, BF16, checkpoint names), train.jsonl
 (per optimizer step: soft CE and KL per depth, anchors per depth, lr) and eval.json (offline acceptance
-before and after, eval_offline.py). --epochs 0 exports the loaded tensors unchanged. --metrics-file
+before and after, eval_offline.py), and with --save-every N a ckpt-stepNNNNNN.safetensors every N steps
+(same layout as the final file, so eval_offline --refit and splice.py take it). --epochs 0 exports the loaded tensors unchanged. --metrics-file
 rewrites a Prometheus textfile (prom.py) after every step and eval, for the #97 dashboard.
 """
 from __future__ import annotations
@@ -129,6 +130,8 @@ def train(a) -> dict:
                 last = list(step_samples(rec, labels, weights, a.epochs, cnt_acc[0] / max(now - t_step, 1e-9), mem))
                 publish()
                 seen, ce_acc, h_acc, cnt_acc, t_step = 0, [0.0] * a.depth, [0.0] * a.depth, [0] * a.depth, now
+                if a.save_every and step % a.save_every == 0:  # ponytail: tensors only, no optimizer state (no resume)
+                    export(model, names, os.path.join(a.out, f"ckpt-step{step:06d}.safetensors"), {**meta, "step": step})
                 if a.max_steps and step >= a.max_steps:
                     break
             if a.max_steps and step >= a.max_steps:
@@ -163,6 +166,8 @@ def main(argv=None):
     ap.add_argument("--clip", type=float, default=1.0)
     ap.add_argument("--epochs", type=int, default=2)
     ap.add_argument("--max-steps", type=int, default=0)
+    ap.add_argument("--save-every", type=int, default=0,
+                    help="every N optimizer steps, export the trainable tensors to <out>/ckpt-stepNNNNNN.safetensors")
     ap.add_argument("--tokens-per-step", type=int, default=8192, help="valid depth-0 anchors per optimizer step")
     ap.add_argument("--eval-windows", type=int, default=200, help="held-out windows per eval (0 = skip)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")

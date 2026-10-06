@@ -431,7 +431,11 @@ def test_metrics_files(snap, tmp_path):
     data, mf = str(tmp_path / "data" / "train"), tmp_path / "train.prom"
     train_main(["--snapshot", str(d), "--draft-vocab", str(d / "ids.txt.gz"), "--data", data, "--heldout", data,
                 "--depth", "3", "--topk", "5", "--window", "64", "--epochs", "2", "--tokens-per-step", "4", "--eval-windows", "1",
-                "--device", "cpu", "--out", str(tmp_path / "run1"), "--metrics-file", str(mf)])
+                "--device", "cpu", "--out", str(tmp_path / "run1"), "--metrics-file", str(mf), "--save-every", "1"])
+    from safetensors.torch import load_file
+    ck = [load_file(tmp_path / "run1" / f"ckpt-step{i:06d}.safetensors") for i in (1, 2)]
+    final = load_file(tmp_path / "run1" / "mtp_refit.safetensors")
+    assert ck[1].keys() == final.keys() and all(torch.equal(ck[1][k], final[k]) for k in final)
     m = _prom(mf)
     lab = 'run="run1",phase="train"'
     assert m[f"mtp_refit_train_step{{{lab}}}"] == 2 and m[f"mtp_refit_train_epoch{{{lab}}}"] == 2
