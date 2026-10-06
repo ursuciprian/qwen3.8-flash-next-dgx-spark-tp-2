@@ -194,6 +194,8 @@ def test_unroll_matches_sequential_chain(snap, monkeypatch):
 
 def _capture_shards(tmp, docs, split_at):
     """Write hook-format shards: doc rows, the first doc split across shards 0 and 1."""
+    tail = max(d["stored"] for d in docs)
+    assert all(d["stored"] == min(d["tokens"].shape[0], tail) for d in docs)
     rows = {k: [] for k in ("hidden", "tokens", "positions", "topk_ids", "topk_logprobs", "req")}
     shards, reqs = [], []
     for i, doc in enumerate(docs):
@@ -220,7 +222,7 @@ def _capture_shards(tmp, docs, split_at):
     os.makedirs(tmp, exist_ok=True)
     for s, (r, q) in enumerate(shards):
         save_file({k: torch.cat(v) for k, v in r.items()}, os.path.join(tmp, f"shard-{s:05d}.safetensors"),
-                  metadata={"format": "mtp-capture-v1", "requests": json.dumps(q)})
+                  metadata={"format": "mtp-capture-v1", "requests": json.dumps(q), "tail": str(tail)})
 
 
 def _docs(g, lens, stored, resp):
@@ -242,8 +244,12 @@ def test_shard_round_trip(tmp_path):
             f.write(json.dumps({"id": f"p{i}", "category": "code", "split": "train" if i == 0 else "heldout",
                                 "sha1": gen.token_sha1(d["tokens"].tolist()), "response_start": d["resp"],
                                 "length": d["tokens"].shape[0]}) + "\n")
+    with open(tmp_path / "manifest.jsonl", "a") as f:  # an entry no shard has (rows lost before a flush)
+        f.write(json.dumps({"id": "lost", "category": "code", "split": "train", "sha1": "0" * 40,
+                            "response_start": 1, "length": 5}) + "\n")
     stats = assemble([str(tmp_path / "cap")], str(tmp_path / "manifest.jsonl"), str(tmp_path / "data"))
     assert stats["docs"] == 2 and stats["incomplete"] == 0 and stats["no_manifest"] == 0
+    assert stats["manifest_unseen"] == 1
     for split, i in (("train", 0), ("heldout", 1)):
         (w,) = list(iter_windows(str(tmp_path / "data" / split), window=64))
         d, lo = docs[i], docs[i]["tokens"].shape[0] - docs[i]["stored"]
@@ -369,3 +375,18 @@ def test_parity_drafts_and_live(snap, tmp_path):
     (mdir / "metrics-before.txt").write_text(prom([10, 5], [20, 20]))
     (mdir / "metrics-after.txt").write_text(prom([90, 69], [120, 120]))
     assert [round(x, 3) for x in parity.live_rates(str(mdir))] == [0.8, 0.64]
+
+
+def test_stitch_dedupes_recomputed_rows():
+    from tools.mtp_refit.assemble import ROW_KEYS, _complete, _stitch
+
+    def piece(pos, tag):
+        k = len(pos)
+        return {"positions": torch.tensor(pos, dtype=torch.int32), "tokens": torch.full((k,), tag),
+                **{x: torch.full((k, 2), tag) for x in ROW_KEYS if x not in ("positions", "tokens")}}
+
+    pieces = [piece([2, 3, 4], 1), piece([4, 5], 2)]  # position 4 recomputed after a preemption
+    assert _complete(pieces, length=6, start=2) and not _complete(pieces, length=6, start=1)
+    assert not _complete([piece([2, 3, 5], 1)], length=6, start=2)
+    doc = _stitch(pieces)
+    assert doc["positions"].tolist() == [2, 3, 4, 5] and doc["tokens"].tolist() == [1, 1, 2, 2]

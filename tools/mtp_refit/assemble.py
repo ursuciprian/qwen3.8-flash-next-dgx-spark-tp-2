@@ -64,31 +64,36 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
         m = json.loads(line)
         man[m["sha1"]] = m
     shards = sorted(p for d in capture_dirs for p in glob.glob(os.path.join(d, "shard-*.safetensors")))
-    # pass 1: metadata only -> request id -> (sha1, prefill_len)
+    # pass 1: metadata only -> request id -> (sha1, prefill_len, first stored position, drafts)
     reqs: dict[tuple[str, str], dict] = {}
     for p in shards:
         with safe_open(p, "pt") as f:
-            for r in json.loads(f.metadata()["requests"]):
+            md = f.metadata()
+            for r in json.loads(md["requests"]):
                 key = (os.path.dirname(p), r["id"])  # request ids are unique per server run (= dir)
-                info = reqs.setdefault(key, {"sha1": None, "prefill_len": r["prefill_len"], "drafts": None})
+                start = max(0, r["prefill_len"] - int(md.get("tail", r["prefill_len"])))
+                info = reqs.setdefault(key, {"sha1": None, "prefill_len": r["prefill_len"], "drafts": None,
+                                             "start": start})
                 info["sha1"] = r["sha1"] or info["sha1"]
                 info["drafts"] = r.get("drafts") or info["drafts"]
     writers = {s: PartWriter(os.path.join(out, s), hc) for s in ("train", "heldout")}
     pending: dict[tuple[str, str], list[dict]] = {}
-    stats = {"docs": 0, "rows": 0, "no_manifest": 0, "incomplete": 0, "length_mismatch": 0}
+    seen = {i["sha1"] for i in reqs.values()}
+    stats = {"docs": 0, "rows": 0, "no_manifest": sum(i["sha1"] not in man for i in reqs.values()),
+             "incomplete": 0, "length_mismatch": 0, "manifest_unseen": sum(s not in seen for s in man)}
     for p in shards:
         with safe_open(p, "pt") as f:
             t = {k: f.get_tensor(k) for k in (*ROW_KEYS, "req")}
             req_list = json.loads(f.metadata()["requests"])
         for k, r in enumerate(req_list):
-            rows = (t["req"] == k).nonzero().flatten()
-            pending.setdefault((os.path.dirname(p), r["id"]), []).append({x: t[x][rows] for x in ROW_KEYS})
-        for key in [k for k in pending if _complete(pending[k], reqs[k]["prefill_len"])]:
-            pieces, info = pending.pop(key), reqs[key]
-            m = man.get(info["sha1"])
-            if m is None:
-                stats["no_manifest"] += 1
+            key = (os.path.dirname(p), r["id"])
+            if reqs[key]["sha1"] not in man:  # e.g. rows of generation requests: never collected
                 continue
+            rows = (t["req"] == k).nonzero().flatten()
+            pending.setdefault(key, []).append({x: t[x][rows] for x in ROW_KEYS})
+        for key in [k for k in pending if _complete(pending[k], reqs[k]["prefill_len"], reqs[k]["start"])]:
+            pieces, info = pending.pop(key), reqs[key]
+            m = man[info["sha1"]]
             if m["length"] != info["prefill_len"]:
                 stats["length_mismatch"] += 1
                 continue
@@ -105,14 +110,16 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
 
 
 def _stitch(pieces):
+    """Rows in position order; a position stored twice (a preempted, recomputed request) keeps the later row."""
     doc = {k: torch.cat([p[k] for p in pieces]) for k in ROW_KEYS}
-    order = doc["positions"].argsort()
+    last = {int(p): i for i, p in enumerate(doc["positions"].tolist())}
+    order = torch.tensor([last[p] for p in sorted(last)], dtype=torch.long)
     return {k: v[order] for k, v in doc.items()}
 
 
-def _complete(pieces, length) -> bool:
-    pos = torch.cat([p["positions"] for p in pieces]).sort().values
-    return int(pos[-1]) == length - 1 and bool((pos.diff() == 1).all())
+def _complete(pieces, length, start) -> bool:
+    pos = torch.cat([p["positions"] for p in pieces]).unique()  # sorted
+    return int(pos[0]) == start and int(pos[-1]) == length - 1 and pos.numel() == length - start
 
 
 # ---------------------------------------------------------------- reader

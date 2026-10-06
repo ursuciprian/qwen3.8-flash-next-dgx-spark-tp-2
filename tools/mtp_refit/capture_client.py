@@ -29,6 +29,8 @@ def main():
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--max-len", type=int, default=262143, help="skip sequences longer than this")
     ap.add_argument("--timeout", type=float, default=1800)
+    ap.add_argument("--tail", type=int, default=6144, help="the capture server's VLLM_MTP_CAPTURE_TAIL")
+    ap.add_argument("--min-context", type=int, default=2048, help="prompt rows kept before the response")
     ap.add_argument("--max-tokens", type=int, default=8,
                     help=">1 so the prefill step schedules drafts; the hook records that greedy chain")
     a = ap.parse_args()
@@ -36,12 +38,16 @@ def main():
     man_path = os.path.join(a.out, "manifest.jsonl")
     done = {json.loads(l)["sha1"] for l in open(man_path)} if os.path.exists(man_path) else set()
     recs = [json.loads(l) for f in sorted(glob.glob(os.path.join(a.gen, "*.jsonl"))) for l in open(f)]
-    lock, man, n = threading.Lock(), open(man_path, "a"), [0, 0]
+    lock, man, n = threading.Lock(), open(man_path, "a"), [0, 0, 0]
 
     def one(r):
         toks = r["prompt_token_ids"] + r["output_token_ids"]
         sha = token_sha1(toks)
         if sha in done or len(toks) > a.max_len or not r["output_token_ids"]:
+            return
+        if len(r["output_token_ids"]) > a.tail - a.min_context:  # the hook's tail would cut its context
+            with lock:
+                n[2] += 1
             return
         try:
             _post(f"{a.server}/v1/completions",
@@ -60,7 +66,7 @@ def main():
     with ThreadPoolExecutor(a.concurrency) as ex:
         list(ex.map(one, recs))
     man.close()
-    print(f"captured {n[0]}, failed {n[1]}, already done {len(done)}")
+    print(f"captured {n[0]}, failed {n[1]}, skipped as too long for the tail {n[2]}, already done {len(done)}")
 
 
 if __name__ == "__main__":

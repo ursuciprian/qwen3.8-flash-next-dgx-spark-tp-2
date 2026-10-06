@@ -175,8 +175,7 @@ def cmd_prompts(a):
         per_source = -(-want // len(spec["sources"]))
         out, dropped = [], 0
         for src in spec["sources"]:
-            ds = load_dataset(src["dataset"], src.get("config"), split=src["split"], streaming=True,
-                              trust_remote_code=src.get("trust_remote_code", False))
+            ds = load_dataset(src["dataset"], src.get("config"), split=src["split"], streaming=True)
             ds = ds.shuffle(seed=mix["seed"], buffer_size=10_000)
             extra = {"field": src["field"]} if "field" in src else {}
             got = 0
@@ -223,7 +222,10 @@ def cmd_run(a):
         done |= {json.loads(l)["id"] for l in open(f)}
     todo = [p for p in prompts if p["id"] not in done]
     random.Random(0).shuffle(todo)  # categories interleaved, so a budget stop keeps the mix
-    sampling = {"max_tokens": a.max_tokens, **({"temperature": a.temperature} if a.temperature is not None else {})}
+    sampling = {"max_tokens": a.max_tokens}
+    for k in ("temperature", "top_p", "top_k"):
+        if getattr(a, k) is not None:
+            sampling[k] = getattr(a, k)
     lock, total, stop = threading.Lock(), [0], threading.Event()
     files = {}
 
@@ -280,6 +282,8 @@ def main():
     r.add_argument("--budget-tokens", type=int, default=0, help="stop after this many response tokens (0 = all)")
     r.add_argument("--max-tokens", type=int, default=16384)
     r.add_argument("--temperature", type=float, help="default: the server's sampling defaults")
+    r.add_argument("--top-p", type=float)
+    r.add_argument("--top-k", type=int, help="-1 = off (plain T sampling, as eval_offline's T=1 formula)")
     r.add_argument("--reasoning-effort", default="medium")
     r.add_argument("--timeout", type=float, default=1800)
     r.add_argument("--metrics", action="store_true", help="save vllm:* /metrics before and after the run")

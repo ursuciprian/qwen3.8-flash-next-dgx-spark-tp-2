@@ -40,17 +40,19 @@ def evaluate(model, data_dir, depth=6, window=2048, stride=None, max_windows=Non
     model.eval()
     lookup = full_to_draft(model.draft_ids, model.cfg.vocab_size)
     acc = defaultdict(lambda: [[0.0, 0, 0, 0] for _ in range(depth)])  # cat -> per k [t1 sum, n, t0 hit, t0 n]
-    for i, w in enumerate(iter_windows(data_dir, window, stride, device=device)):
+    for i, w in enumerate(iter_windows(data_dir, window, stride, seed=0, device=device)):  # fixed shuffle
         if max_windows and i >= max_windows:
             break
         with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=autocast):
             samples = model.unroll(w["tokens"], w["hidden"], w["positions"], depth)
         n = w["tokens"].shape[0]
-        chain = torch.ones(n, dtype=torch.bool, device=w["tokens"].device)
+        ar = torch.arange(n, device=w["tokens"].device)
+        # greedy serving drafts from anchor t only if x[t+1] was the target's argmax at row t
+        chain = w["tokens"][(ar + 1).clamp(max=n - 1)].long() == w["topk_ids"][:, 0].long()
         for k, (rows, valid) in enumerate(depth_targets(n, depth, w["loss_mask"])):
             ids, lp = w["topk_ids"][rows], w["topk_logprobs"][rows]
             t1, t0 = acceptance(model.logits(samples[k]), ids, lp, lookup, model.draft_ids)
-            lab = w["tokens"][(torch.arange(n, device=chain.device) + 2 + k).clamp(max=n - 1)]
+            lab = w["tokens"][(ar + 2 + k).clamp(max=n - 1)]
             for cat in (w["category"], "all"):
                 a = acc[cat][k]
                 a[0] += float(t1[valid].sum())
@@ -83,7 +85,7 @@ def main():
     ap.add_argument("--refit", help="mtp_refit.safetensors to overlay (default: the shipped drafter)")
     ap.add_argument("--depth", type=int, default=6)
     ap.add_argument("--window", type=int, default=2048)
-    ap.add_argument("--window-stride", type=int)
+    ap.add_argument("--window-stride", type=int, help="default window // 2: every anchor sees >= window/2 keys")
     ap.add_argument("--max-windows", type=int)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--experts-impl")
@@ -92,7 +94,7 @@ def main():
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, experts_impl=a.experts_impl)
     if a.refit:
         print(f"overlay: {load_refit(model, a.refit)} tensors from {a.refit}")
-    res = evaluate(model, a.data, a.depth, a.window, a.window_stride, a.max_windows, a.device)
+    res = evaluate(model, a.data, a.depth, a.window, a.window_stride or a.window // 2, a.max_windows, a.device)
     json.dump(res, open(a.out, "w"), indent=1)
     print(json.dumps(res.get("all"), indent=1))
 

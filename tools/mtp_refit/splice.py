@@ -46,7 +46,9 @@ def splice(src, refit, out):
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
     for f in os.listdir(src):
-        if f not in by_shard:
+        if os.path.isdir(os.path.join(src, f)):
+            shutil.copytree(os.path.join(src, f), os.path.join(tmp, f), copy_function=os.link)
+        elif f not in by_shard:
             os.link(os.path.join(src, f), os.path.join(tmp, f))
     report = {"refit": os.path.abspath(refit), "refit_sha256": sha256(refit), "shards": {}}
     with open(refit, "rb") as rf:

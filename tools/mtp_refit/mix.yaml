@@ -5,7 +5,7 @@
 total: 3000             # prompts; gen.py run --budget-tokens stops at the response-token budget (2M in phase 2)
 heldout_fraction: 0.05
 seed: 97
-max_prompt_tokens: 24000   # gen.py run skips prompts the server renders longer than this
+max_prompt_tokens: 24000   # gen.py prompts drops prompts longer than ~3.5 chars per token of this
 categories:
   agentic:        # multi-turn agent coding, tool calls in the qwen3_xml format through the server's template
     share: 0.40
@@ -19,8 +19,7 @@ categories:
     share: 0.20
     sources:
       - {dataset: nvidia/OpenCodeReasoning, config: split_0, split: split_0, adapter: field, field: input}
-      - {dataset: livecodebench/code_generation_lite, config: release_v6, split: test, adapter: field,
-         field: question_content, trust_remote_code: true}
+      # livecodebench/code_generation_lite is a loading-script dataset: datasets >= 4 cannot read it
   chat:
     share: 0.10
     sources:
@@ -31,7 +30,7 @@ categories:
       - {dataset: openai/gsm8k, config: main, split: train, adapter: field, field: question}
       - {dataset: AI-MO/NuminaMath-CoT, split: train, adapter: field, field: problem}
 # Benchmark and gate prompts never trained on (paths or globs on dgx-01; files or directories: .py string literals,
-# .json/.jsonl/.yaml string values, any other text file whole). A pattern matching nothing is an error.
+# .json/.jsonl string values, any other file read whole as text). A pattern matching nothing is an error.
 exclude:
   - ~/.local/share/uv/tools/tool-eval-bench/lib/python3*/site-packages/tool_eval_bench   # tool-eval-bench scenarios
   - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/scripts/hardmode_targeted.sh     # hardmode + TC-45 prompts

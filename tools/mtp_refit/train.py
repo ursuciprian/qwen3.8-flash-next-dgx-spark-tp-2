@@ -42,7 +42,8 @@ def train(a) -> dict:
     os.makedirs(a.out, exist_ok=True)
     meta = {k: v for k, v in vars(a).items() if k != "func"}
     res = {"args": meta}
-    ev = dict(depth=a.depth, window=a.window, max_windows=a.eval_windows, device=a.device)
+    stride = a.window_stride or a.window // 2
+    ev = dict(depth=a.depth, window=a.window, stride=stride, max_windows=a.eval_windows, device=a.device)
     if a.heldout and a.eval_windows:
         res["before"] = evaluate(model, a.heldout, **ev)
     if a.epochs:
@@ -53,7 +54,9 @@ def train(a) -> dict:
         step, seen, ce_acc, cnt_acc, t0 = 0, 0, [0.0] * a.depth, [0] * a.depth, time.time()
         model.train()
         for epoch in range(a.epochs):
-            for w in iter_windows(a.data, a.window, a.window_stride, seed=a.seed + epoch, device=a.device):
+            for w in iter_windows(a.data, a.window, stride, seed=a.seed + epoch, device=a.device):
+                if not w["loss_mask"][1:].any():  # prompt-only window: no anchor counts
+                    continue
                 if w["topk_ids"].shape[1] != a.topk:
                     raise SystemExit(f"data has top-{w['topk_ids'].shape[1]}, --topk {a.topk}")
                 with torch.autocast(torch.device(a.device).type, dtype=torch.bfloat16):
@@ -106,7 +109,8 @@ def main(argv=None):
     ap.add_argument("--loss", default="kl", choices=["kl"], help="soft CE to the target top-k (= KL + const)")
     ap.add_argument("--topk", type=int, default=20, help="must match the capture's VLLM_MTP_CAPTURE_TOPK")
     ap.add_argument("--window", type=int, default=2048)
-    ap.add_argument("--window-stride", type=int, help="default: --window (no overlap)")
+    ap.add_argument("--window-stride", type=int,
+                    help="default window // 2: overlapping windows, each anchor trained once with >= window/2 keys")
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--warmup", type=int, default=20)
     ap.add_argument("--clip", type=float, default=1.0)

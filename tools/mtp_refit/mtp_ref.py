@@ -15,6 +15,8 @@ VLLM_LM_HEAD_A16=1).
 Known gaps, settled by the phase 2 GPU parity test, not here:
 - served HC mixers of the drafter run online MXFP8 (VLLM_QWEN38_HC_MXFP8=hc); trained BF16
 - QSA sparse selection is skipped: windows <= indexer_budget tokens make it dense and exact
+- K/V go through the fp8 e4m3 round trip of the served KV cache (scale 1.0; the parity test confirms)
+- the frozen head and experts are BF16 copies of fp4 x e4m3 values (~2^-9 extra rounding per weight)
 - draft step k of anchor t runs at position t + k against depth-0 keys at their own positions; RoPE
   only sees relative positions, so a constant offset in vLLM's draft positions would not matter
 """
@@ -111,6 +113,7 @@ class MtpRef(nn.Module):
         self.register_buffer("draft_ids", torch.empty(draft_rows, dtype=torch.long), persistent=False)
         self.rotary = None  # built after to_empty (holds computed buffers)
         self.compute_dtype = torch.bfloat16  # the b12x feedback oracle is BF16-only; tests use float64
+        self.kv_fp8 = True  # served with --kv-cache-dtype fp8: K/V pass through e4m3 (scale 1.0, no MTP k/v scales)
 
     # -- one draft pass over rows, attention supplied by the caller
     def _qkv(self, x: torch.Tensor, pos: torch.Tensor):
@@ -121,6 +124,8 @@ class MtpRef(nn.Module):
         v = a.v_proj(x).view(n, -1, hd)
         cos, sin = self.rotary(x, pos.view(1, 1, -1).expand(3, 1, -1))
         q, k = apply_rotary_pos_emb(q, k, cos[0], sin[0], unsqueeze_dim=1)
+        if self.kv_fp8:
+            k, v = _fp8_ste(k), _fp8_ste(v)
         return q, gate.reshape(n, -1), k, v
 
     def block(self, tokens, state, pos, attend):
@@ -169,9 +174,20 @@ class MtpRef(nn.Module):
         return out
 
 
+def _fp8_ste(x: torch.Tensor) -> torch.Tensor:
+    """x as the fp8 e4m3 KV cache returns it (saturating, scale 1.0), straight-through gradient."""
+    y = x.float().clamp(-448.0, 448.0).to(torch.float8_e4m3fn).to(x.dtype)
+    return x + (y - x).detach()
+
+
 def _attention(q, k0, v0, mask, diag):
     """q [n, heads, hd] over k0/v0 [m, kv_heads, hd] where mask [n, m], plus one key per (k, v) in
     diag that row i of q sees only at row i (the same anchor's earlier draft steps); GQA."""
+    with torch.autocast(q.device.type, enabled=False):  # scores and softmax in fp32 as the served kernel
+        return _attention_fp32(q, k0, v0, mask, diag)
+
+
+def _attention_fp32(q, k0, v0, mask, diag):
     n, nh, hd = q.shape
     m, nkv = k0.shape[:2]
     acc = torch.float64 if q.dtype == torch.float64 else torch.float32
