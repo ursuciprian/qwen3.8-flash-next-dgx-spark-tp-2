@@ -4,7 +4,7 @@
 
 | name | content now |
 |---|---|
-| `qwen3.8-flash-next-1x-dgx-spark` | v3d: v3c + NVFP4 GDN weights for decode and an MXFP8 copy for prefill (`VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`), checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `244cb6fe`, image `tp1-v3d-20261005-21e0b201-5dad364d-warm` (experimental) |
+| `qwen3.8-flash-next-1x-dgx-spark` | v3d: v3c + NVFP4 GDN weights for decode and an MXFP8 copy for prefill (`VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`), checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `244cb6fe`, image `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` (experimental) |
 | `qwen3.8-flash-next-1x-dgx-spark-previous` | the v3c recipe that was `qwen3.8-flash-next-1x-dgx-spark` on 2026-10-05 |
 | (was `-previous`, v3b) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-v3b-20261005.yaml` (not listed; run by path) |
 

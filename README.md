@@ -234,7 +234,7 @@ Stop with `sparkrun stop --all`.
 | **Disk** | ~125 GB per node (98.5 GiB checkpoint + ~25 GB image) | ~128 GB (97.7 GiB checkpoint + 2.6 GiB MXFP8 shard + image) |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
-| **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (169 s, measured on the same files at a local path) with the compile cache from the image and a warm page cache; the first boot from the HF repo is slow, see [Known limits](#known-limits) |
+| **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (171 s) with the compile cache from the image and a warm page cache, once the checkpoint is downloaded |
 | **Concurrency** | `max_num_seqs` 16 | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens) |
 
 <!-- TODO: 1x kernel/linger requirements and the cold first-boot time with the shipped seed. -->
@@ -256,15 +256,12 @@ Image and video input are not tested on these builds.
 - 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
   8 × 64K fits.
 - 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host
-  MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The v3c image ships the TP=1 plan
-  seed and compile cache, so its first boot skips this; the v3d image does not yet (next bullet). Close other
-  memory-heavy work during the first boot.
+  MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The images ship the TP=1 plan seed
+  and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
 - 1× Spark in steady state has ~14 GiB MemAvailable (lowest 13.3 GiB in the benchmark run), most of it PLE page cache.
-- 1× Spark v3d, first boot from the Hugging Face repo: the image's compile seed was built from boots of the same files at
-  a local path. The b12x plan and the torch compile key both include the model path, so until the image is re-seeded
-  the first boot of this recipe takes the autotune path above (~30 min, low host memory for about a minute), with
-  ~1 GiB less headroom than v3c. This boot path, including the fetch of shard 35, has not been measured yet. The
-  `-previous` recipe (v3c) boots from its seed.
+- 1× Spark: the b12x plan seed and the compile cache are keyed by the model's snapshot path, so they match only the
+  pinned checkpoint revision. Serving another revision or a local copy of the files autotunes and compiles on its
+  first boot.
 - 2× Spark c1 varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting); the counting tables show the max of 5 rounds from one boot.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - Prose throughput was not re-measured on b1.4.
@@ -275,7 +272,7 @@ Image and video input are not tested on these builds.
 |---|---|---|
 | [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | 2× Spark default |
 | [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `b1.3-20260929-b7fbaf96-7344a997-warm` | Rollback: full draft vocab, no QSA race fix, thinking effort `xhigh` |
-| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3d-20261005-21e0b201-5dad364d-warm` | 1× Spark, experimental (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) |
+| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` | 1× Spark, experimental (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) |
 | [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-v3c-20261005-21e0b201-50330171-warm` | Rollback: v3c, base NVFP4 checkpoint |
 
 Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair serves different checkpoints and keeps one cache each. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).

@@ -11,9 +11,9 @@
 #     acceptance per draft position within 0.005. A 128-row cutoff lost 2.3% on pp2048 (noise 1.0%) and was dropped.
 #   - Gate: hardmode 91, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds 11/13 20/20, stragglers c8-c16
 #     0 preemptions, min MemAvailable 14.04 GiB.
-#   - The image's compile seed was built from boots of the same files at a local path; the b12x plan and the torch
-#     compile key include the model path, so a first boot from the HF repo autotunes and compiles (~30 min) until the
-#     image is re-seeded. Not yet measured on this path.
+#   - The b12x plan and the torch compile key include the model path, so the image seed is built from boots of this
+#     recipe (HF snapshot 244cb6fe): plan f7894ea6 + AOT keys 237b44e9 / 30859ad7 / aff8b2f6. A boot of the published
+#     image with those entries removed from the runtime cache loaded them from the image (171 s to healthy).
 #   Results: results/tp1-v3d-20261005. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3c).
 #
 # Base: v3c header below.
@@ -95,7 +95,7 @@ description: "Experimental (v3d). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVF
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
 model_revision: 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-hf-20261005-21e0b201-5dad364d-warm
 runtime: vllm
 
 build_args: []

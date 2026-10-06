@@ -3,8 +3,8 @@
 ## Single Spark v3d (2026-10-05)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
-`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm`
-(digest `sha256:32012ffd1629a931b087877d8b29588c2fc8ae4c28b4cedbdd94c89d6cbc2c13`), checkpoint
+`ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-hf-20261005-21e0b201-5dad364d-warm`
+(digest `sha256:81ac7975869814102843b4ca58e5ea219c3e938518b8f87d1a6fbb6edd89ede2`), checkpoint
 [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
 @ `244cb6fe` (weights identical to the first upload `f35e321b`; only the model card changed).
 
@@ -21,10 +21,21 @@ v3d = v3c + `VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`:
 
 Versions: vLLM `exp/v3d` (= `exp/v3c` 50330171 + the dispatch), b12x 21e0b201.
 
-The bench below booted the same checkpoint files from a local snapshot path (sha256 identical to the HF repo, all 49
-checkpoint files). That boot loaded its compile cache from the image in 169 s. The recipe as committed (HF snapshot
-path, shard 35 fetched at start) has not been booted yet: the image's b12x plan and compile cache are keyed by the
-local path, so its first boot autotunes and compiles. A re-seeded image is being built.
+The bench below booted the same checkpoint files from a local snapshot path, sha256 identical to the HF repo for all
+49 checkpoint files. It used image `tp1-v3d-20261005-21e0b201-5dad364d-warm` (digest `sha256:32012ffd…`).
+
+The b12x plan and the torch compile key include the model path, so the published image is seeded from boots of the
+recipe as committed, at HF snapshot 244cb6fe:
+
+- The cold boot loaded the re-keyed plan, compiled without autotuning and took 337 s.
+- A boot of the published image, with those cache entries removed from the runtime cache, loaded them from the image
+  and took 171 s. All 72 MXFP8 copies loaded.
+- Quick llama-benchy cells on that boot (one run of 3, T=1): pp2048 c1 1,757, tg512 c1 55.6 ± 3.4, c8 125.5 ± 6.1.
+  Accept/draft was 0.55–0.56 (0.58–0.63 in the grid below). Single cells of this grid vary by up to ~10% between
+  runs. A CPU requant job ran on the other Spark at the same time.
+
+Files: [`hf-seed-check/`](../results/tp1-v3d-20261005/hf-seed-check/). The shard-35 fetch was checked separately on
+an empty HF cache inside the image, and it downloaded the two files byte-identical to `7c4f1bc1`.
 
 Raw files: [`results/tp1-v3d-20261005/`](../results/tp1-v3d-20261005/) (gate, screen) and
 [`bench/`](../results/tp1-v3d-20261005/bench/) (every table below; one boot on dgx-01).
