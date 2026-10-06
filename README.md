@@ -167,6 +167,29 @@ column, `tokens_per_step` in the copy-heavy and counting files). Raw files:
 [`results/tp1-v3d-20261005/bench/`](results/tp1-v3d-20261005/bench/).
 Charts: `uv run scripts/make_charts.py` renders every chart on this page from those files.
 
+### High concurrency: measured with max_num_seqs 32, quality gate not run at this cap
+
+The shipped recipes cap concurrency at 16 requests (2×) and 8 (1×). These runs raised `max_num_seqs` to 32 to show
+how far aggregate throughput goes. The quality gate has not been run at this cap, so these are throughput
+measurements only, not a supported configuration. One fresh boot per setup (2026-10-05).
+
+<img src="docs/img/concurrency.svg" alt="Aggregate decode tok/s at 1 to 32 concurrent requests with max_num_seqs 32. 2× Spark b1.4: counting 994 and copy-heavy 911 at 32, coding 291 at c32. 1× Spark v3d: counting 676, copy-heavy 565, coding 199 at c32." width="900">
+
+| Workload | 2× Spark b1.4, c16 | 2× Spark b1.4, c32 | 1× Spark v3d, c16 | 1× Spark v3d, c32 |
+|---|:---:|:---:|:---:|:---:|
+| Counting, max of 5 rounds | 781.9 | **994.4** | 522.2 | **675.9** |
+| Copy-heavy, max of 3 rounds (streams) | 644.9 | **910.7** | 405.2 | **565.2** |
+| Coding, llama-benchy tg512, max of 3 runs | 232.0 | **290.7** | 152.1 | **198.7** |
+
+- Straggler probe at c8/c16/c32: 0 preemptions on both setups, 3.98–3.99 accepted per 4 drafts.
+- Per-request speed drops as requests are added. At c32 counting runs at 32.0 tok/s per request on 2× and 21.6 on 1×,
+  and the TTFT probe (~1.5K-token prompts) reached 14.5 s (2×) and 22.2 s (1×) at p50.
+- Lowest MemAvailable: 2× 5.2 / 6.6 GiB, 1× 4.5 GiB. The 1× run is under the 6 GiB headroom the shipped recipes
+  keep. A 1× boot at `max_num_seqs` 16 was stopped by the 4 GiB memory guard during startup.
+
+Full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05), raw files:
+[`results/high-conc-k46b-20261005/`](results/high-conc-k46b-20261005/).
+
 ## Quality gate
 
 A build ships only if it passes every check.

@@ -26,6 +26,7 @@ OUT = ROOT / "docs" / "img"
 
 T1 = RES / "tp1-v3d-20261005"   # single-Spark v3d: gate files and bench/ (one boot on dgx-01)
 LIB = RES / "lib-bench-20261005"
+HC = RES / "high-conc-k46b-20261005"   # max_num_seqs 32 runs (k46b): not the shipped cap, no quality gate at this cap
 
 SRC = {
     # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots).
@@ -59,6 +60,8 @@ SRC = {
         ("v3d", "10-05", T1 / "bench/task.csv"),
     ],
     "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
+    # High concurrency, max_num_seqs 32 (one boot per setup): counting, copy-heavy, coding at c16/c32.
+    "hc": {"2× Spark (TP=2), b1.4": HC / "tp2-s32", "1× Spark (TP=1), v3d": HC / "v3d-s32"},
     "tp2_tc45": RES / "b1.4-20261001/gate/tc45-cand1.txt",
     "tp1_fidelity": T1 / "gate-summary.txt",
     "tp1_gate": T1 / "gate-summary.txt",
@@ -320,6 +323,44 @@ def chart_depth(lib):
     save(fig, "depth.svg")
 
 
+def benchy_tg_max(path):
+    """llama-benchy JSON -> {concurrency: max run tg tok/s total} at depth 0."""
+    out = {}
+    for b in json.loads(Path(path).read_text())["benchmarks"]:
+        if b["context_size"] == 0 and not b["is_context_prefill_phase"]:
+            out[b["concurrency"]] = max(b["tg_throughput"]["values"])
+    return out
+
+
+def chart_concurrency():
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), sharey=True)
+    for ax, (title, d) in zip(axes, SRC["hc"].items()):
+        style_ax(ax)
+        series = (("Copy-heavy, max of 3 rounds", C_COPY, copy_best([d / "copy-streams.json"])),
+                  ("Counting, max of 5 rounds", C_COUNT, count_best(sorted(d.glob("count-c*.json")))),
+                  ("Coding, benchy tg512, max of 3 runs", C_CODE, benchy_tg_max(d / "benchy.json")))
+        for label, color, data in series:
+            pts = sorted((c, y) for c, y in data.items() if c in (1, 8, 16, 32))
+            assert pts, f"{title} {label}: no data"
+            xs, ys = zip(*pts)
+            ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=label)
+            ax.annotate(f"{ys[-1]:.0f}", (xs[-1], ys[-1]), xytext=(6, 0), textcoords="offset points",
+                        va="center", fontsize=10, color=INK, fontweight="bold")
+        ax.set_xscale("log", base=2)
+        ax.set_xticks([1, 8, 16, 32], ["1", "8", "16", "32"])
+        ax.set_xlim(0.85, 32 * 1.5)
+        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
+        ax.set_xlabel("Concurrent requests")
+    axes[0].set_ylabel("Aggregate decode tok/s")
+    axes[0].set_ylim(0, None)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.08), fontsize=10)
+    fig.text(0.0, -0.17, "Measured with max_num_seqs 32 (the shipped recipes use 16 on 2× and 8 on 1×); the quality gate "
+             "was not run at this cap.\nOne boot per setup; coding measured at c16 and c32 only. Raw files: "
+             "results/high-conc-k46b-20261005/.", fontsize=8.5, color=MUTED)
+    save(fig, "concurrency.svg")
+
+
 def chart_quality():
     t2f, t1f = fidelity(SRC["tp2_fidelity"]), fidelity(SRC["tp1_fidelity"])
     v = json.loads(SRC["tp2_verdict"].read_text())
@@ -368,3 +409,4 @@ if __name__ == "__main__":
     chart_builds(hist, hist1)
     chart_depth(lib)
     chart_quality()
+    chart_concurrency()

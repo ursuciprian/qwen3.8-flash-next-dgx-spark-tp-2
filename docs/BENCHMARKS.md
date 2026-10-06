@@ -1,5 +1,42 @@
 # Benchmarks: full tables
 
+## High concurrency, max_num_seqs 32 (2026-10-05)
+
+Measured with `max_num_seqs` 32 and CUDA graphs up to 160 rows. The shipped recipes use 16 (2×) and 8 (1×), and the
+quality gate was not run at this cap. One fresh boot per setup: 2× Spark b1.4 (image `b1.4-20261001-b7fbaf96-a7e649d8-warm`,
+KV 3,615,479 tokens) and 1× Spark v3d (image `tp1-v3d-20261005-21e0b201-5dad364d-warm`, checkpoint files at a local
+path, KV 993,754 tokens). Raw files: [`results/high-conc-k46b-20261005/`](../results/high-conc-k46b-20261005/)
+([`summary.md`](../results/high-conc-k46b-20261005/summary.md) has every cell, including medians, TTFT and per-request speed).
+
+**Counting** (T=0, thinking off, 320 tokens out, 5 rounds per level), aggregate tok/s, max of 5 rounds:
+
+| setup | c1 | c8 | c16 | c32 |
+|---|---|---|---|---|
+| 2× b1.4 | 121.9 | 552.4 | 781.9 | 994.4 |
+| 1× v3d | 84.6 | 366.2 | 522.2 | 675.9 |
+
+**Copy-heavy** (low effort, 1,500 tokens out, 3 rounds per stream count), window tok/s, max of 3 rounds:
+
+| setup | 1 | 8 | 16 | 32 |
+|---|---|---|---|---|
+| 2× b1.4 | 116.7 | 439.4 | 644.9 | 910.7 |
+| 1× v3d | 80.3 | 282.6 | 405.2 | 565.2 |
+
+Tokens per step 4.91–5.00 in both workloads.
+
+**Coding** (llama-benchy task mode, pp2048 tg512, depth 0, T=1.0, 3 runs), tg tok/s total, max of 3 runs:
+
+| setup | c16 | c32 | tokens/step |
+|---|---|---|---|
+| 2× b1.4 | 232.0 | 290.7 | 3.28 / 3.32 |
+| 1× v3d | 152.1 | 198.7 | 3.28 / 3.37 |
+
+**Straggler probe** at c8/c16/c32: 0 preemptions on both setups (3.98–3.99 accepted per 4 drafts); c32 round wall
+10.0 s (2×) and 15.1 s (1×) for 320 tokens per request.
+
+**Memory**: lowest MemAvailable 5.19 GiB (dgx-01) / 6.58 GiB (dgx-02) on 2×, 4.46 GiB on 1×. A 1× boot at
+`max_num_seqs` 16 on the other Spark was stopped by the 4 GiB MemAvailable guard during startup.
+
 ## Single Spark v3d (2026-10-05)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image
