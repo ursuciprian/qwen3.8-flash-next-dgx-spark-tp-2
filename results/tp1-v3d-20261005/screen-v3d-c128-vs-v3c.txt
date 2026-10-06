@@ -1,0 +1,25 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.824 arm 0.821 shift -0.003
+  pos 1: control 0.672 arm 0.665 shift -0.007
+  pos 2: control 0.546 arm 0.537 shift -0.009
+  pos 3: control 0.444 arm 0.433 shift -0.011
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +1.02%  noise  5.28%            n=4 CI [-5.1,+5.5] control boot-to-boot +1.87%, step -8.24%
+  probe  fresh-c4      +6.80%  noise  3.50%  better    n=16 CI [+3.5,+10.5] control boot-to-boot +2.38%, step -5.30%
+  probe  fresh-c8      +3.44%  noise  2.68%  better    n=32 CI [+1.3,+5.8] control boot-to-boot +2.68%, step -3.64%
+  probe  d16k-c4       +3.35%  noise  2.20%  better    n=16 CI [+1.3,+5.7] control boot-to-boot -1.37%, step -3.44%
+  probe  count-c8      +2.18%  noise  2.36%            n=32 CI [+0.7,+3.6] control boot-to-boot -2.36%, step -3.21%
+  wall   d16k-c8       +0.41%  noise  1.00%            wall s control 126/126 arm 127/124 (cut counts as the time)
+  benchy pp2048 (c1)   -2.27%  noise  1.01%  WORSE>2x  control 1825.1 arm 1783.6 t/s (boots 2/2)
+  benchy tg512 (c1)   +10.25%  noise  9.17%  better    control 53.1 arm 58.5 t/s (boots 2/2)
+  benchy tg512 (c8)    +6.00%  noise  7.40%            control 123.0 arm 130.4 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 15/20 prompts identical, |dlogprob| mean 0.0421 max 0.8261
+  self  ctl-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0406 max 0.4328
+  self  arm-p1 a/b: 10/20 prompts identical, |dlogprob| mean 0.0317 max 0.3782
+  self  arm-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0308 max 0.3873
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0525 max 0.5897
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0436 max 0.5866
+reason: benchy pp2048 (c1) -2.27% (noise 1.01%)
+better: probe fresh-c4 +6.80% (noise 3.50%); probe fresh-c8 +3.44% (noise 2.68%); probe d16k-c4 +3.35% (noise 2.20%); benchy tg512 (c1) +10.25% (noise 9.17%)
+VERDICT=KILL

@@ -27,10 +27,11 @@ Workload key used below — every number carries one of these tags:
   `B/dgx0{1,2}/copy-streams.json` (1x Spark v3a on each Spark), with the
   counting files of the same run; earlier: `results/b1.2-20260927/copy-streams-20260929.json`
   (2x b1.2), `results/tp1-v2-20261002/copy-streams.json` (1x v2); 1x v3c:
-  `results/tp1-v3c-20261005/bench/copy-streams.json`. The README charts
+  `results/tp1-v3c-20261005/bench/copy-streams.json`; 1x v3d: `results/tp1-v3d-20261005/bench/copy-streams.json`
+  (v3c rerun in the same window on the other Spark: `results/tp1-v3d-20261005/bench-v3c-dgx02/`). The README charts
   (`docs/img/`) are rendered by `scripts/make_charts.py` from `b14.json`,
   `b1.4-20261001/benchy/`, `showcase-20261004/A/`, `lib-bench-20261005/`, the
-  1x build grids (`tp1-v2-*`, `tp1-v3a-*`, `tp1-v3b-*`) and `tp1-v3c-20261005/`.
+  1x build grids (`tp1-v2-*`, `tp1-v3a-*`, `tp1-v3b-*`, `tp1-v3c-*`) and `tp1-v3d-20261005/`.
 - **[lib]** llm-inference-bench 0.7.6: 30 s sustained decode per cell at
   c1/c4/c8 with 0/16K/64K context, standalone prefill 8K-128K, hotel-lights x8,
   server default sampling.
@@ -43,6 +44,7 @@ aren't summarized here.
 
 | date | recipe / arm | key numbers | verdict | file |
 |---|---|---|---|---|
+| 2026-10-05 | 1x v3d (v3c + NVFP4 GDN weights for decode, MXFP8 copy for prefill, cutoff 41 rows; checkpoint ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE) vs v3c, Thunderdome screen + gate | screen: fresh c8 +4.44%, 16K c4 +5.89%, [count] c8 +7.83%, [task] tg512 c1 +19.3%, pp2048 c1 -0.89% (noise 1.00), acceptance shift <= 0.005, 72 MXFP8 copies per boot; cutoff-128 arm KILL (pp2048 -2.27%, noise 1.01); gate hardmode 91, TC-45 100, fidelity 20/20 x4 + 128k seeds 11/13, no stragglers, min MemAvailable 14.04 GiB; [task] tg512 c1 59.8, c8 139.5, 16k c8 111.0; [count] max of 5 c8 377.8; [copy] max of 3 c1/c4/c8 80.8/188.5/281.5 (v3c same window 74.8/189.6/268.4); [lib] c8 0/16K/64K 173.4/191.5/179.5 | **promoted, 1x default** | `results/tp1-v3d-20261005/` |
 | 2026-10-05 | 1x v3c (v3b + shared GDN prefill staging + compact GDN records, KV 14 GiB) vs v3b, Thunderdome screen + gate | screen: fresh c4 +2.45%, [count] c8 +3.13%, 16K c8 wall 347/370 -> 125/126 s, rest within noise, acceptance unchanged, T=0 identity pass; kv16 arm INCONCLUSIVE (16K c4 -2.0%); gate hardmode 93, TC-45 100, fidelity 20/20 x4 + 128k seeds 11/13, no stragglers, min MemAvailable 15.01 GiB; [task] tg512 c1 51.8, c8 125.1, 16k c8 109.3 (v3b 22.1); [count] max of 5 c8 360.1; [copy] max of 3 c8 265.3; [lib] c8 0/16K/64K 165.7/165.6/160.4 | **promoted, 1x default** (Jev ship 0.72) | `results/tp1-v3c-20261005/` |
 | 2026-10-05 | [lib] on 2x b1.4 and 1x v3b (#74), counting with every round saved (#82) | b1.4 c1/c4/c8 at 0/16K/64K: 64.8/73.3/77.8, 171.2/175.0/165.4, 248.6/254.9/257.4; v3b 46.9/45.3/44.3, 116.5/112.0/106.3, 168.4/174.8/did not fit; prefill 8K 2,857 / 2,162; hotel-lights 8/8, 7/8 | reference | `results/lib-bench-20261005/` |
 | 2026-10-04 | 2x r9-pin (b12x block-scaled pinned plan 2560x3072@16) vs same image off, 2 passes ABBA | tok/s [count] c2 +2.3% [+1.1, +3.7], [count] c8 -3.1% [-5.3, -0.8] (step +2.8%), other cells within CI, acceptance unchanged | **rejected** (count c8 worse beyond noise; #69) | `results/r9-pin-20261003/report.txt` |
