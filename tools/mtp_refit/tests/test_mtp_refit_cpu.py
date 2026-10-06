@@ -11,7 +11,7 @@ import torch
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
-from tools.mtp_refit import gen, mtp_ref, splice
+from tools.mtp_refit import gen, mtp_ref, parity, splice
 from tools.mtp_refit.assemble import assemble, iter_windows
 from tools.mtp_refit.eval_offline import evaluate, load_refit
 from tools.mtp_refit.mtp_ref import (
@@ -208,6 +208,8 @@ def _capture_shards(tmp, docs, split_at):
                 reqs.append({"id": f"r{i}", "prefill_len": n, "sha1": None})
             if p == n - 1:
                 reqs[-1]["sha1"] = gen.token_sha1(doc["tokens"].tolist())
+                if "drafts" in doc:
+                    reqs[-1]["drafts"] = doc["drafts"]
             rows["hidden"].append(doc["hidden"][p : p + 1])
             rows["tokens"].append(doc["tokens"][p : p + 1].int())
             rows["positions"].append(torch.tensor([p], dtype=torch.int32))
@@ -328,3 +330,42 @@ def test_gen_adapters_and_exclusion(tmp_path):
     assert not gen.shingles("an unrelated prompt about sorting a list of integers in python quickly please") & excl
     with pytest.raises(SystemExit):
         gen.exclusion_set([str(tmp_path / "missing*")])
+
+
+def test_parity_drafts_and_live(snap, tmp_path):
+    d, _ = snap
+    m = load_mtp_ref(str(d), str(d / "ids.txt.gz"))
+    g = torch.Generator().manual_seed(5)
+    (doc,) = _docs(g, [10], [10], [4])
+    L, D = 10, 3
+    chain = [int(m.draft_ids[7])]  # the "sampled" token, then the model's own greedy drafts
+    for k in range(D):
+        ext = torch.tensor(chain + [0] * (D - len(chain)))
+        with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+            sm = m.unroll(torch.cat([doc["tokens"], ext]), torch.cat([doc["hidden"], torch.zeros(D, S * H).bfloat16()]),
+                          torch.arange(L + D), D)
+        chain.append(int(m.draft_ids[m.logits(sm[k][L - 1 : L]).argmax(-1)]))
+    doc["drafts"] = chain
+    _capture_shards(tmp_path / "cap", [doc], split_at=None)
+    (tmp_path / "m.jsonl").write_text(json.dumps({"id": "x", "category": "code", "split": "heldout", "length": L,
+                                                  "sha1": gen.token_sha1(doc["tokens"].tolist()), "response_start": 4}) + "\n")
+    assemble([str(tmp_path / "cap")], str(tmp_path / "m.jsonl"), str(tmp_path / "data"))
+    args = type("A", (), dict(snapshot=str(d), draft_vocab=str(d / "ids.txt.gz"), device="cpu", experts_impl=None,
+                              data=[str(tmp_path / "data" / "heldout")], max_len=64, max_docs=10, min_agree=0.995,
+                              out=str(tmp_path / "p.json")))()
+    assert parity.drafts(args) == 0
+    assert json.load(open(tmp_path / "p.json"))["per_depth_agree"] == [1.0, 1.0, 1.0]
+    doc["drafts"] = chain[:2] + [(chain[2] + 1) % V] + chain[3:]  # vLLM disagrees at depth 1
+    _capture_shards(tmp_path / "cap2", [doc], split_at=None)
+    assemble([str(tmp_path / "cap2")], str(tmp_path / "m.jsonl"), str(tmp_path / "data2"))
+    args.data, args.out = [str(tmp_path / "data2" / "heldout")], str(tmp_path / "p2.json")
+    assert parity.drafts(args) == 1
+    mdir = tmp_path / "live"
+    mdir.mkdir()
+    def prom(acc, drafted):
+        return "".join(f'vllm:spec_decode_num_accepted_tokens_per_pos_total{{position="{i}"}} {a}\n'
+                       f'vllm:spec_decode_num_draft_tokens_per_pos_total{{position="{i}"}} {b}\n'
+                       for i, (a, b) in enumerate(zip(acc, drafted)))
+    (mdir / "metrics-before.txt").write_text(prom([10, 5], [20, 20]))
+    (mdir / "metrics-after.txt").write_text(prom([90, 69], [120, 120]))
+    assert [round(x, 3) for x in parity.live_rates(str(mdir))] == [0.8, 0.64]

@@ -11,7 +11,8 @@ without gaps. Output: data/{train,heldout}/part-%05d.safetensors with
     hidden [N, S, H] bf16, tokens [N] int32, positions [N] int32, topk_ids [N, K] int32,
     topk_logprobs [N, K] fp16, loss_mask [N] uint8 (1 = generated token), doc_offsets [D+1] int64
 
-and metadata "docs" = JSON list of {id, category, sha1}.
+and metadata "docs" = JSON list of {id, category, sha1, length, drafts}; drafts is the vLLM drafter's
+greedy chain [sampled token, d0, d1, ...] from the last row, when the hook recorded it (parity.py).
 """
 from __future__ import annotations
 
@@ -69,8 +70,9 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
         with safe_open(p, "pt") as f:
             for r in json.loads(f.metadata()["requests"]):
                 key = (os.path.dirname(p), r["id"])  # request ids are unique per server run (= dir)
-                info = reqs.setdefault(key, {"sha1": None, "prefill_len": r["prefill_len"]})
+                info = reqs.setdefault(key, {"sha1": None, "prefill_len": r["prefill_len"], "drafts": None})
                 info["sha1"] = r["sha1"] or info["sha1"]
+                info["drafts"] = r.get("drafts") or info["drafts"]
     writers = {s: PartWriter(os.path.join(out, s), hc) for s in ("train", "heldout")}
     pending: dict[tuple[str, str], list[dict]] = {}
     stats = {"docs": 0, "rows": 0, "no_manifest": 0, "incomplete": 0, "length_mismatch": 0}
@@ -92,8 +94,8 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
                 continue
             doc = _stitch(pieces)
             doc["loss_mask"] = (doc["positions"] >= m["response_start"]).to(torch.uint8)
-            writers[m.get("split", "train")].add(doc, {"id": m["id"], "category": m["category"],
-                                                       "sha1": info["sha1"]})
+            writers[m.get("split", "train")].add(doc, {"id": m["id"], "category": m["category"], "sha1": info["sha1"],
+                                                       "length": m["length"], "drafts": info["drafts"]})
             stats["docs"] += 1
             stats["rows"] += doc["tokens"].shape[0]
     stats["incomplete"] = len(pending)
@@ -144,7 +146,7 @@ def iter_windows(data_dir: str, window: int, stride: int | None = None, seed: in
             if cut:
                 w["loss_mask"] = w["loss_mask"].clone()
                 w["loss_mask"][:cut] = 0
-            w["category"], w["id"] = meta["category"], meta["id"]
+            w["category"], w["id"], w["meta"] = meta["category"], meta["id"], meta
             yield w
 
 

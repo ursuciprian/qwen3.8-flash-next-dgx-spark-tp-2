@@ -3,7 +3,8 @@
     python -m tools.mtp_refit.capture_client --server http://localhost:8000 --gen gen --out capture
 
 Each record of gen/<category>.jsonl is sent as /v1/completions with prompt = prompt + output token
-ids, max_tokens 1, temperature 0: one prefill whose rows the hook stores. capture/manifest.jsonl
+ids, temperature 0: one prefill whose rows the hook stores (the few decode steps after it are not
+stored; max_tokens > 1 only makes the prefill step draft, for the parity check). capture/manifest.jsonl
 gets {id, category, split, sha1, response_start, length}; sha1 is the digest the hook writes per
 request, so assemble.py can join them. Stdlib only. Reruns skip records already in the manifest.
 """
@@ -28,6 +29,8 @@ def main():
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--max-len", type=int, default=262143, help="skip sequences longer than this")
     ap.add_argument("--timeout", type=float, default=1800)
+    ap.add_argument("--max-tokens", type=int, default=8,
+                    help=">1 so the prefill step schedules drafts; the hook records that greedy chain")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     man_path = os.path.join(a.out, "manifest.jsonl")
@@ -42,7 +45,7 @@ def main():
             return
         try:
             _post(f"{a.server}/v1/completions",
-                  {"model": a.model, "prompt": toks, "max_tokens": 1, "temperature": 0}, a.timeout)
+                  {"model": a.model, "prompt": toks, "max_tokens": a.max_tokens, "temperature": 0}, a.timeout)
         except Exception as e:  # noqa: BLE001
             print(f"{r['id']}: {e}")
             with lock:
