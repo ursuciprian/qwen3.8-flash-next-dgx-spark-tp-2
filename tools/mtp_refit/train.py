@@ -7,8 +7,9 @@
       --window 2048 --lr 2e-5 --warmup 20 --epochs 2 --tokens-per-step 8192 --out runs/<name>
 
 Writes runs/<name>/mtp_refit.safetensors (the trainable tensors, BF16, checkpoint names), train.jsonl
-(per optimizer step: soft CE per depth, anchors per depth, lr) and eval.json (offline acceptance
-before and after, eval_offline.py). --epochs 0 exports the loaded tensors unchanged.
+(per optimizer step: soft CE and KL per depth, anchors per depth, lr) and eval.json (offline acceptance
+before and after, eval_offline.py). --epochs 0 exports the loaded tensors unchanged. --metrics-file
+rewrites a Prometheus textfile (prom.py) after every step and eval, for the #97 dashboard.
 """
 from __future__ import annotations
 
@@ -19,9 +20,10 @@ import time
 
 import torch
 
+from . import prom
 from .assemble import iter_windows
 from .eval_offline import evaluate
-from .mtp_ref import export, full_to_draft, load_mtp_ref, trainable_names, window_loss
+from .mtp_ref import depth_targets, export, full_to_draft, load_mtp_ref, trainable_names, window_loss
 
 
 def depth_weights(spec: str, depth: int) -> list[float]:
@@ -33,6 +35,33 @@ def depth_weights(spec: str, depth: int) -> list[float]:
     raise ValueError(f"--depth-weights {spec}: equal or decay[:r]")
 
 
+@torch.no_grad()
+def target_entropy(w, depth, lookup) -> list[float]:
+    """Per depth: sum over valid anchors of the entropy of the target top-k as soft_ce sees it
+    (renormalized top-k, ids outside the draft vocab dropped). soft CE - this = KL to the target."""
+    out = []
+    for rows, valid in depth_targets(w["tokens"].shape[0], depth, w["loss_mask"]):
+        lp = w["topk_logprobs"][rows[valid]].float().log_softmax(-1)
+        p = lp.exp() * (lookup[w["topk_ids"][rows[valid]].long()] >= 0)
+        out.append(float(-(p * lp).sum()))
+    return out
+
+
+def step_samples(rec, labels, weights, epochs, anchors_per_s, gpu_mem):
+    yield "mtp_refit_train_step", labels, rec["step"]
+    yield "mtp_refit_train_epoch", labels, rec["epoch"] + 1
+    yield "mtp_refit_train_epochs", labels, epochs
+    yield "mtp_refit_train_lr", labels, rec["lr"]
+    yield "mtp_refit_train_grad_norm", labels, rec["grad_norm"]
+    yield "mtp_refit_train_anchors_per_second", labels, anchors_per_s
+    yield "mtp_refit_train_gpu_memory_bytes", labels, gpu_mem
+    ce = [(c, wt) for c, wt in zip(rec["ce"], weights) if c is not None]
+    yield "mtp_refit_train_loss", labels, sum(c * wt for c, wt in ce) / sum(wt for _, wt in ce) if ce else None
+    for k, (c, kl) in enumerate(zip(rec["ce"], rec["kl"])):
+        yield "mtp_refit_train_ce", {**labels, "position": k + 1}, c
+        yield "mtp_refit_train_kl", {**labels, "position": k + 1}, kl
+
+
 def train(a) -> dict:
     torch.manual_seed(a.seed)
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, a.trainable, a.experts_impl)
@@ -42,16 +71,26 @@ def train(a) -> dict:
     os.makedirs(a.out, exist_ok=True)
     meta = {k: v for k, v in vars(a).items() if k != "func"}
     res = {"args": meta}
+    labels = {"run": os.path.basename(os.path.normpath(a.out)), "phase": "train"}
+    last = []  # the latest step's samples, rewritten with every eval
+
+    def publish():
+        if a.metrics_file:
+            evs = [s for when in ("before", "after") if when in res
+                   for s in prom.acceptance(res[when], {**labels, "drafter": when})]
+            prom.write(a.metrics_file, [*last, *evs])
     stride = a.window_stride or a.window // 2
     ev = dict(depth=a.depth, window=a.window, stride=stride, max_windows=a.eval_windows, device=a.device)
     if a.heldout and a.eval_windows:
         res["before"] = evaluate(model, a.heldout, **ev)
+        publish()
     if a.epochs:
         weights = depth_weights(a.depth_weights, a.depth)
         lookup = full_to_draft(model.draft_ids, model.cfg.vocab_size)
         opt = torch.optim.AdamW(params, lr=a.lr, betas=(0.9, 0.95), weight_decay=0.0)
         log = open(os.path.join(a.out, "train.jsonl"), "a")
         step, seen, ce_acc, cnt_acc, t0 = 0, 0, [0.0] * a.depth, [0] * a.depth, time.time()
+        h_acc, t_step = [0.0] * a.depth, time.time()
         model.train()
         for epoch in range(a.epochs):
             for w in iter_windows(a.data, a.window, stride, seed=a.seed + epoch, device=a.device):
@@ -65,8 +104,10 @@ def train(a) -> dict:
                     continue
                 (loss / a.tokens_per_step).backward()
                 seen += counts[0]
+                h = target_entropy(w, a.depth, lookup)
                 for k in range(a.depth):
                     ce_acc[k] += ce[k]
+                    h_acc[k] += h[k]
                     cnt_acc[k] += counts[k]
                 if seen < a.tokens_per_step:
                     continue
@@ -79,10 +120,15 @@ def train(a) -> dict:
                 opt.zero_grad(set_to_none=True)
                 rec = {"step": step, "epoch": epoch, "lr": lr, "grad_norm": round(gn, 4), "anchors": cnt_acc,
                        "ce": [round(c / n, 5) if n else None for c, n in zip(ce_acc, cnt_acc)],
+                       "kl": [round((c - e) / n, 5) if n else None for c, e, n in zip(ce_acc, h_acc, cnt_acc)],
                        "s": round(time.time() - t0, 1)}
                 log.write(json.dumps(rec) + "\n")
                 log.flush()
-                seen, ce_acc, cnt_acc = 0, [0.0] * a.depth, [0] * a.depth
+                now = time.time()
+                mem = torch.cuda.max_memory_allocated() if torch.device(a.device).type == "cuda" else None
+                last = list(step_samples(rec, labels, weights, a.epochs, cnt_acc[0] / max(now - t_step, 1e-9), mem))
+                publish()
+                seen, ce_acc, h_acc, cnt_acc, t_step = 0, [0.0] * a.depth, [0.0] * a.depth, [0] * a.depth, now
                 if a.max_steps and step >= a.max_steps:
                     break
             if a.max_steps and step >= a.max_steps:
@@ -93,6 +139,7 @@ def train(a) -> dict:
     export(model, names, os.path.join(a.out, "mtp_refit.safetensors"), meta)
     if a.heldout and a.eval_windows:
         res["after"] = evaluate(model, a.heldout, **ev)
+        publish()
     json.dump(res, open(os.path.join(a.out, "eval.json"), "w"), indent=1)
     return res
 
@@ -122,6 +169,7 @@ def main(argv=None):
     ap.add_argument("--experts-impl", help="transformers experts implementation (default eager loop)")
     ap.add_argument("--seed", type=int, default=97)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--metrics-file", help="Prometheus textfile to rewrite per step (off by default)")
     a = ap.parse_args(argv)
     res = train(a)
     print(json.dumps({k: res[k] for k in ("steps",) if k in res}))

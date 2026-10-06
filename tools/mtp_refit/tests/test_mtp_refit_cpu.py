@@ -407,3 +407,62 @@ def test_validate_prompts(tmp_path):
         f.write('{"id": "b9", "categ')
     errs = gen.validate_prompts(str(tmp_path), mix)
     assert any("sha256" in e for e in errs) and any("b:3" in e for e in errs)
+
+
+def _prom(path):
+    out = {}
+    for line in open(path):
+        name, _, v = line.rpartition(" ")
+        out[name] = float(v)
+    return out
+
+
+def test_metrics_files(snap, tmp_path):
+    from tools.mtp_refit import p2_metrics
+
+    d, _ = snap
+    g = torch.Generator().manual_seed(5)
+    docs = _docs(g, [16], [16], [6])
+    _capture_shards(tmp_path / "cap", docs, split_at=None)
+    sha = gen.token_sha1(docs[0]["tokens"].tolist())
+    (tmp_path / "m.jsonl").write_text(json.dumps({"id": "x", "category": "code", "split": "train", "sha1": sha,
+                                                  "response_start": 6, "length": 16}) + "\n")
+    assemble([str(tmp_path / "cap")], str(tmp_path / "m.jsonl"), str(tmp_path / "data"))
+    data, mf = str(tmp_path / "data" / "train"), tmp_path / "train.prom"
+    train_main(["--snapshot", str(d), "--draft-vocab", str(d / "ids.txt.gz"), "--data", data, "--heldout", data,
+                "--depth", "3", "--topk", "5", "--window", "64", "--epochs", "2", "--tokens-per-step", "4", "--eval-windows", "1",
+                "--device", "cpu", "--out", str(tmp_path / "run1"), "--metrics-file", str(mf)])
+    m = _prom(mf)
+    lab = 'run="run1",phase="train"'
+    assert m[f"mtp_refit_train_step{{{lab}}}"] == 2 and m[f"mtp_refit_train_epoch{{{lab}}}"] == 2
+    rec = [json.loads(x) for x in open(tmp_path / "run1" / "train.jsonl")][-1]
+    for k in range(3):
+        kl = m[f'mtp_refit_train_kl{{{lab},position="{k + 1}"}}']
+        assert kl >= -1e-4 and kl < m[f'mtp_refit_train_ce{{{lab},position="{k + 1}"}}']
+        assert abs(kl - rec["kl"][k]) < 1e-4
+    for when in ("before", "after"):
+        assert 0 <= m[f'mtp_refit_acceptance{{{lab},drafter="{when}",category="all",mode="t1",kind="per_position",'
+                      f'position="1"}}'] <= 1
+    assert not list(tmp_path.glob("*.tmp.*"))
+
+    # phase 2 sidecar on a fake job layout: partial last line ignored, results picked up
+    res, dd = tmp_path / "res", tmp_path / "p2"
+    for sub in ("prompts", "gen", "capture/shards", "capture/main"):
+        (dd / sub).mkdir(parents=True)
+    res.mkdir()
+    (dd / "prompts" / "code.jsonl").write_text("{}\n{}\n{}\n")
+    (dd / "gen" / "code.jsonl").write_text(json.dumps({"output_token_ids": [1, 2, 3]}) + "\n" + '{"output_tok')
+    (dd / "capture" / "shards" / "s0.safetensors").write_bytes(b"x" * 10)
+    (dd / "capture" / "main" / "manifest.jsonl").write_text("{}\n")
+    (tmp_path / "STATE").write_text("DONE: parity drafts=PASS live: t0=PASS t1=FAIL (x)\n")
+    json.dump(json.load(open(tmp_path / "run1" / "eval.json"))["after"], open(res / "eval-baseline.json", "w"))
+    out = tmp_path / "p2.prom"
+    p2_metrics.main(["--state", str(tmp_path / "STATE"), "--res", str(res), "--data", str(dd), "--out", str(out)])
+    m = _prom(out)
+    lab = 'run="res",phase="p2"'
+    assert m[f'mtp_refit_p2_response_tokens{{{lab},set="main"}}'] == 3
+    assert m[f'mtp_refit_p2_generated_docs{{{lab},set="main"}}'] == 1
+    assert m[f"mtp_refit_p2_prompts_total{{{lab}}}"] == 3 and m[f"mtp_refit_p2_capture_bytes{{{lab}}}"] == 10
+    assert m[f'mtp_refit_p2_captured_docs{{{lab},set="main"}}'] == 1 and m[f"mtp_refit_p2_done{{{lab}}}"] == 1
+    assert m[f'mtp_refit_parity_pass{{{lab},check="live_t1"}}'] == 0
+    assert any(k.startswith('mtp_refit_acceptance{run="res",phase="p2",drafter="shipped"') for k in m)
