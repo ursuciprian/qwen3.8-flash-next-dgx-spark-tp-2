@@ -12,7 +12,8 @@ without gaps. Output: data/{train,heldout}/part-%05d.safetensors with
     topk_logprobs [N, K] fp16, loss_mask [N] uint8 (1 = generated token), doc_offsets [D+1] int64
 
 and metadata "docs" = JSON list of {id, category, sha1, length, drafts}; drafts is the vLLM drafter's
-greedy chain [sampled token, d0, d1, ...] from the last row, when the hook recorded it (parity.py).
+greedy chain [sampled token, d0, d1, ...] from the last row, when the hook recorded it (parity.py), and
+draft_topk = per draft step [top-20 ids, their served logits] when the hook recorded those.
 """
 from __future__ import annotations
 
@@ -73,9 +74,10 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
                 key = (os.path.dirname(p), r["id"])  # request ids are unique per server run (= dir)
                 start = max(0, r["prefill_len"] - int(md.get("tail", r["prefill_len"])))
                 info = reqs.setdefault(key, {"sha1": None, "prefill_len": r["prefill_len"], "drafts": None,
-                                             "start": start})
+                                             "draft_topk": None, "start": start})
                 info["sha1"] = r["sha1"] or info["sha1"]
                 info["drafts"] = r.get("drafts") or info["drafts"]
+                info["draft_topk"] = r.get("draft_topk") or info["draft_topk"]
     writers = {s: PartWriter(os.path.join(out, s), hc) for s in ("train", "heldout")}
     pending: dict[tuple[str, str], list[dict]] = {}
     seen = {i["sha1"] for i in reqs.values()}
@@ -100,7 +102,8 @@ def assemble(capture_dirs: list[str], manifest: str, out: str, hc: int = 4) -> d
             doc = _stitch(pieces)
             doc["loss_mask"] = (doc["positions"] >= m["response_start"]).to(torch.uint8)
             writers[m.get("split", "train")].add(doc, {"id": m["id"], "category": m["category"], "sha1": info["sha1"],
-                                                       "length": m["length"], "drafts": info["drafts"]})
+                                                       "length": m["length"], "drafts": info["drafts"],
+                                                       **({"draft_topk": info["draft_topk"]} if info["draft_topk"] else {})})
             stats["docs"] += 1
             stats["rows"] += doc["tokens"].shape[0]
     stats["incomplete"] = len(pending)

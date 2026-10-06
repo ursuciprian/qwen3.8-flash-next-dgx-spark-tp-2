@@ -6,9 +6,21 @@
 
 drafts: for captured documents short enough to be stored whole and attended densely (<= --max-len
 rows, starting at position 0), MtpRef runs the vLLM drafter's own greedy chain recorded by the
-capture hook (input tokens: the sampled token, then the drafter's earlier drafts) from the last row
-and its argmax must equal vLLM's draft at every depth. Pass: agreement >= --min-agree at each depth.
-This compares argmaxes, not logits: vLLM does not expose draft logits outside its CUDA graphs.
+capture hook (input tokens: the sampled token, then the drafter's earlier drafts) from the last row.
+With the served per-step top-20 logits (hook draft_topk, vLLM cbee9971), the design 5.1 criterion,
+fixed before the served logits were looked at (2026-10-06):
+  - logits: mean over documents of ||ref - served|| / ||served|| over the served top-20 ids < 1e-2
+    at every depth;
+  - argmax: ref argmax == served top-1 on >= 0.995 of the decisive anchors at every depth, where an
+    anchor is decisive when the served top-1 - top-2 margin exceeds delta, the numerical noise floor
+    of the reference itself (`parity noise`: delta = 2 x the 99.5th percentile of |logit difference|
+    of the same token between two MtpRef runs on different devices; a margin below 2x the per-logit
+    noise can flip between two exact implementations);
+  - decisive anchors >= 0.9 of all at every depth (else the argmax check vouches for too little).
+Without draft_topk (older captures) the plain argmax agreement >= --min-agree is the criterion.
+--dump writes the reference logit of vLLM's draft per document and depth (input to `parity noise`).
+
+noise: delta from two --dump files of the same documents (e.g. GPU and CPU).
 
 live: offline per-position acceptance against the live per-position counters of the generation run
 that produced the same documents (gen.py run --metrics). The offline side is eval_offline's "replay"
@@ -27,13 +39,20 @@ import re
 import torch
 
 from .assemble import iter_windows
-from .mtp_ref import load_mtp_ref
+from .mtp_ref import full_to_draft, load_mtp_ref, serve_hc_mxfp8
+
+LOGIT_REL_ERR_MAX, ARGMAX_MIN, DECISIVE_MIN = 1e-2, 0.995, 0.9
 
 
 @torch.no_grad()
 def drafts(a):
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, experts_impl=a.experts_impl).eval()
     model.kv_fp8 = getattr(a, "kv_fp8", "on") == "on"
+    if getattr(a, "hc_mxfp8", "off") == "on":
+        serve_hc_mxfp8(model)
+    delta = json.load(open(a.noise))["delta"] if getattr(a, "noise", None) else None
+    lookup = full_to_draft(model.draft_ids, model.cfg.vocab_size)
+    rel, dec, dec_hit, dump, with_topk = None, None, None, {}, 0
     hit, n, docs = None, None, 0
     for d in a.data:
         for w in iter_windows(d, a.max_len, device=a.device):
@@ -45,16 +64,33 @@ def drafts(a):
             D = len(chain) - 1
             hit = hit or [0] * D
             n = n or [0] * D
+            rel, dec, dec_hit = rel or [[] for _ in range(D)], dec or [0] * D, dec_hit or [0] * D
+            topk = m.get("draft_topk")
+            with_topk += topk is not None
             ext = torch.tensor(chain[:D], dtype=w["tokens"].dtype, device=a.device)
             tokens = torch.cat([w["tokens"], ext])
             hidden = torch.cat([w["hidden"], w["hidden"].new_zeros(D, w["hidden"].shape[1])])
             pos = torch.arange(L + D, device=a.device)
             with torch.autocast(torch.device(a.device).type, dtype=torch.bfloat16):
                 samples = model.unroll(tokens, hidden, pos, D)
+            dump[m["id"]] = []
             for k in range(min(D, len(hit))):
-                got = int(model.draft_ids[model.logits(samples[k][L - 1 : L]).argmax(-1)])
+                lg = model.logits(samples[k][L - 1 : L])[0]
+                got = int(model.draft_ids[lg.argmax(-1)])
                 hit[k] += got == chain[k + 1]
                 n[k] += 1
+                j = int(lookup[chain[k + 1]])
+                dump[m["id"]].append(float(lg[j]) if j >= 0 else None)
+                if topk is not None and delta is not None:
+                    ids = torch.tensor(topk[0][k], device=lg.device)
+                    vals = torch.tensor(topk[1][k], device=lg.device)
+                    keep = ids < lookup.numel()
+                    keep[keep.clone()] = lookup[ids[keep]] >= 0
+                    ref, srv = lg[lookup[ids[keep]]], vals[keep]
+                    rel[k].append(float((ref - srv).norm() / srv.norm()))
+                    if float(vals[0] - vals[1]) > delta:
+                        dec[k] += 1
+                        dec_hit[k] += got == int(ids[0])
             docs += 1
             if docs >= a.max_docs:
                 break
@@ -63,9 +99,39 @@ def drafts(a):
     agree = [round(h / c, 4) for h, c in zip(hit or [], n or [])]
     ok = bool(agree) and min(agree) >= a.min_agree
     res = {"docs": docs, "per_depth_agree": agree, "min_agree": a.min_agree, "pass": ok}
+    if delta is not None and docs and with_topk == docs:
+        err = [round(sum(r) / len(r), 5) for r in rel]
+        frac = [round(d / c, 4) for d, c in zip(dec, n)]
+        dagree = [round(h / d, 4) if d else None for h, d in zip(dec_hit, dec)]
+        ok = (all(e < LOGIT_REL_ERR_MAX for e in err) and all(f >= DECISIVE_MIN for f in frac)
+              and all(x is not None and x >= ARGMAX_MIN for x in dagree))
+        res = {"docs": docs, "logit_rel_err": err, "logit_rel_err_max": LOGIT_REL_ERR_MAX, "delta": delta,
+               "decisive_frac": frac, "decisive_agree": dagree, "argmax_min": ARGMAX_MIN,
+               "decisive_min": DECISIVE_MIN, "per_depth_agree_all": agree, "pass": ok}
+    elif delta is not None:
+        res["note"] = f"draft_topk on {with_topk} of {docs} documents: logit criterion not applicable"
+        ok = res["pass"] = False
+    if getattr(a, "dump", None):
+        json.dump(dump, open(a.dump, "w"))
     json.dump(res, open(a.out, "w"), indent=1)
     print(json.dumps(res))
     return 0 if ok else 1
+
+
+def noise(a):
+    """delta = 2 x q99.5 of |logit_a - logit_b| of the same token over documents and depths."""
+    x, y = json.load(open(a.a)), json.load(open(a.b))
+    d = sorted(abs(p - q) for k in x.keys() & y.keys() for p, q in zip(x[k], y[k]) if p is not None and q is not None)
+    if not d:
+        raise SystemExit("no common documents")
+    q = d[min(len(d) - 1, int(0.995 * len(d)))]
+    res = {"delta": round(2 * q, 4), "q995_abs_logit_diff": q, "samples": len(d), "median": d[len(d) // 2],
+           "max": d[-1], "a": a.a, "b": a.b,
+           "derivation": "a top-1/top-2 margin can flip between two exact implementations only if it is below the "
+                         "sum of their per-logit errors; 2 x the 99.5th percentile of the per-logit difference"}
+    json.dump(res, open(a.out, "w"), indent=1)
+    print(json.dumps(res))
+    return 0
 
 
 def live_rates(metrics_dir):
@@ -116,6 +182,9 @@ def main():
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--experts-impl")
     p.add_argument("--kv-fp8", choices=["on", "off"], default="on", help="as eval_offline / train")
+    p.add_argument("--hc-mxfp8", choices=["on", "off"], default="off", help="as eval_offline")
+    p.add_argument("--noise", help="parity noise JSON (delta): enables the logit criterion")
+    p.add_argument("--dump", help="write {doc id: [reference logit of vLLM's draft per depth]}")
     p.add_argument("--out", required=True)
     q = sub.add_parser("live")
     q.add_argument("--offline", required=True, help="eval_offline.py JSON of the same documents")
@@ -123,8 +192,12 @@ def main():
     q.add_argument("--metrics", required=True, help="gen.py run --metrics output dir")
     q.add_argument("--tol", type=float, default=0.01)
     q.add_argument("--out", required=True)
+    z = sub.add_parser("noise")
+    z.add_argument("--a", required=True)
+    z.add_argument("--b", required=True)
+    z.add_argument("--out", required=True)
     a = ap.parse_args()
-    raise SystemExit({"drafts": drafts, "live": live}[a.cmd](a))
+    raise SystemExit({"drafts": drafts, "live": live, "noise": noise}[a.cmd](a))
 
 
 if __name__ == "__main__":

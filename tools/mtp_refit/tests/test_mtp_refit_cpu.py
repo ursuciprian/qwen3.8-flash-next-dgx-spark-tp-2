@@ -212,6 +212,8 @@ def _capture_shards(tmp, docs, split_at):
                 reqs[-1]["sha1"] = gen.token_sha1(doc["tokens"].tolist())
                 if "drafts" in doc:
                     reqs[-1]["drafts"] = doc["drafts"]
+                if "draft_topk" in doc:
+                    reqs[-1]["draft_topk"] = doc["draft_topk"]
             rows["hidden"].append(doc["hidden"][p : p + 1])
             rows["tokens"].append(doc["tokens"][p : p + 1].int())
             rows["positions"].append(torch.tensor([p], dtype=torch.int32))
@@ -543,3 +545,69 @@ def test_capture_cut_records():
     c = int(r["id"].split("#cut")[1])
     assert 1 <= c <= 30 and r["output_token_ids"] == list(range(c)) and r["split"] == "heldout"
     assert cut_records(recs, 40, 0) == out  # seeded
+
+
+def test_parity_logit_criterion_and_noise(snap, tmp_path):
+    d, _ = snap
+    m = load_mtp_ref(str(d), str(d / "ids.txt.gz"))
+    g = torch.Generator().manual_seed(5)
+    (doc,) = _docs(g, [10], [10], [4])
+    L, D = 10, 3
+    chain, served = [int(m.draft_ids[7])], [[], []]
+    for k in range(D):
+        ext = torch.tensor(chain + [0] * (D - len(chain)))
+        with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+            sm = m.unroll(torch.cat([doc["tokens"], ext]), torch.cat([doc["hidden"], torch.zeros(D, S * H).bfloat16()]),
+                          torch.arange(L + D), D)
+        lg = m.logits(sm[k][L - 1 : L])[0]
+        v, i = lg.topk(20)
+        served[0].append(m.draft_ids[i].tolist())
+        served[1].append(v.tolist())
+        chain.append(int(m.draft_ids[i[0]]))
+    args = dict(snapshot=str(d), draft_vocab=str(d / "ids.txt.gz"), device="cpu", experts_impl=None, max_len=64,
+                max_docs=10, min_agree=0.995, kv_fp8="on", hc_mxfp8="off")
+    (tmp_path / "m.jsonl").write_text(json.dumps({"id": "x", "category": "code", "split": "heldout", "length": L,
+                                                  "sha1": gen.token_sha1(doc["tokens"].tolist()), "response_start": 4}) + "\n")
+    json.dump({"delta": 1e-3}, open(tmp_path / "noise.json", "w"))
+
+    def run(topk, name):
+        doc["drafts"], doc["draft_topk"] = chain, topk
+        _capture_shards(tmp_path / name, [doc], split_at=None)
+        assemble([str(tmp_path / name)], str(tmp_path / "m.jsonl"), str(tmp_path / f"data-{name}"))
+        a = type("A", (), dict(args, data=[str(tmp_path / f"data-{name}" / "heldout")], noise=str(tmp_path / "noise.json"),
+                               dump=str(tmp_path / f"dump-{name}.json"), out=str(tmp_path / f"p-{name}.json")))()
+        return parity.drafts(a), json.load(open(a.out))
+
+    rc, res = run(served, "same")  # the served logits are the reference's own: error ~0, every anchor decisive
+    assert rc == 0 and max(res["logit_rel_err"]) < 1e-3 and res["decisive_agree"] == [1.0] * D
+    off = [served[0], [[x * 1.05 for x in row] for row in served[1]]]
+    rc, res = run(off, "off")  # 5% logit error fails the 1e-2 bound even though every argmax agrees
+    assert rc == 1 and min(res["logit_rel_err"]) > 1e-2 and res["decisive_agree"] == [1.0] * D
+    dump = json.load(open(tmp_path / "dump-same.json"))
+    other = {k: [x + 0.01 for x in v] for k, v in dump.items()}
+    json.dump(other, open(tmp_path / "dump-b.json", "w"))
+    a = type("A", (), dict(a=str(tmp_path / "dump-same.json"), b=str(tmp_path / "dump-b.json"),
+                           out=str(tmp_path / "noise-out.json")))()
+    assert parity.noise(a) == 0 and abs(json.load(open(a.out))["delta"] - 0.02) < 1e-6
+
+
+def test_mxfp8_round_trip_and_hc():
+    from tools.mtp_refit.mtp_ref import mxfp8_round_trip, serve_hc_mxfp8
+
+    w = torch.randn(8, 64, generator=torch.Generator().manual_seed(3)) * 0.05
+    q = mxfp8_round_trip(w)
+    assert torch.equal(mxfp8_round_trip(q), q)  # values on the grid stay
+    assert float((q - w).norm() / w.norm()) < 2 ** -4 and not torch.equal(q, w)
+    blk = w[0, :32].abs().max()  # e8m0 scale: the block max lands within the e4m3 range without saturating
+    assert float(q[0, :32].abs().max()) <= 448 * 2 ** float(torch.ceil(torch.log2(blk / 448)))
+
+
+def test_serve_hc_mxfp8_touches_only_hc(snap):
+    from tools.mtp_refit.mtp_ref import serve_hc_mxfp8
+
+    d, _ = snap
+    m = load_mtp_ref(str(d), None)
+    before = {n: p.detach().clone() for n, p in m.named_parameters()}
+    assert serve_hc_mxfp8(m) == 5  # down x3 + inject x2 (in 256); up has in = hc_lowrank 8, not a block of 32
+    changed = {n for n, p in m.named_parameters() if not torch.equal(p, before[n])}
+    assert changed and all(any(k in n for k in ("input_mix_weight", "block_inject")) for n in changed)

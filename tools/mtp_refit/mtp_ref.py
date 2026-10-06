@@ -87,6 +87,31 @@ def nvfp4_round_trip(w: torch.Tensor) -> torch.Tensor:
     return (q * s / gs).view(rows, cols)
 
 
+def mxfp8_round_trip(w: torch.Tensor) -> torch.Tensor:
+    """Weight values vLLM serves after online MXFP8 (block 32 along in, e8m0 scale ceil(log2(amax / 448))),
+    as vllm mxfp8_utils._mxfp8_e4m3_quantize_torch; same dtype as w."""
+    o, i = w.shape
+    b = w.float().view(o, i // 32, 32)
+    amax = b.abs().amax(-1, keepdim=True).clamp(min=torch.finfo(torch.float32).tiny)
+    d = torch.exp2((torch.ceil(torch.log2(amax / FP8_MAX)) + 127).clamp(0, 254) - 127)
+    return ((b / d).to(torch.float8_e4m3fn).float() * d).view(o, i).to(w.dtype)
+
+
+HC_LINEARS = ("input_mix_weight_down", "input_mix_weight_up", "block_inject_weight")
+
+
+@torch.no_grad()
+def serve_hc_mxfp8(model) -> int:
+    """In place: the hyper-connection mixer weights as VLLM_QWEN38_HC_MXFP8=hc serves them (eval and parity
+    only; training keeps BF16 masters, which serving quantizes at load). Returns the number of tensors."""
+    n = 0
+    for name, p in model.named_parameters():
+        if any(k in name for k in HC_LINEARS) and p.shape[1] % 32 == 0:  # vLLM leaves other shapes BF16
+            p.copy_(mxfp8_round_trip(p.data))
+            n += 1
+    return n
+
+
 def load_draft_vocab(path: str, vocab_size: int) -> torch.Tensor:
     """Same format as vLLM's load_draft_vocab_ids: one id per line, '#' comments, optional .gz."""
     with (gzip.open if path.endswith(".gz") else open)(path, "rt", encoding="utf-8") as fh:
