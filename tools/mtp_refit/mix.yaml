@@ -1,0 +1,44 @@
+# Prompt mix for the MTP refit (#97, drafter-refit-design.md 4.3), weighted to agentic coding and tool calls.
+# gen.py prompts: pulls each source with `datasets`, converts it (adapter = converter name in gen.py), drops
+# prompts that share a 13-gram with anything under `exclude`, assigns `heldout_fraction` of each category to
+# held-out by a hash of the prompt id, then samples categories to `share` of `total` prompts.
+total: 3000             # prompts; gen.py run --budget-tokens stops at the response-token budget (2M in phase 2)
+heldout_fraction: 0.05
+seed: 97
+max_prompt_tokens: 24000   # gen.py run skips prompts the server renders longer than this
+categories:
+  agentic:        # multi-turn agent coding, tool calls in the qwen3_xml format through the server's template
+    share: 0.40
+    sources:
+      - {dataset: nebius/SWE-agent-trajectories, split: train, adapter: swe_agent}
+  tools:          # single-turn tool calling with native tool definitions
+    share: 0.20
+    sources:
+      - {dataset: Team-ACE/ToolACE, split: train, adapter: toolace}
+  code:
+    share: 0.20
+    sources:
+      - {dataset: nvidia/OpenCodeReasoning, config: split_0, split: split_0, adapter: field, field: input}
+      - {dataset: livecodebench/code_generation_lite, config: release_v6, split: test, adapter: field,
+         field: question_content, trust_remote_code: true}
+  chat:
+    share: 0.10
+    sources:
+      - {dataset: HuggingFaceH4/ultrachat_200k, split: train_sft, adapter: field, field: prompt}
+  math:
+    share: 0.10
+    sources:
+      - {dataset: openai/gsm8k, config: main, split: train, adapter: field, field: question}
+      - {dataset: AI-MO/NuminaMath-CoT, split: train, adapter: field, field: problem}
+# Benchmark and gate prompts never trained on (paths or globs on dgx-01; files or directories: .py string literals,
+# .json/.jsonl/.yaml string values, any other text file whole). A pattern matching nothing is an error.
+exclude:
+  - ~/.local/share/uv/tools/tool-eval-bench/lib/python3*/site-packages/tool_eval_bench   # tool-eval-bench scenarios
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/scripts/hardmode_targeted.sh     # hardmode + TC-45 prompts
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/scripts/_gen_corpus.py           # Thunderdome / llama-benchy corpus
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/corpus-code.txt
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/corpus-prose.txt
+  - ~/GEN-AI/hotel-ab/*.py                                                       # hotel-lights
+  - ~/GEN-AI/hotel-ab/*.sh
+  - ~/GEN-AI/k48/hotel.sh
+  - ~/GEN-AI/llama-benchy/src
