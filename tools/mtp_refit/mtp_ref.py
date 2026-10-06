@@ -14,11 +14,16 @@ VLLM_LM_HEAD_A16=1).
 
 Known gaps, settled by the phase 2 GPU parity test, not here:
 - served HC mixers of the drafter run online MXFP8 (VLLM_QWEN38_HC_MXFP8=hc); trained BF16
-- QSA sparse selection is skipped: windows <= indexer_budget tokens make it dense and exact
-- K/V go through the fp8 e4m3 round trip of the served KV cache (scale 1.0). Phase 2 (#97) did NOT confirm it:
-  the T=0 step replay on the live set gives per position 0.854/0.692/0.550/0.427 with the round trip and
-  0.856/0.724/0.612/0.518 without it (K is what matters, V is neutral), live 0.856/0.710/0.585/0.485 sits in
-  between; the served K precision is unresolved
+- QSA sparse selection: off by default (windows <= indexer_budget tokens make it dense and exact); qsa_select=True
+  applies the indexer's block top-k (transformers Qwen4ExpTextQSAIndexer semantics, vectorized) to the depth-0
+  keys, for eval on whole long documents. Draft-step queries select with their own index query over the same
+  depth-0 blocks; their chain keys are always attended (the served raw ring)
+- K/V: kv_fp8=True rounds K/V to fp8 e4m3 (scale 1.0) as --kv-cache-dtype fp8 serves them (vLLM qsa.py writes
+  K/V with reshape_and_cache_flash before attention; b12x converts fp8 -> BF16 in shared memory, k_scale folded
+  into the score scale). Measured on the p2 live set (T=0 step replay vs live counters, positions 1-4): fp8
+  0.853/0.692/0.551/0.428 vs live fp8 0.856/0.710/0.585/0.485 (served loses less than this emulation, cause
+  unresolved); kv_fp8=False 0.856/0.724/0.612/0.518 vs live with the drafter KV in BF16
+  (speculative_config kv_cache_dtype "auto") 0.848/0.720/0.616/0.521. Train and check against the BF16 drafter KV
 - the frozen head and experts are BF16 copies of fp4 x e4m3 values (~2^-9 extra rounding per weight)
 - draft step k of anchor t runs at position t + k against depth-0 keys at their own positions; RoPE
   only sees relative positions, so a constant offset in vLLM's draft positions would not matter
@@ -117,6 +122,7 @@ class MtpRef(nn.Module):
         self.rotary = None  # built after to_empty (holds computed buffers)
         self.compute_dtype = torch.bfloat16  # the b12x feedback oracle is BF16-only; tests use float64
         self.kv_fp8 = True  # served with --kv-cache-dtype fp8: K/V pass through e4m3 (scale 1.0, no MTP k/v scales)
+        self.qsa_select = False  # eval: QSA block top-k over depth-0 keys (see module docstring)
 
     # -- one draft pass over rows, attention supplied by the caller
     def _qkv(self, x: torch.Tensor, pos: torch.Tensor):
@@ -142,11 +148,48 @@ class MtpRef(nn.Module):
         ).flatten(-2)
         x, hyper, inj = L.attn_hyper_connection(fused)
         q, gate, k, v = self._qkv(x, pos)
-        o = attend(q, k, v).reshape(n, -1)
+        o = (attend(q, k, v, self._index(x, pos)) if self.qsa_select else attend(q, k, v)).reshape(n, -1)
         h = hyper + (L.self_attn.o_proj(o * torch.sigmoid(gate))[:, None] * inj[..., None]).flatten(-2)
         x, hyper, inj = L.mlp_hyper_connection(h)
         h = hyper + (L.mlp(x[None])[0][:, None] * inj[..., None]).flatten(-2)
         return h, self.hyper_connection_mixer(h), k, v
+
+    def _index(self, x: torch.Tensor, pos: torch.Tensor):
+        """Indexer query (normed, RoPE) [n, heads, d] and raw token keys [n, d] for rows x."""
+        ix, c = self.layers[0].self_attn.indexer, self.cfg
+        qk = ix.index_qk_proj(x)
+        q, raw = qk.split([c.indexer_n_heads * c.indexer_head_dim, c.indexer_kv_heads * c.indexer_head_dim], -1)
+        cos, sin = self.rotary(x, pos.view(1, 1, -1).expand(3, 1, -1))
+        q = apply_rotary_pos_emb(ix.q_layernorm(q.view(x.shape[0], -1, c.indexer_head_dim)), None, cos[0], sin[0],
+                                 unsqueeze_dim=1)
+        q = q[0] if isinstance(q, tuple) else q
+        return q, raw, cos[0], sin[0]
+
+    def qsa_mask(self, iq: torch.Tensor, ctx, causal: torch.Tensor) -> torch.Tensor:
+        """causal [n, n] restricted to the QSA selection: per query row i, the top budget/ratio complete
+        blocks of 4 depth-0 keys among rows 0..i by sum_h relu(q_h . k_block) / sqrt(d), plus the incomplete
+        tail block. Dense (= causal) while rows <= budget + ratio - 1."""
+        c = self.cfg
+        n, r = causal.shape[0], c.indexer_compress_ratio
+        if n <= c.indexer_budget + r - 1:
+            return causal
+        _, raw, cos, sin = ctx
+        B = n // r
+        ix = self.layers[0].self_attn.indexer
+        pooled = ix.k_layernorm(raw[: B * r].view(B, r, -1).float().mean(1).to(raw.dtype))
+        starts = torch.arange(B, device=raw.device) * r
+        kb = apply_rotary_pos_emb(pooled[:, None], None, cos[starts], sin[starts], unsqueeze_dim=1)
+        kb = (kb[0] if isinstance(kb, tuple) else kb)[:, 0]
+        score = torch.relu(torch.einsum("nhd,bd->nhb", iq.float(), kb.float())).sum(1) / c.indexer_head_dim ** 0.5
+        rows = torch.arange(n, device=raw.device)
+        nb = (rows + 1) // r  # complete blocks visible to row i
+        valid = torch.arange(B, device=raw.device)[None] < nb[:, None]
+        top = score.masked_fill(~valid, float("-inf")).topk(min(c.indexer_budget // r, B), dim=-1).indices
+        sel = torch.zeros(n, B, dtype=torch.bool, device=raw.device).scatter_(1, top, True) & valid
+        cols = torch.arange(n, device=raw.device)
+        blk = sel[:, (cols // r).clamp(max=B - 1)] & (cols[None] < (nb * r)[:, None])
+        tail = cols[None] >= (nb * r)[:, None]
+        return causal & (blk | tail)
 
     def logits(self, sample: torch.Tensor) -> torch.Tensor:
         return F.linear(sample.to(self.head.dtype), self.head).float()
@@ -162,12 +205,16 @@ class MtpRef(nn.Module):
         n = tokens.shape[0]
         shifted = torch.cat([tokens[1:], tokens.new_zeros(depth)])
         causal = torch.ones(n, n, dtype=torch.bool, device=tokens.device).tril()
-        ctx, chain, out, state = None, [], [], hidden
+        ctx, chain, out, state, ictx = None, [], [], hidden, None
         for k in range(depth):
-            def attend(q, kk, vv, k=k):
+            def attend(q, kk, vv, ix=None, k=k):
+                nonlocal ictx
+                if ix is not None and k == 0:
+                    ictx = ix
+                mask = causal if ix is None else self.qsa_mask(ix[0], ictx, causal)
                 if k == 0:
-                    return _attention(q, kk, vv, causal, [])
-                return _attention(q, ctx[0], ctx[1], causal, chain + [(kk, vv)])
+                    return _attention(q, kk, vv, mask, [])
+                return _attention(q, ctx[0], ctx[1], mask, chain + [(kk, vv)])
             state, sample, kk, vv = self.block(shifted[k : k + n], state, pos + k, attend)
             if k == 0:
                 ctx = (kk, vv)

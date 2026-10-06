@@ -491,3 +491,55 @@ def test_replay_counts_steps_not_anchors():
     # 0 -> 1 (rejected, p .5: accepts depth 0) or 2 (accepted 1, p .5: accepts none) -> 3 ends
     assert steps == 2.0 and hits == [1.0, 0.0]
     assert replay(torch.zeros(2, 3), 5) == (0.0, [0.0] * 3)
+
+
+def test_qsa_mask_matches_transformers_indexer(snap):
+    d, _ = snap
+    m = load_mtp_ref(str(d), None).float()
+    g = torch.Generator().manual_seed(7)
+    n = 150  # budget 64 = 16 blocks of 4: rows past 66 select
+    ix_mod = m.layers[0].self_attn.indexer
+    with torch.no_grad():  # positive q.k, so relu never ties blocks at 0 and the top-k order is unique
+        ix_mod.index_qk_proj.weight.abs_()
+        ix_mod.q_layernorm.weight.fill_(1.0)
+        ix_mod.k_layernorm.weight.fill_(1.0)
+    x = torch.randn(n, H, generator=g).abs()
+    pos = torch.arange(n)
+    causal = torch.ones(n, n, dtype=torch.bool).tril()
+    with torch.no_grad():
+        ix = m._index(x, pos)
+        got = m.qsa_mask(ix[0], ix, causal)
+        cos, sin = m.rotary(x, pos.view(1, 1, -1).expand(3, 1, -1))
+        ref = m.layers[0].self_attn.indexer(x[None], (cos, sin), causal[None, None], None)[0, 0] & causal
+    assert torch.equal(got, ref)
+    assert torch.equal(got[:67], causal[:67]) and not torch.equal(got, causal)
+    assert int(got[-1].sum()) == 64 + (n % 4)  # 16 blocks + the incomplete tail
+    tokens = torch.randint(0, V, (40,), generator=g)
+    hidden = torch.randn(40, S * H, generator=g)
+    m = load_mtp_ref(str(d), None)
+    with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+        off = m.unroll(tokens, hidden, torch.arange(40), 3)
+        m.qsa_select = True
+        on = m.unroll(tokens, hidden, torch.arange(40), 3)
+    assert all(torch.equal(a, b) for a, b in zip(off, on))  # short window: dense = selection
+    tokens = torch.randint(0, V, (100,), generator=g)
+    hidden = torch.randn(100, S * H, generator=g)
+    with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+        on = m.unroll(tokens, hidden, torch.arange(100), 3)
+        m.qsa_select = False
+        off = m.unroll(tokens, hidden, torch.arange(100), 3)
+    assert all(torch.equal(a[:67], b[:67]) for a, b in zip(off, on)) and not torch.equal(off[2][-1], on[2][-1])
+
+
+def test_capture_cut_records():
+    from tools.mtp_refit.capture_client import cut_records
+
+    recs = [{"id": "a", "split": "train", "prompt_token_ids": [1] * 10, "output_token_ids": list(range(50))},
+            {"id": "b", "split": "train", "prompt_token_ids": [1] * 100, "output_token_ids": list(range(5))},
+            {"id": "c", "split": "train", "prompt_token_ids": [1] * 10, "output_token_ids": [7]}]
+    out = cut_records(recs, 40, 0)
+    assert [r["id"].split("#")[0] for r in out] == ["a"]  # b: prompt too long, c: nothing to cut
+    r = out[0]
+    c = int(r["id"].split("#cut")[1])
+    assert 1 <= c <= 30 and r["output_token_ids"] == list(range(c)) and r["split"] == "heldout"
+    assert cut_records(recs, 40, 0) == out  # seeded

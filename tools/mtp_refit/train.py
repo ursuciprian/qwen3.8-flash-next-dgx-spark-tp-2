@@ -66,6 +66,7 @@ def step_samples(rec, labels, weights, epochs, anchors_per_s, gpu_mem):
 def train(a) -> dict:
     torch.manual_seed(a.seed)
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, a.trainable, a.experts_impl)
+    model.kv_fp8 = getattr(a, "kv_fp8", "on") == "on"
     names = trainable_names(model, a.trainable)
     params = [p for n, p in model.named_parameters() if n in set(names)]
     print(f"trainable: {len(names)} tensors, {sum(p.numel() for p in params) / 1e6:.1f}M params")
@@ -172,6 +173,8 @@ def main(argv=None):
     ap.add_argument("--eval-windows", type=int, default=200, help="held-out windows per eval (0 = skip)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--experts-impl", help="transformers experts implementation (default eager loop)")
+    ap.add_argument("--kv-fp8", choices=["on", "off"], default="on",
+                    help="fp8 round trip of the drafter K/V: on = served --kv-cache-dtype fp8, off = drafter KV in BF16")
     ap.add_argument("--seed", type=int, default=97)
     ap.add_argument("--out", required=True)
     ap.add_argument("--metrics-file", help="Prometheus textfile to rewrite per step (off by default)")

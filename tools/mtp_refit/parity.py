@@ -33,6 +33,7 @@ from .mtp_ref import load_mtp_ref
 @torch.no_grad()
 def drafts(a):
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, experts_impl=a.experts_impl).eval()
+    model.kv_fp8 = getattr(a, "kv_fp8", "on") == "on"
     hit, n, docs = None, None, 0
     for d in a.data:
         for w in iter_windows(d, a.max_len, device=a.device):
@@ -114,6 +115,7 @@ def main():
     p.add_argument("--min-agree", type=float, default=0.995)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--experts-impl")
+    p.add_argument("--kv-fp8", choices=["on", "off"], default="on", help="as eval_offline / train")
     p.add_argument("--out", required=True)
     q = sub.add_parser("live")
     q.add_argument("--offline", required=True, help="eval_offline.py JSON of the same documents")

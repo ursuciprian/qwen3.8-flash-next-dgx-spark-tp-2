@@ -154,10 +154,13 @@ def main():
     ap.add_argument("--max-windows", type=int)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--experts-impl")
+    ap.add_argument("--kv-fp8", choices=["on", "off"], default="on", help="fp8 e4m3 round trip of K/V (served cache)")
+    ap.add_argument("--qsa-select", action="store_true", help="QSA block top-k over depth-0 keys (long documents)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--metrics-file", help="Prometheus textfile for the result (off by default); run label = --out stem")
     a = ap.parse_args()
     model = load_mtp_ref(a.snapshot, a.draft_vocab, a.device, experts_impl=a.experts_impl)
+    model.kv_fp8, model.qsa_select = a.kv_fp8 == "on", a.qsa_select
     if a.refit:
         print(f"overlay: {load_refit(model, a.refit)} tensors from {a.refit}")
     res = evaluate(model, a.data, a.depth, a.window, a.window_stride or a.window // 2, a.max_windows, a.device)
