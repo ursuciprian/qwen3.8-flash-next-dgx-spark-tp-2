@@ -18,7 +18,7 @@ import time
 
 from . import prom
 
-SETS = {"main": "gen", "live-t0": "gen-live-t0", "live-t1": "gen-live-t1"}
+SETS = {"main": "gen", "live-t0": "gen-live-t0", "live-t1": "gen-live-t1", "dgx02": "gen-dgx02"}
 
 
 class Tail:
