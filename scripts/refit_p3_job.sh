@@ -2,8 +2,10 @@
 # refit-p3 (2026-10-06, #97 phase 3): first training run of the MTP drafter refit on dgx-01 (TP=1, GPU), offline eval
 # against the shipped drafter, stop rule, and (only on a gain) a staged, not started, Thunderdome arm k56 vs shipped v3d.
 # The shipped 2x is stopped for the run and restored at the end (also on failure). Design: drafter-refit-design.md.
-#   0. preflight  refit-p2 ended DONE with parity drafts/live t0/live t1 all PASS (else STATE "skipped: parity ...",
-#                 nothing touched); training image (refit-p2's mtpcap image), tools = this branch (refit-p3/src)
+#   0. preflight  refit-p2 ended DONE with parity drafts/live t0/live t1 all PASS, or REFIT_USER_ACCEPTED=coverage-<date>
+#                 (user decision, 2026-10-07 18:55) and `parity gate --accepted` PASSes on the chain-K/V-fixed re-score
+#                 in $P/rescore-20261007 (waives the decisive fraction only); else STATE "skipped: parity ...", nothing
+#                 touched. Training image (refit-p2's mtpcap image), tools = this branch (refit-p3/src)
 #   1. assemble   only if refit-p2 left no data/{train,heldout} parts (same command as p2; 5% held-out by prompt hash
 #                 comes from the prompt split field)
 #   2. warm-up    train.py --max-steps $WARM_STEPS, no metrics: anchors/s from train.jsonl (steps 2..N)
@@ -13,12 +15,15 @@
 #                 steps need (1 or 2). Checkpoint every ~1/6 of the run (ckpt-step*.safetensors). Metrics:
 #                 /var/lib/node_exporter/textfile_collector/mtp_refit_train.prom (dashboard "MTP drafter refit").
 #   4. eval       eval_offline.py on held-out, refit run1 (depth 6, window 2048, stride 1024: the p2 baseline's args),
-#                 T=0 and T=1 per position + tokens/step; shipped = refit-p2's eval-baseline.json (same tool, data and
-#                 args; rerun here only if missing). Metrics: mtp_refit_eval_{refit,shipped}.prom.
+#                 T=0 and T=1 per position + tokens/step; shipped = re-evaluated before training (step 1b) with the same
+#                 tool, data and args (refit-p2's eval-baseline.json predates the chain-K/V fix and used BF16 K/V).
+#                 Metrics: mtp_refit_eval_{refit,shipped}.prom.
 #   5. stop rule  mean over positions 1-6 of (refit - shipped) per-position acceptance at T=0, category "all":
 #                 < +0.02 -> "DONE: gain below threshold"; >= +0.02 -> splice f4..61 on both Sparks, b12x seed
 #                 re-keyed to the f4..61 path (k48/remap_seed.py), image k56 on both Sparks, arm dirs k56/refit-01
-#                 (dgx-01) + k56/refit-02 (dgx-02), thunderdome --dry-run, k56/READY. Never starts k56.
+#                 (dgx-01) + k56/refit-02 (dgx-02), shipped fp8 drafter KV (recipe = v3d + model/container/cache root),
+#                 thunderdome --dry-run, k56/READY, then queues k56/start.sh (TD_ACC_RISE_OK=1, gate on PROMOTE) on the
+#                 gpu-lock right after this job (user approval, 2026-10-07).
 #   6. restore    the shipped 2x, pong
 # Never takes the gpu-lock: the caller holds it (GPU_LOCK_HELD=1; after_p2.sh does that once refit-p2 is over).
 # Usage:  flock -o ~/GEN-AI/gpu-lock env GPU_LOCK_HELD=1 bash ~/GEN-AI/refit-p3/job.sh   (after_p2.sh does this)
@@ -45,8 +50,13 @@ TEXTFILE=/var/lib/node_exporter/textfile_collector
 TRAIN_S=${TRAIN_S:-5400}; WARM_STEPS=${WARM_STEPS:-5}; TPS=8192; MAX_EPOCHS=2; GAIN_MIN=0.02
 PARITY_RE='^DONE: parity drafts=PASS live: t0=PASS t1=PASS'
 COMMON=(--snapshot "$SN" --draft-vocab $VOCAB --data "$CD/data/train" --trainable dense --depth 6 --depth-weights equal
-        --loss kl --topk 20 --window 2048 --lr 2e-5 --warmup 20 --tokens-per-step $TPS --eval-windows 0)
-EVARGS=(--snapshot "$SN" --draft-vocab $VOCAB --data "$CD/data/heldout" --depth 6)
+        --loss kl --topk 20 --window 2048 --lr 2e-5 --warmup 20 --tokens-per-step $TPS --eval-windows 0 --kv-fp8 on)
+EVARGS=(--snapshot "$SN" --draft-vocab $VOCAB --data "$CD/data/heldout" --depth 6 --kv-fp8 on --hc-mxfp8 on)
+# 2026-10-07: train and eval the SHIPPED v3d serving format: fp8 e4m3 drafter K/V at scale 1.0 (--kv-fp8 on), draft
+# steps attend the prefill keys only (MtpRef chain_kv=False, the default since a73c0bd), HC MXFP8 on for eval. The BF16
+# drafter KV (k65) did not ship; k56 keeps v3d's fp8 drafter KV. The earlier fp8 replay gap was the chain-key bug.
+ACCEPT=${REFIT_USER_ACCEPTED:-}; ACCEPT_WHY="user accepted in chat 2026-10-07 18:55"
+RESCORE=$P/rescore-20261007   # parity-drafts.json, live-t0.json, live-t1.json of the chain-K/V-fixed MtpRef (#97)
 
 pyrun() { # python3 args... in IMG with the GPU (or CPU with PYDEV=cpu), tools = $P/src, textfile dir at /metrics
   docker rm -f refit-p3-py >/dev/null 2>&1
@@ -99,6 +109,10 @@ if [ "${1:-}" = --dry-run ]; then
   PYDEV=cpu pyrun -m tools.mtp_refit.train --help | grep -q -- --save-every && PYDEV=cpu pyrun -m tools.mtp_refit.eval_offline --help \
     | grep -q -- --metrics-file || { echo "train/eval CLI in the image lacks --save-every/--metrics-file"; rc=1; }
   echo "refit-p2 STATE: $(head -1 "$P2/STATE")"
+  if [ -n "$ACCEPT" ]; then echo "parity gate (REFIT_USER_ACCEPTED=$ACCEPT): $(PYDEV=cpu pyrun -m tools.mtp_refit.parity gate \
+    --drafts /work/rescore-20261007/parity-drafts.json --live /work/rescore-20261007/live-t0.json /work/rescore-20261007/live-t1.json \
+    --accepted "$ACCEPT" 2>&1 | tail -1)"; fi
+  grep -q -- '--kv-fp8 on' <<< "${COMMON[*]}" && grep -q -- '--kv-fp8 on --hc-mxfp8 on' <<< "${EVARGS[*]}" || { echo "train/eval not fp8 drafter KV + HC MXFP8"; rc=1; }
   ls "$D"/data/train/part-*.safetensors >/dev/null 2>&1 && echo "data: train $(anchors "$D/data/train") / heldout $(anchors "$D/data/heldout") (anchors docs)" \
     || echo "data: not assembled yet (refit-p2 checks step does it)"
   echo "estimate: stop 2x ~2 min, warm-up ~10 min, train ${TRAIN_S}s, eval ~= p2 baseline eval, stage k56 ~20 min if gain, restore ~10 min"
@@ -107,11 +121,19 @@ if [ "${1:-}" = --dry-run ]; then
 
 mkdir -p "$RES" "$P/runs"
 log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" | tee -a "$RES/refit-p3.log"; }
-st() { echo "$*" > "$P/STATE"; echo "$*" > "$RES/STATE"; log "STATE: $*"; }
+NOTE=
+st() { { echo "$*"; [ -n "$NOTE" ] && echo "$NOTE"; } > "$P/STATE"; cp "$P/STATE" "$RES/STATE"; log "STATE: $*"; }
 REP=$RES/refit-p3.txt
 # refit-p2 gate, again under the lock (after_p2.sh checked it before waiting)
 s2=$(head -1 "$P2/STATE" 2>/dev/null)
-echo "$s2" | grep -qE "$PARITY_RE" || { st "skipped: parity not all PASS (refit-p2: $s2); nothing run"; exit 0; }
+if ! echo "$s2" | grep -qE "$PARITY_RE"; then
+  [ -n "$ACCEPT" ] || { st "skipped: parity not all PASS (refit-p2: $s2); nothing run"; exit 0; }
+  GV=$(PYDEV=cpu pyrun -m tools.mtp_refit.parity gate --drafts /work/rescore-20261007/parity-drafts.json \
+       --live /work/rescore-20261007/live-t0.json /work/rescore-20261007/live-t1.json --accepted "$ACCEPT" 2>&1 | tail -1)
+  log "parity gate with REFIT_USER_ACCEPTED=$ACCEPT ($ACCEPT_WHY), re-score $RESCORE: $GV"
+  echo "$GV" | grep -q '^PASS' || { st "skipped: parity gate FAIL under REFIT_USER_ACCEPTED=$ACCEPT: $GV; nothing run"; exit 0; }
+  NOTE="override: REFIT_USER_ACCEPTED=$ACCEPT skips only the drafts decisive-fraction criterion ($ACCEPT_WHY); re-score $RESCORE: $GV"
+  st "running: p3 gate (override)"; fi
 
 health() { curl -s -m 5 -o /dev/null -w '%{http_code}' "$1:8000/health"; }
 pong() { curl -s -m 120 "$1:8000/v1/chat/completions" -H 'Content-Type: application/json' -d '{"model":"qwen3.8-flash-next","messages":[{"role":"user","content":"Reply with exactly one word: pong"}],"max_tokens":400,"temperature":0,"chat_template_kwargs":{"enable_thinking":false}}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["choices"][0]["message"]["content"].strip())' 2>&1; }
@@ -141,8 +163,14 @@ CH=; FINAL="FAILED: job"
 trap 'kill $GU 2>/dev/null; restore || { sleep 60; restore; } || FINAL="FAILED: restore -- $FINAL"; st "$FINAL"' EXIT
 trap 'log "signal: stopping child $CH"; [ -n "$CH" ] && kill -TERM $CH 2>/dev/null && wait $CH; docker rm -f refit-p3-py >/dev/null 2>&1; FINAL="FAILED: stopped by signal"; exit 143' TERM INT HUP
 log "refit-p3 pid $$, RES $RES, data $D, image $IMG, tools $(cat "$P/src/COMMIT" 2>/dev/null), 2x tag for restore: $E"
-echo "refit-p3 $(TZ=Europe/Bucharest date '+%F %T %Z'): #97 phase 3 run1, tools $(cat "$P/src/COMMIT" 2>/dev/null), image $IMG; refit-p2: $s2" > "$REP"
+if [ "${STAGE_ONLY:-}" = 1 ]; then { echo; echo "== restage $(TZ=Europe/Bucharest date '+%F %T %Z'): STAGE_ONLY=1, k56 from run1 and the evals above, tools $(cat "$P/src/COMMIT" 2>/dev/null)"; } >> "$REP"
+else echo "refit-p3 $(TZ=Europe/Bucharest date '+%F %T %Z'): #97 phase 3 run1, tools $(cat "$P/src/COMMIT" 2>/dev/null), image $IMG; refit-p2: $s2" > "$REP"; fi
+[ -n "$NOTE" ] && echo "$NOTE" >> "$REP"
+echo "format: fp8 drafter K/V (--kv-fp8 on), chain_kv=False, HC MXFP8 on for eval (shipped v3d)" >> "$REP"
 
+# STAGE_ONLY=1: skip steps 0-4 (no stop of the 2x, no training or eval); stop rule and staging from $RES's evals and
+# runs/run1 (used after the 2026-10-07 staging failure: run1 files were root 0600)
+if [ "${STAGE_ONLY:-}" != 1 ]; then
 # 0. preflight
 st "running: p3 preflight"   # not "running: preflight": the dashboard maps that to stage 1
 docker image inspect "$IMG" >/dev/null 2>&1 || { FINAL="FAILED: preflight: image $IMG missing"; exit 1; }
@@ -164,6 +192,19 @@ read -r NA ND <<< "$(anchors "$D/data/train")"; read -r HA HD <<< "$(anchors "$D
 SPE=$(( NA / TPS ))
 echo "data: train $ND docs / $NA anchors (~$SPE steps of $TPS per epoch), heldout $HD docs / $HA anchors" >> "$REP"
 log "data: train $ND docs $NA anchors, heldout $HD docs $HA anchors"
+
+# 1b. baseline: the shipped drafter on held-out with the fixed tool, before training (T=0 and T=1)
+st "running: eval shipped"
+child pyrun -m tools.mtp_refit.eval_offline "${EVARGS[@]}" --out /work/eval-shipped.json --metrics-file /metrics/mtp_refit_eval_shipped.prom \
+  > "$RES/eval-shipped.txt" 2>&1 || { FINAL="FAILED: eval shipped ($RES/eval-shipped.txt)"; exit 1; }
+cp "$P/eval-shipped.json" "$RES/eval-shipped.json"
+python3 - "$RES/eval-shipped.json" >> "$REP" <<'EOF2'
+import json, sys
+r = json.load(open(sys.argv[1]))["all"]
+print("baseline shipped (held-out, fixed tool, fp8 drafter KV):",
+      "; ".join(f"{m} per position {r[m]['per_position']} tok/step d4 {r[m]['tokens_per_step_d4']}" for m in ("t0", "t1")))
+EOF2
+log "$(tail -1 "$REP")"
 
 # 2. warm-up: measured anchors/s at the real settings
 st "running: warm-up"
@@ -193,21 +234,20 @@ child pyrun -m tools.mtp_refit.train "${COMMON[@]}" --epochs $EPOCHS --max-steps
   --metrics-file /metrics/mtp_refit_train.prom > "$RES/train-run1.txt" 2>&1 \
   || { FINAL="FAILED: train run1 ($RES/train-run1.txt; checkpoints in $P/runs/run1)"; exit 1; }
 [ -f "$P/runs/run1/mtp_refit.safetensors" ] || { FINAL="FAILED: train run1 wrote no mtp_refit.safetensors"; exit 1; }
+# the container writes root 0600 files; splice.py and scp on the host read them
+docker run --rm --network none -v "$P/runs:/r" --entrypoint chmod "$IMG" -R a+rX /r || { FINAL="FAILED: chmod runs"; exit 1; }
 cp "$P/runs/run1/train.jsonl" "$RES/train-run1.jsonl"
 echo "train run1: $(tail -1 "$RES/train-run1.txt"); last step $(tail -1 "$P/runs/run1/train.jsonl")" >> "$REP"
 
 # 4. offline eval on held-out, T=0 and T=1
 st "running: eval"
-BASE_J=$RES2/eval-baseline.json
-if [ ! -s "$BASE_J" ]; then
-  child pyrun -m tools.mtp_refit.eval_offline "${EVARGS[@]}" --out /work/eval-shipped.json --metrics-file /metrics/mtp_refit_eval_shipped.prom \
-    > "$RES/eval-shipped.txt" 2>&1 || { FINAL="FAILED: eval shipped ($RES/eval-shipped.txt)"; exit 1; }
-  BASE_J=$P/eval-shipped.json; fi
-cp "$BASE_J" "$RES/eval-shipped.json"
 child pyrun -m tools.mtp_refit.eval_offline "${EVARGS[@]}" --refit /work/runs/run1/mtp_refit.safetensors --out /work/eval-refit-run1.json \
   --metrics-file /metrics/mtp_refit_eval_refit.prom > "$RES/eval-refit-run1.txt" 2>&1 \
   || { FINAL="FAILED: eval refit ($RES/eval-refit-run1.txt)"; exit 1; }
 cp "$P/eval-refit-run1.json" "$RES/"
+fi
+[ -r "$P/runs/run1/mtp_refit.safetensors" ] && [ -s "$RES/eval-shipped.json" ] && [ -s "$RES/eval-refit-run1.json" ] \
+  || { FINAL="FAILED: run1 weights or evals missing/unreadable"; exit 1; }
 GL=$(gain "$RES/eval-shipped.json" "$RES/eval-refit-run1.json") || { FINAL="FAILED: gain computation"; exit 1; }
 G0=${GL%% *}; GPTS=$(awk -v g=$G0 'BEGIN{printf "%+.2f", g*100}')
 python3 - "$RES/eval-shipped.json" "$RES/eval-refit-run1.json" >> "$REP" <<'EOF'
@@ -256,16 +296,19 @@ stage() { # run as a plain "( stage )" (never under || or &&, which would switch
       -e "s|^name: qwen3.8-flash-next-1x-dgx-spark-v3d\$|name: qwen3.8-flash-next-1x-dgx-spark-k56-refit|" \
       -e "s|^container: .*|container: $KIMG|" -e "s|^model: $F403\$|model: $F461|" \
       -e "s|^env:\$|env:\n  VLLM_CACHE_ROOT: \"/cache/runtime/vllm-k56-refit\"|" "$K/v3d.yaml" > "$K/k56-refit.yaml"
-  [ "$(diff "$K/v3d.yaml" "$K/k56-refit.yaml" | grep -c '^>')" = 5 ] && grep -qx "model: $F461" "$K/k56-refit.yaml" \
+  [ "$(diff "$K/v3d.yaml" "$K/k56-refit.yaml" | grep -c '^>')" = 5 ] && ! grep -q 'kv_cache_dtype"' "$K/k56-refit.yaml" && grep -qx "model: $F461" "$K/k56-refit.yaml" \
     && grep -qx "container: $KIMG" "$K/k56-refit.yaml" || { echo "k56 recipe edits did not apply"; exit 1; }
   for a in refit-01 refit-02; do mkdir -p "$K/$a"; cp "$K/k56-refit.yaml" "$K/$a/k56-refit.yaml"
     { echo "# k56 arm (#97 refit run1) on $([ $a = refit-01 ] && echo dgx-01 || echo dgx-02) vs shipped v3d: refit MTP dense tensors"
       echo "# ($GPTS pts/pos offline T=0). Own VLLM_CACHE_ROOT + bake (new model path); seed re-keyed in the image."
       echo "name: $a"; echo "recipe: k56-refit.yaml"; echo "base: $K/v3d.yaml"; echo "bake: yes"; echo "hook: $G/k53/hook.sh"; } > "$K/$a/thunderdome.arm"; done
-  env RES="$RES/k56-dry" GATE=0 CHAIN_NO_RESTORE=1 bash "$TD" "$K/refit-01" "$K/refit-02" --dry-run > "$RES/k56-dry-run.txt" 2>&1
+  env RES="$RES/k56-dry" GATE=0 CHAIN_NO_RESTORE=1 TD_ACC_RISE_OK=1 bash "$TD" "$K/refit-01" "$K/refit-02" --dry-run > "$RES/k56-dry-run.txt" 2>&1
   if grep -q REFUSED "$RES/k56-dry-run.txt"; then echo "thunderdome dry-run dropped an arm"; exit 1; fi
   echo "$KIMG" > "$K/IMAGE"; date > "$K/READY"; }
 ( stage ) > "$RES/k56-stage.txt" 2>&1; [ $? = 0 ] || { FINAL="FAILED: k56 staging ($RES/k56-stage.txt); refit gain $GPTS pts/pos T=0"; exit 1; }
-{ echo; echo "== k56 staged: $(cat "$K/IMAGE"), snapshot $F461 on both Sparks, seed $(cat "$RES/remap-seed.txt")"
-  echo "start (on the user's word): setsid nohup bash $K/start.sh > $K/start.nohup 2>&1 < /dev/null &"; } >> "$REP"
-FINAL="DONE: gain $GPTS pts/pos T=0, k56 staged, not started ($REP)"
+# queue k56 right after this job (user approval 2026-10-07): start.sh blocks on the gpu-lock, which the caller holds
+# until this job (and its restore) has exited
+( cd "$K" && setsid nohup bash "$K/start.sh" > "$K/start.nohup" 2>&1 < /dev/null 9>&- & echo $! > "$K/start.pid" )
+{ echo; echo "== k56 staged: $(cat "$K/IMAGE"), snapshot $F461 on both Sparks, fp8 drafter KV, seed $(cat "$RES/remap-seed.txt")"
+  echo "queued: k56/start.sh pid $(cat "$K/start.pid") on the gpu-lock (TD_ACC_RISE_OK=1, gate on PROMOTE)"; } >> "$REP"
+FINAL="DONE: gain $GPTS pts/pos T=0, k56 staged and queued (start.sh pid $(cat "$K/start.pid")) ($REP)"

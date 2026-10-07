@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# refit-p3 waiter (2026-10-07, #97): k68 first, then refit-p3/job.sh under the gpu-lock with
+# REFIT_USER_ACCEPTED=coverage-2026-10-07 (the user accepted the drafts coverage shortfall in chat, 2026-10-07 18:55).
+#   phase 1  wait for the k68 backlog runner (pid $RUNNER) to exit (k68 done and the 2x checked). This file has no .sh
+#            name and refit-p3 STATE says "pending" during this phase on purpose: backlog lib.sh others_busy would
+#            otherwise count refit-p3 as queued and hold k68 back, and the user asked for k68 first.
+#   phase 2  STATE "queued: ..." and flock -w 43200 on ~/GEN-AI/gpu-lock, GPU_LOCK_HELD=1 bash job.sh
+# Start: setsid nohup bash ~/GEN-AI/refit-p3/after_k68 > ~/GEN-AI/refit-p3/after_k68.nohup 2>&1 < /dev/null &
+# Stop:  kill -TERM <pid in after_k68.log>. Never pkill -f.
+set -u
+P=$HOME/GEN-AI/refit-p3; RUNNER=${RUNNER:-660227}
+log() { echo "[$(TZ=Europe/Bucharest date '+%F %T %Z')] $*" >> "$P/after_k68.log"; }
+log "waiter pid $$; k68 runner pid $RUNNER"
+echo "pending: after k68 (backlog runner pid $RUNNER), then the gpu-lock; waiter pid $$" > "$P/STATE"
+t0=$(date +%s)
+while kill -0 "$RUNNER" 2>/dev/null; do
+  [ $(( $(date +%s) - t0 )) -gt 43200 ] && { log "k68 runner still alive after 12 h; giving up"; echo "FAILED: k68 runner $RUNNER alive after 12 h; nothing run" > "$P/STATE"; exit 1; }
+  sleep 30; done
+log "k68 runner gone; k68: $(head -1 "$HOME/GEN-AI/backlog/k68/STATE")"
+echo "queued: waiting for the gpu-lock (after_k68 pid $$)" > "$P/STATE"
+flock -w 43200 -o "$HOME/GEN-AI/gpu-lock" env GPU_LOCK_HELD=1 REFIT_USER_ACCEPTED=coverage-2026-10-07 bash "$P/job.sh" \
+  > "$P/job.nohup" 2>&1 < /dev/null; rc=$?
+grep -q '^queued: waiting for the gpu-lock' "$P/STATE" && { echo "FAILED: gpu-lock busy for 12 h; nothing run" > "$P/STATE"; log "lock timeout"; exit 1; }
+log "job exit $rc; STATE: $(head -1 "$P/STATE")"
