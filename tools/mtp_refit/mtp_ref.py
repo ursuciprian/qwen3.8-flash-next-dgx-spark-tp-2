@@ -20,8 +20,11 @@ Known gaps, settled by the phase 2 GPU parity test, not here:
   depth-0 blocks
 - chain K/V: served draft steps 1+ attend the depth-0 keys of rows 0..t only, never the K/V that earlier draft
   steps of the same chain wrote (not even their own). Measured against the served per-step top-20 draft logits
-  (recheck2 capture, 60 docs, logit rel err per depth): with the chain keys 0.0055/0.034/0.044/0.057, without
-  0.0055/0.0078/0.0081/0.0122. chain_kv=True restores the attended chain (EAGLE-style TTT) for comparison
+  (recheck2 capture, 500 docs, logit rel err per depth): with the chain keys 0.0044/0.0249/0.0450/0.0637 (GPU),
+  without 0.0062/0.0078/0.0087/0.0093 (CPU); live T=0 step replay minus live counters at positions 3-4 goes from
+  -0.013/-0.017 to -0.003/-0.004. The vLLM/b12x code read (cbee9971, b12x 21e0b201) shows no step that drops
+  them, so the cause is open; zero-valued chain K/V fit as well as absent ones. chain_kv=True restores the
+  attended chain (EAGLE-style TTT) for comparison
 - K/V: kv_fp8=True rounds K/V to fp8 e4m3 (scale 1.0) as --kv-cache-dtype fp8 serves them (vLLM qsa.py writes
   K/V with reshape_and_cache_flash before attention; b12x converts fp8 -> BF16 in shared memory, k_scale folded
   into the score scale). Measured on the p2 live set (T=0 step replay vs live counters, positions 1-4): fp8
