@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/k/gpu_stride_check.py", line 63, in <module>
+    launch_sparse_paged_gqa(query=q, key_cache=k, value_cache=v, block_table=table, request_ids=rids,
+  File "/usr/local/lib/python3.12/dist-packages/b12x/attention/qsa/_sparse_gqa.py", line 334, in launch_sparse_paged_gqa
+    run_merge(merge, (
+  File "/usr/local/lib/python3.12/dist-packages/b12x/_lib/compiler.py", line 2931, in run_compiled
+    return compiled(*args)
+           ^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not callable
