@@ -1,0 +1,100 @@
+k54 2026-10-07 04:19:00 EEST: confidence-gated MTP draft depth (vLLM exp/r19-adaptive-depth a91c4b2ce86b9892707148916c32425afaf2076a)
+image spark-vllm-b12x:r19b-21e0b201-a91c4b2c; arm A r19b-d6-all (dgx-01), arm B r19b-d6-c2 (dgx-02), both vs v3d
+gputest: 40 failed, 32 passed, 14 warnings in 178.63s (0:02:58)
+
+== r19b-d6-all (dgx-01) vs v3d: screen=INCONCLUSIVE post=[; gputest failed] min_MemAvailable=13.11GiB -> INCONCLUSIVE
+reason: probe fresh-c1 -7.51% (noise 6.78%)
+reason: probe fresh-c4 -2.57% (noise 2.01%)
+better: probe count-c8 +7.60% (noise 2.12%); benchy tg512 (c1) +12.90% (noise 5.02%)
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 4: only on the arm side (not judged)
+  pos 5: only on the arm side (not judged)
+  pos 0: control 0.818 arm 0.811 shift -0.007
+  pos 1: control 0.661 arm 0.655 shift -0.006
+  pos 2: control 0.531 arm 0.524 shift -0.007
+  pos 3: control 0.428 arm 0.419 shift -0.009
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -7.51%  noise  6.78%  worse     n=4 CI [-13.5,+0.0] control boot-to-boot +6.50%, step +2.96%
+  probe  fresh-c4      -2.57%  noise  2.01%  worse     n=16 CI [-4.4,-0.5] control boot-to-boot +2.01%, step +1.86%
+  probe  fresh-c8      -1.36%  noise  1.69%            n=32 CI [-3.0,+0.4] control boot-to-boot +0.91%, step +2.75%
+  probe  d16k-c4       -1.67%  noise  1.84%            n=16 CI [-3.6,+0.1] control boot-to-boot -0.56%, step +1.76%
+  probe  count-c8      +7.60%  noise  2.12%  better    n=32 CI [+6.2,+9.0] control boot-to-boot +2.12%, step +22.31%
+  wall   d16k-c8       -0.77%  noise  1.00%            wall s control 126/125 arm 125/128 (cut counts as the time)
+  benchy pp2048 (c1)   +0.40%  noise  2.81%            control 1825.8 arm 1833.0 t/s (boots 2/2)
+  benchy tg512 (c1)   +12.90%  noise  5.02%  better    control 52.4 arm 59.2 t/s (boots 2/2)
+  benchy tg512 (c8)    +4.76%  noise  7.97%            control 126.5 arm 132.6 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0426 max 0.7505
+  self  ctl-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0452 max 0.6969
+  self  arm-p1 a/b: 8/20 prompts identical, |dlogprob| mean 0.0455 max 0.5084
+  self  arm-p2 a/b: 9/20 prompts identical, |dlogprob| mean 0.0393 max 0.4682
+  cross ctl-p1/arm-p1: 9/20 prompts identical, |dlogprob| mean 0.0378 max 0.4758
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0394 max 0.6095
+reason: probe fresh-c1 -7.51% (noise 6.78%)
+reason: probe fresh-c4 -2.57% (noise 2.01%)
+better: probe count-c8 +7.60% (noise 2.12%); benchy tg512 (c1) +12.90% (noise 5.02%)
+VERDICT=INCONCLUSIVE
+-- single-request hook cells (arm vs control, same pass; depth = drafts per round, share6 = rounds drafting 6)
+pass 1 copy-1    ctl     80.6  arm     91.6   +13.6%   arm depth 5.884 share6 0.942 tok/step 6.794
+pass 1 copy-2    ctl    123.4  arm    145.3   +17.7%   arm depth 5.884 share6 0.942 tok/step 6.794
+pass 1 count-c1  ctl     80.8  arm     89.7   +11.0%   arm depth 5.667 share6 0.833 tok/step 6.46
+pass 1 count-c2  ctl    145.4  arm    172.4   +18.6%   arm depth 5.709 share6 0.855 tok/step 6.629
+pass 1 teb       ctl     62.9  arm     61.8    -1.7%   arm depth 4.505 share6 0.252 tok/step 3.673
+pass 2 copy-1    ctl     80.5  arm     91.4   +13.5%   arm depth 5.875 share6 0.938 tok/step 6.784
+pass 2 copy-2    ctl    122.3  arm    142.8   +16.7%   arm depth 5.875 share6 0.938 tok/step 6.784
+pass 2 count-c1  ctl     80.9  arm     86.9    +7.4%   arm depth 5.684 share6 0.842 tok/step 6.385
+pass 2 count-c2  ctl    143.6  arm    162.1   +12.9%   arm depth 5.652 share6 0.826 tok/step 6.486
+pass 2 teb       ctl     61.2  arm     61.3    +0.2%   arm depth 4.5 share6 0.25 tok/step 3.639
+mean of passes: copy-1 +13.5%, copy-2 +17.2%, count-c1 +9.2%, count-c2 +15.7%, teb -0.8%
+
+== r19b-d6-c2 (dgx-02) vs v3d: screen=KILL post=[; gputest failed] min_MemAvailable=13.47GiB -> KILL
+reason: probe fresh-c4 -4.31% (noise 2.09%)
+reason: probe fresh-c8 -5.56% (noise 1.84%)
+reason: probe count-c8 -7.38% (noise 2.69%)
+reason: benchy tg512 (c8) -8.18% (noise 1.04%)
+better: benchy tg512 (c1) +15.81% (noise 4.00%)
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 4: only on the arm side (not judged)
+  pos 5: only on the arm side (not judged)
+  pos 0: control 0.814 arm 0.815 shift +0.001
+  pos 1: control 0.659 arm 0.658 shift -0.001
+  pos 2: control 0.538 arm 0.532 shift -0.005
+  pos 3: control 0.436 arm 0.431 shift -0.005
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -3.63%  noise  6.46%            n=4 CI [-9.7,+3.2] control boot-to-boot -2.86%, step +4.82%
+  probe  fresh-c4      -4.31%  noise  2.09%  WORSE>2x  n=16 CI [-6.5,-2.3] control boot-to-boot -1.93%, step +2.92%
+  probe  fresh-c8      -5.56%  noise  1.84%  WORSE>2x  n=32 CI [-7.4,-3.7] control boot-to-boot -1.35%, step +4.42%
+  probe  d16k-c4       -3.90%  noise  7.82%            n=16 CI [-6.7,-1.4] control boot-to-boot +7.82%, step +2.19%
+  probe  count-c8      -7.38%  noise  2.69%  WORSE>2x  n=32 CI [-8.3,-6.4] control boot-to-boot +2.69%, step +7.72%
+  wall   d16k-c8       -1.18%  noise  2.36%            wall s control 127/124 arm 127/127 (cut counts as the time)
+  benchy pp2048 (c1)   -0.52%  noise  1.00%            control 1825.1 arm 1815.7 t/s (boots 2/2)
+  benchy tg512 (c1)   +15.81%  noise  4.00%  better    control 54.0 arm 62.5 t/s (boots 2/2)
+  benchy tg512 (c8)    -8.18%  noise  1.04%  WORSE>2x  control 137.6 arm 126.3 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0404 max 0.8549
+  self  ctl-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0391 max 1.0828
+  self  arm-p1 a/b: 13/20 prompts identical, |dlogprob| mean 0.0311 max 0.3688
+  self  arm-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0337 max 0.3993
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0358 max 0.3196
+  cross ctl-p2/arm-p2: 11/20 prompts identical, |dlogprob| mean 0.0338 max 0.7046
+reason: probe fresh-c4 -4.31% (noise 2.09%)
+reason: probe fresh-c8 -5.56% (noise 1.84%)
+reason: probe count-c8 -7.38% (noise 2.69%)
+reason: benchy tg512 (c8) -8.18% (noise 1.04%)
+better: benchy tg512 (c1) +15.81% (noise 4.00%)
+VERDICT=KILL
+-- single-request hook cells (arm vs control, same pass; depth = drafts per round, share6 = rounds drafting 6)
+pass 1 copy-1    ctl     80.6  arm     91.3   +13.3%   arm depth 5.877 share6 0.938 tok/step 6.771
+pass 1 copy-2    ctl    122.0  arm    138.8   +13.7%   arm depth 5.877 share6 0.938 tok/step 6.771
+pass 1 count-c1  ctl     82.5  arm     97.7   +18.4%   arm depth 5.735 share6 0.867 tok/step 6.609
+pass 1 count-c2  ctl    138.6  arm    169.5   +22.3%   arm depth 5.687 share6 0.843 tok/step 6.577
+pass 1 teb       ctl     63.8  arm     61.5    -3.6%   arm depth 4.449 share6 0.224 tok/step 3.617
+pass 2 copy-1    ctl     80.9  arm     91.5   +13.1%   arm depth 5.872 share6 0.936 tok/step 6.792
+pass 2 copy-2    ctl    122.4  arm    139.6   +14.0%   arm depth 5.872 share6 0.936 tok/step 6.792
+pass 2 count-c1  ctl     82.9  arm     97.9   +18.1%   arm depth 5.551 share6 0.776 tok/step 6.212
+pass 2 count-c2  ctl    143.5  arm    169.3   +18.0%   arm depth 5.703 share6 0.852 tok/step 6.565
+pass 2 teb       ctl     57.1  arm     58.0    +1.6%   arm depth 4.33 share6 0.165 tok/step 3.435
+mean of passes: copy-1 +13.2%, copy-2 +13.9%, count-c1 +18.3%, count-c2 +20.1%, teb -1.0%
+guard dgx01: min MemAvailable over the screen 11.77 GiB at 1791335943
+guard dgx02: min MemAvailable over the screen 13.43 GiB at 05:26:49
+eligible for gate: none

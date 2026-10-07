@@ -1,5 +1,130 @@
 # Benchmarks: full tables
 
+## DP=2 against 2× TP=2 on an agent replay (2026-10-07)
+
+The same multi-turn replay against two setups on the same pair, one boot each, one pass per workload:
+
+- 2× TP=2: the shipped `qwen3.8-flash-next-2x-dgx-spark` (b1.4), `max_num_seqs` 16, one KV pool of 3,669,461 tokens on
+  this boot.
+- DP=2: the shipped `qwen3.8-flash-next-1x-dgx-spark` (v3d, experimental) on each Spark, `max_num_seqs` 8 and a pool of
+  993,754 tokens per replica, behind `pa_router.py` on dgx-01 port 8100. The router takes the sha1 of the first two
+  non-system messages to pick the replica, so every turn of a session goes to the replica that has its prefix cache. It
+  does no load balancing: over the whole run it sent 29 sessions to dgx-01 and 35 to dgx-02.
+
+Workloads (`drive.py` in the results dir, same seeds on both setups). Each session is a synthetic agent transcript of
+tool calls. Every turn sends the whole conversation with tools on, thinking off, temperature 0.6, then appends the reply
+and a tool result. All sessions of a workload start together.
+
+- `agent8`: 8 sessions x 6 turns, ~32K-token start, +2K tokens per turn, up to 512 output tokens.
+- `agent16`: 16 sessions x 4 turns, same sizes.
+- `long-N`: N sessions x 2 turns, ~128K-token start, +1K per turn, up to 256 output tokens, N = 4, 8, 12, 16. The ladder
+  stops after the first N with a preemption or a request error.
+
+| workload | setup | wall (s) | output tokens | output tok/s total | TTFT first turn mean / max (s) | TTFT follow-up mean / p90 (s) | decode tok/s per request | prefix hit | preemptions | KV max per replica | sessions per replica | running max per replica | min MemAvailable dgx-01 / dgx-02 (GiB) |
+|---|---|---:|---:|---:|---|---|---:|---:|---:|---|---|---|---|
+| agent8 | 2× TP=2 | 156.1 | 2,038 | 13.1 | 63.4 / 103.2 | 5.4 / 7.8 | 8.1 | 78% | 0 | 16% | - | 8 | 10.55 / 14.03 |
+| agent8 | DP=2 | 149.5 | 3,015 | 20.2 | 51.5 / 83.4 | 4.0 / 5.9 | 11.8 | 77% | 0 | 25% / 16% | 5 / 3 | 5 / 3 | 14.11 / 14.14 |
+| agent16 | 2× TP=2 | 253.6 | 2,421 | 9.5 | 122.3 / 234.6 | 10.0 / 24.1 | 6.5 | 70% | 0 | 19% | - | 10 | 10.52 / 14.01 |
+| agent16 | DP=2 | 303.1 | 3,581 | 11.8 | 119.4 / 258.3 | 14.4 / 36.7 | 10.6 | 70% | 0 | 13% / 39% | 3 / 13 | 3 / 8 | 14.14 / 13.98 |
+| long-4 | 2× TP=2 | 224.2 | 301 | 1.3 | 165.5 / 219.5 | 5.2 / 7.3 | 35.3 | 49% | 0 | 14% | - | 4 | 10.52 / 14.00 |
+| long-4 | DP=2 | 141.8 | 296 | 2.1 | 136.5 / 137.3 | 2.8 / 3.0 | 50.4 | 49% | 0 | 29% / 29% | 2 / 2 | 2 / 2 | 14.11 / 13.94 |
+| long-8 | 2× TP=2 | 449.6 | 615 | 1.4 | 282.1 / 446.8 | 7.2 / 8.5 | 15.3 | 49% | 0 | 20% | - | 8 | 10.49 / 13.99 |
+| long-8 | DP=2 | 353.8 | 647 | 1.8 | 212.5 / 351.1 | 7.3 / 9.5 | 19.2 | 49% | 0 | 40% / 41% | 3 / 5 | 3 / 5 | 14.07 / 13.89 |
+| long-12 | 2× TP=2 | 672.2 | 816 | 1.2 | 403.3 / 667.3 | 43.5 / 153.7 | 10.3 | 49% | 0 | 26% | - | 9 | 10.44 / 13.79 |
+| long-12 | DP=2 | 496.1 | 874 | 1.8 | 292.9 / 491.6 | 7.6 / 9.5 | 16.5 | 49% | 0 | 55% / 41% | 7 / 5 | 7 / 5 | 13.90 / 13.89 |
+| long-16 | 2× TP=2 | 891.9 | 1,073 | 1.2 | 516.9 / 889.3 | 90.3 / 161.8 | 7.6 | 49% | 0 | 28% | - | 10 | 10.30 / 13.98 |
+| long-16 | DP=2 | 638.1 | 1,204 | 1.9 | 369.0 / 633.8 | 8.0 / 9.6 | 13.6 | 49% | 0 | 49% / 56% | 9 / 7 | 8 / 7 | 13.72 / 13.87 |
+
+How to read it:
+
+- The prompt work is the same on both setups (prompt tokens per workload match within 0.1%), but the replies are not.
+  At temperature 0.6 on two different builds, DP=2 wrote 48% more output tokens on `agent8` and `agent16`. Output tok/s
+  favours the setup that writes more, so for those two workloads compare wall time: `agent8` 149.5 s (DP=2) against
+  156.1 s (TP=2), `agent16` 303.1 s against 253.6 s.
+- `agent16` on DP=2 is the router's split: 3 sessions on dgx-01 and 13 on dgx-02. dgx-02 queued up to 10 requests, and
+  follow-up TTFT was worse than on TP=2 (14.4 against 10.0 s mean).
+- `long-N`: output length is within 12% between the setups. DP=2 finished 21–37% sooner (`long-16` 638.1 s against
+  891.9 s) and kept follow-up TTFT at 2.8–8.0 s mean, where TP=2 rose to 43.5 s at 12 sessions and 90.3 s at 16. These
+  runs are prefill-bound (~128K-token prompts, 256 tokens out), so output tok/s is low on both. This fits two replicas
+  each prefilling a session at ~1,880 tok/s (1× v3d at 128K) against TP=2 prefilling one at a time at ~1,980 tok/s
+  (the cold 245K request in the long-context run below).
+- Max concurrent long contexts: both setups ran 16 sessions of ~129,540 tokens with no preemption or error, the largest
+  step of the ladder. The sessions start together but their prefills queue, so at most 10 requests were running at once
+  on TP=2 and 8 + 7 on DP=2.
+- Quality was not checked through the router in this run.
+
+KV pool lines from the boot logs, router stats and the per-turn JSON per workload:
+[`results/dp2-vs-tp2-k60-20261007-0248/`](../results/dp2-vs-tp2-k60-20261007-0248/) (`k60.txt`, `kvpool.txt`,
+`router-stats.json`, `tp2/` and `dp2/`, the router in its `scripts/` dir).
+
+## Long contexts at once on 2× b1.4 (2026-10-07)
+
+The shipped 2× recipe (image `b1.4-20261001-b7fbaf96-a7e649d8-warm`, `max_num_seqs` 16), one boot. `scripts/fidelity_probe.py`
+with its defaults: thinking on, temperature 0.6, `max_tokens` 4096, 5 planted file paths per transcript. A request is
+exact when the model calls the bash tool on the planted path. Two depths: `--depths 128000` (245,267 prompt tokens) and
+the depth whose prompt still fits 262,144 with a 4,096-token answer and a 1,024-token follow-up turn (256,515 tokens).
+
+- `cN`: one transcript, `--concurrency N`. The prefix cache is warm after `c1`, so `c2` and `c4` test decode under load.
+- `sN`: N probe processes at once, each with its own transcript and seed, 5 paths x 2 trials each. N different long
+  contexts are resident together and all start cold.
+
+| run | sessions x concurrency | prompt tokens | exact | near | wrong | explore | no_call | TTFT mean / max (s) | decode tok/s per request | output tok/s total | preemptions | prefix hit | KV max | min MemAvailable dgx-01 / dgx-02 (GiB) |
+|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| d128k-c1 | 1 x 1 | 245,267 | 20 | 0 | 0 | 0 | 0 | 8.0 / 124.1 | 95.9 | 14.1 | 0 | 94% | 7% | 10.90 / 14.35 |
+| d128k-c2 | 1 x 2 | 245,267 | 20 | 0 | 0 | 0 | 0 | 2.2 / 3.4 | 52.7 | 51.5 | 0 | 99% | 8% | 10.91 / 14.35 |
+| d128k-c4 | 1 x 4 | 245,267 | 20 | 0 | 0 | 0 | 0 | 3.5 / 6.1 | 31.4 | 61.2 | 0 | 99% | 10% | 10.75 / 14.22 |
+| d128k-s2 | 2 x 1 | 244,387 | 20 | 0 | 0 | 0 | 0 | 26.2 / 247.6 | 64.2 | 9.7 | 0 | 90% | 14% | 10.68 / 14.16 |
+| d128k-s4 | 4 x 1 | 244,407 | 40 | 0 | 0 | 0 | 0 | 40.9 / 511.7 | 30.9 | 9.8 | 0 | 90% | 27% | 10.51 / 14.14 |
+| dmax-c1 | 1 x 1 | 256,515 | 20 | 0 | 0 | 0 | 0 | 8.3 / 131.8 | 89.3 | 18.3 | 0 | 94% | 7% | 10.68 / 14.13 |
+| dmax-c2 | 1 x 2 | 256,515 | 20 | 0 | 0 | 0 | 0 | 2.1 / 3.3 | 52.4 | 59.6 | 0 | 99% | 8% | 10.68 / 14.15 |
+| dmax-c4 | 1 x 4 | 256,515 | 20 | 0 | 0 | 0 | 0 | 3.1 / 5.8 | 33.5 | 77.8 | 0 | 99% | 10% | 10.62 / 14.10 |
+| dmax-s2 | 2 x 1 | 255,932 | 20 | 0 | 0 | 0 | 0 | 27.6 / 262.9 | 63.6 | 11.1 | 0 | 90% | 14% | 10.64 / 14.16 |
+| dmax-s4 | 4 x 1 | 256,024 | 40 | 0 | 0 | 0 | 0 | 42.8 / 540.4 | 34.7 | 9.4 | 0 | 90% | 28% | 10.59 / 14.14 |
+
+- 240 of 240 requests exact over the 10 runs, no request errors, 0 preemptions, lowest MemAvailable 10.51 GiB (dgx-01).
+- The TTFT max of a `c1` row is the cold prefill of the first request (245,267 tokens in 124.1 s, about 1,980 tok/s);
+  later requests hit the prefix cache. In the `sN` rows the N cold prefills queue, so the last one waits longest
+  (511.7 s and 540.4 s with four contexts).
+- Four different ~256K contexts at once used 28% of the KV pool (4 x ~256K is about 1.02M of 3.67M tokens). More than
+  four at once was not run.
+
+Columns: preemptions = `vllm:num_preemptions_total` delta over the run; prefix hit = cache hit tokens / queried tokens
+over the run; KV max = highest `vllm:kv_cache_usage_perc` sample (every 5 s); decode tok/s per request = completion
+tokens / time after the first token (single-turn requests only); output tok/s total = generated tokens / run wall time;
+MemAvailable from a 1 s sampler on both nodes. Raw files: one JSON per probe process and `run.json` per run in
+[`results/longctx-concurrency-k59-20261007-0206/`](../results/longctx-concurrency-k59-20261007-0206/) (`k59.txt`,
+`table.md`, `drive.py`).
+
+## Coding probe, 36 prompts in four languages (2026-10-06)
+
+Single-request decode speed on short coding requests: 12 Python and 8 each C++, Rust and Go (write a function, fix a
+bug, refactor, write tests). One request at a time, up to 768 tokens out, each prompt sent once per setting:
+
+- T=0, thinking off: temperature 0, `enable_thinking=false`.
+- Server defaults: only model, messages and `max_tokens`, so the recipe's sampling and its `medium` thinking default
+  apply. 34 of 36 requests (2×) and 33 of 36 (1×) stopped at 768 tokens, and about two thirds of the streamed chunks
+  were reasoning, so these rows measure thinking plus the start of the answer.
+
+Decode tok/s = (completion tokens − 1) / (time of last token − time of first token). Tokens/step comes from the
+`vllm:spec_decode_*` counters around each request. Setups: 2× Spark b1.4 (the shipped recipe, dgx-01 + dgx-02) and
+1× Spark v3d (the shipped recipe and published image `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm`, alone on dgx-02).
+Raw files and the probe script: [`results/coding-probe-k55-20261006/`](../results/coding-probe-k55-20261006/).
+
+Decode tok/s, median of the prompts (max in brackets):
+
+| Prompts | 2× b1.4, T=0, thinking off | 1× v3d, T=0, thinking off | 2× b1.4, server defaults | 1× v3d, server defaults |
+|---|:---:|:---:|:---:|:---:|
+| 12 Python | 103.1 (109.9) | 73.2 (77.0) | 87.7 (97.2) | 60.0 (65.8) |
+| 8 C++ | 113.5 (120.6) | 75.6 (81.8) | 88.3 (93.8) | 62.1 (67.2) |
+| 8 Rust | 108.5 (115.7) | 76.3 (79.7) | 86.3 (90.7) | 58.1 (66.3) |
+| 8 Go | 104.8 (115.5) | 71.6 (77.4) | 85.3 (93.2) | 59.1 (64.2) |
+| All 36 | 106.2 (120.6) | 72.9 (81.8) | 87.5 (97.2) | 59.7 (67.2) |
+| Tokens/step, all 36 | 4.01 | 3.96 | 3.44 | 3.38 |
+| TTFT median, all 36 | 129 ms | 206 ms | 131 ms | 199 ms |
+
+Each cell is one pass over its prompts on one boot. An earlier 1× v3d boot that ran only the 12 Python prompts gave
+71.0 (T=0, thinking off) and 62.3 (server defaults), against 73.2 and 60.0 above.
+
 ## High concurrency, max_num_seqs 32 (2026-10-05)
 
 Measured with `max_num_seqs` 32 and CUDA graphs up to 160 rows. The shipped recipes use 16 (2×) and 8 (1×), and the
@@ -402,6 +527,9 @@ Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`
 (`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd`), checkpoint revision `7c4f1bc1`.
 A/B against the previous build (2026-09-29) on 2026-10-01, two separate boots per build, means of both boots.
 Raw files and verdict: [`results/b1.4-20261001/`](../results/b1.4-20261001/). The 2026-09-29 build's tables follow below.
+KV pool of the shipped recipe (fp8 KV, `gpu_memory_utilization` 0.80, boot of 2026-10-02): 30.53 GiB, 3,673,158 tokens,
+14.01x at 262,144 tokens per request by vLLM's count. Other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens;
+the `max_num_seqs` 32 boot logged 3,615,479 (13.79x). Serve-log lines: [`kv-pool-2x.txt`](../results/b1.4-20261001/kv-pool-2x.txt).
 What changed: the MTP draft head scores 131,072 of the 248,320 vocab ids (lossless via rejection sampling), the vllm#923
 QSA prefill-flag race fix, the vllm#914 Triton recompile fix, and the server default thinking effort `medium` (a recipe
 flag; the speed and gate numbers below were measured without it, at the template default).

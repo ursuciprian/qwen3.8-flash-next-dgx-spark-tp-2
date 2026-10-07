@@ -1,0 +1,51 @@
+{
+ "run": "dmax-c2",
+ "depth": 134135,
+ "concurrency": 2,
+ "sessions": 1,
+ "seeds": [
+  7
+ ],
+ "trials": 4,
+ "expected": 20,
+ "returned": 20,
+ "probe_exit": [
+  0
+ ],
+ "errors": 0,
+ "counts": {
+  "exact": 20,
+  "near": 0,
+  "wrong": 0,
+  "explore": 0,
+  "no_call": 0
+ },
+ "prompt_tokens_max": 256515,
+ "ttft_mean": 2.081458044052124,
+ "ttft_p50": 1.989560842514038,
+ "ttft_max": 3.2541263103485107,
+ "decode_tps_mean": 52.4105206636941,
+ "decode_tps_p50": 47.88097706604225,
+ "decode_n": 20,
+ "agg_output_tps": 59.62081990753939,
+ "wall_s": 52.46489405632019,
+ "preemptions": 0.0,
+ "prefix_hit_rate": 0.9936908025436388,
+ "kv_usage_max": 0.08010882708585243,
+ "running_max": 2.0,
+ "waiting_max": 0.0,
+ "min_mem_dgx01": 10.68,
+ "min_mem_dgx02": 14.15,
+ "metrics_delta": {
+  "vllm:num_preemptions_total": 0.0,
+  "vllm:prefix_cache_queries_total": 5130288.0,
+  "vllm:prefix_cache_hits_total": 5097920.0,
+  "vllm:generation_tokens_total": 3128.0,
+  "vllm:prompt_tokens_total": 5130288.0,
+  "vllm:spec_decode_num_accepted_tokens_total": 2401.0,
+  "vllm:spec_decode_num_draft_tokens_total": 2960.0
+ },
+ "t0": 1791329353.990058,
+ "t1": 1791329406.454952,
+ "ok": true
+}

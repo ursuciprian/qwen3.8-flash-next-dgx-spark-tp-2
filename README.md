@@ -62,11 +62,16 @@ hf download local-inference-lab/Qwen3.8-Flash-Next-NVFP4 --revision 7c4f1bc1a2d6
 
 ## Measured
 
-Two kinds of workload, labelled per row, because they differ by about 2× in tokens per decode step:
+Workloads are labelled per row, because they differ by about 2× in tokens per decode step:
 
 - High-acceptance workloads (copying, counting) accept nearly every MTP draft (~4.9–5.0 tokens per step). They show
   the decode rate when drafts land, which bounds what MTP can give.
-- Coding is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the rate an agent sees.
+- Coding (llama-benchy) is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the
+  rate an agent sees.
+- Coding (36 prompts) sends 36 short coding requests (12 Python, 8 each C++, Rust and Go) one at a time, up to 768
+  tokens out, once at temperature 0 with thinking off and once with the server defaults (thinking on). The cell is
+  the median decode tok/s of the 36 requests, with the max in brackets
+  ([details](docs/BENCHMARKS.md#coding-probe-36-prompts-in-four-languages-2026-10-06)).
 
 ### 2× Spark (TP=2), build b1.4
 
@@ -76,10 +81,18 @@ Two kinds of workload, labelled per row, because they differ by about 2× in tok
 | **High-acceptance:** counting, T=0, max of 5 rounds | 4.91–5.00 | 122.4 | 389.8 | 558.0 | 795.3 | b1.4 (2026-10-05) |
 | **Coding:** llama-benchy tg512, depth 0 | 2.7–2.8 | 62.2 | 150.9 | 195.5 | 242.8 | b1.4 (2026-10-01) |
 | **Coding:** llama-benchy tg512, 16k cached depth | 2.6–2.7 | 63.8 | 117.5 | 145.9 | 176.5 | b1.4 (2026-10-01) |
+| **Coding:** 36 prompts, T=0, thinking off, median (max) | 4.01 | 106.2 (120.6) | | | | b1.4 (2026-10-06) |
+| **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.44 | 87.5 (97.2) | | | | b1.4 (2026-10-06) |
 
 Prefill (c1): 2,784–2,855 tok/s for a 2,048-token prompt; 2,895–2,920 tok/s filling a 16k context (two boots).
 TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached context). c2/c5/c10 cells:
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md#b14-image-2026-10-01).
+
+KV pool (fp8 KV, `gpu_memory_utilization` 0.80, boot of 2026-10-02): 30.53 GiB, 3,673,158 tokens, which vLLM reports
+as 14.01x concurrency at 262,144 tokens per request. vLLM sizes the pool by profiling memory at boot, so it varies a
+little: other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens, and the `max_num_seqs` 32 boot logged
+3,615,479 (13.79x). This is vLLM's capacity figure; 14 concurrent 262K requests have not been run. Serve-log lines:
+[`kv-pool-2x.txt`](results/b1.4-20261001/kv-pool-2x.txt).
 
 ### 1× Spark (TP=1, experimental), build v3d
 
@@ -89,6 +102,8 @@ TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached conte
 | **High-acceptance:** counting, T=0, max of 5 rounds | 4.82–5.00 | 84.8 | 239.8 | 377.8 | v3d (2026-10-05) |
 | **Coding:** llama-benchy tg512, depth 0 | 3.3–3.5 | 59.8 | 111.4 | 139.5 | v3d (2026-10-05) |
 | **Coding:** llama-benchy tg512, 16k cached depth | 3.1–3.4 | 62.6 | 101.4 | 111.0 | v3d (2026-10-05) |
+| **Coding:** 36 prompts, T=0, thinking off, median (max) | 3.96 | 72.9 (81.8) | | | v3d (2026-10-06) |
+| **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.38 | 59.7 (67.2) | | | v3d (2026-10-06) |
 
 v3d serves [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE):
 
@@ -104,6 +119,9 @@ between runs.
 
 Prefill (c1): 1,788 tok/s for a 2,048-token prompt; 2,088 tok/s filling a 16k context. TTFT at c1: 1.18 s (2k new
 tokens) / 1.94 s (2k new tokens on a 16k cached context).
+
+KV pool: 14 GiB, 993,754 tokens, which vLLM reports as 3.79x concurrency at 262,144 tokens per request (2× b1.4:
+3,673,158 tokens, 14.01x).
 
 | Context length | Requests that fit in the KV pool at once, v3b (6 GiB) | v3c / v3d (14 GiB) |
 |---|:---:|:---:|
@@ -190,6 +208,56 @@ measurements only, not a supported configuration. One fresh boot per setup (2026
 Full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05), raw files:
 [`results/high-conc-k46b-20261005/`](results/high-conc-k46b-20261005/).
 
+### Several long contexts at once, 2× b1.4
+
+The quality gate runs the long-context tool-call probe one request at a time. On 2026-10-07 the shipped 2× recipe ran
+it with up to four requests at once (thinking on, temperature 0.6, one boot). "Same transcript" rows send N requests
+on one prompt (prefix cache warm); "different transcripts" rows run N probes with their own prompts, all starting cold.
+
+| Prompt tokens | Requests at once | Exact tool calls | TTFT mean / max (s) | Decode tok/s per request | KV max |
+|---|---|:---:|:---:|:---:|:---:|
+| 245,267 | 1 | 20/20 | 8.0 / 124.1 | 95.9 | 7% |
+| 245,267 | 4, same transcript | 20/20 | 3.5 / 6.1 | 31.4 | 10% |
+| 244,407 | 4, different transcripts | 40/40 | 40.9 / 511.7 | 30.9 | 27% |
+| 256,515 | 1 | 20/20 | 8.3 / 131.8 | 89.3 | 7% |
+| 256,515 | 4, same transcript | 20/20 | 3.1 / 5.8 | 33.5 | 10% |
+| 256,024 | 4, different transcripts | 40/40 | 42.8 / 540.4 | 34.7 | 28% |
+
+All 10 runs (these plus 2 at once): 240 of 240 exact, 0 preemptions, lowest MemAvailable 10.51 GiB. The TTFT max is
+the cold prefill: about 2 minutes for one ~250K prompt, and with four different cold contexts the last one waits for
+the other three. More than four ~256K contexts at once was not run. Full table:
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#long-contexts-at-once-on-2-b14-2026-10-07), raw files:
+[`results/longctx-concurrency-k59-20261007-0206/`](results/longctx-concurrency-k59-20261007-0206/).
+
+### DP=2 against 2× TP=2
+
+DP=2 here is the shipped 1× v3d recipe (experimental) on each Spark behind a minimal prefix-affinity router
+([`pa_router.py`](results/dp2-vs-tp2-k60-20261007-0248/scripts/pa_router.py) on dgx-01: the sha1 of the first two
+non-system messages picks the replica, no load balancing). Both setups ran the same synthetic agent replay
+([`drive.py`](results/dp2-vs-tp2-k60-20261007-0248/drive.py): tools on, thinking off, temperature 0.6, all sessions
+starting together), one boot each, 2026-10-07:
+
+| Workload | Wall time, TP=2 / DP=2 (s) | Follow-up TTFT mean, TP=2 / DP=2 (s) | Decode tok/s per request, TP=2 / DP=2 |
+|---|:---:|:---:|:---:|
+| 8 sessions x 6 turns from ~32K tokens | 156.1 / 149.5 | 5.4 / 4.0 | 8.1 / 11.8 |
+| 16 sessions x 4 turns from ~32K tokens | 253.6 / 303.1 | 10.0 / 14.4 | 6.5 / 10.6 |
+| 4 sessions x 2 turns from ~128K tokens | 224.2 / 141.8 | 5.2 / 2.8 | 35.3 / 50.4 |
+| 8 sessions x 2 turns from ~128K tokens | 449.6 / 353.8 | 7.2 / 7.3 | 15.3 / 19.2 |
+| 12 sessions x 2 turns from ~128K tokens | 672.2 / 496.1 | 43.5 / 7.6 | 10.3 / 16.5 |
+| 16 sessions x 2 turns from ~128K tokens | 891.9 / 638.1 | 90.3 / 8.0 | 7.6 / 13.6 |
+
+- On ~128K sessions DP=2 finished 21–37% sooner. These runs are prefill-bound, and two replicas prefill two sessions at
+  once.
+- With 16 sessions from ~32K, the router put 13 sessions on one Spark, and DP=2 was slower.
+- DP=2's total output tok/s is higher on all six workloads, but on the ~32K workloads it wrote 48% more output tokens
+  than TP=2 (temperature 0.6, different builds), so compare wall time there.
+- 0 preemptions on both setups; both ran 16 sessions of ~129,540 tokens, the largest step tested.
+- Quality through the router has not been checked yet.
+
+Full table (output tok/s, TTFT, prefix hits, KV usage and sessions per replica, MemAvailable):
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#dp2-against-2-tp2-on-an-agent-replay-2026-10-07), raw files:
+[`results/dp2-vs-tp2-k60-20261007-0248/`](results/dp2-vs-tp2-k60-20261007-0248/).
+
 ## Quality gate
 
 A build ships only if it passes every check.
@@ -258,7 +326,7 @@ Stop with `sparkrun stop --all`.
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
 | **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (171 s) with the compile cache from the image and a warm page cache, once the checkpoint is downloaded |
-| **Concurrency** | `max_num_seqs` 16 | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens) |
+| **Concurrency** | `max_num_seqs` 16, KV pool 30.53 GiB (3,673,158 tokens, 14.01x at 262,144; varies by boot, see [Measured](#2-spark-tp2-build-b14)) | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens, 3.79x at 262,144) |
 
 <!-- TODO: 1x kernel/linger requirements and the cold first-boot time with the shipped seed. -->
 
@@ -276,6 +344,9 @@ Image and video input are not tested on these builds.
 
 ## Known limits
 
+- 2× Spark: by vLLM's count the KV pool fits about 14 requests at 262,144 tokens (3,673,158 tokens on the
+  2026-10-02 boot), under the 16-request cap. Four different ~256K contexts at once used 28% of the pool
+  ([measured](#several-long-contexts-at-once-2-b14)); more than four at once have not been run.
 - 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
   8 × 64K fits.
 - 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host

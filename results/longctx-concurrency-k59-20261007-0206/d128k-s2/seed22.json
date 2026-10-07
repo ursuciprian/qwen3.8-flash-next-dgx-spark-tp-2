@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 22,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/d128k-s2/seed22.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 243484,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 26.499049615859985,
+   "mean_latency": 28.56894211769104,
+   "results": [
+    {
+     "target": "INV-1000-C550",
+     "path": "/srv/clients/vertexx-cargo-b30080/svc-relay_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-b30080/svc-relay_v2/logs/error.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 111,
+     "turns": 1,
+     "ttft": 247.60534954071045,
+     "dt": 249.0606565475464
+    },
+    {
+     "target": "INV-1000-C550",
+     "path": "/srv/clients/vertexx-cargo-b30080/svc-relay_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-b30080/svc-relay_v2/logs/error.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 168,
+     "turns": 1,
+     "ttft": 0.9307703971862793,
+     "dt": 3.830232858657837
+    },
+    {
+     "target": "INV-1001-04CA",
+     "path": "/srv/clients/umbra-systems-f29a3a/svc-reconcile_v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systems-f29a3a/svc-reconcile_v1/logs/error.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 110,
+     "turns": 1,
+     "ttft": 2.834867238998413,
+     "dt": 4.175862073898315
+    },
+    {
+     "target": "INV-1001-04CA",
+     "path": "/srv/clients/umbra-systems-f29a3a/svc-reconcile_v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systems-f29a3a/svc-reconcile_v1/logs/error.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 113,
+     "turns": 1,
+     "ttft": 0.9412927627563477,
+     "dt": 3.1965668201446533
+    },
+    {
+     "target": "INV-1002-D2E7",
+     "path": "/srv/clients/umbra-systems-45d7cd/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systems-45d7cd/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 118,
+     "turns": 1,
+     "ttft": 2.8616063594818115,
+     "dt": 5.0964133739471436
+    },
+    {
+     "target": "INV-1002-D2E7",
+     "path": "/srv/clients/umbra-systems-45d7cd/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systems-45d7cd/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 137,
+     "turns": 1,
+     "ttft": 1.5579655170440674,
+     "dt": 3.550468683242798
+    },
+    {
+     "target": "INV-1003-9E35",
+     "path": "/srv/clients/vertexx-cargo-190668/svc-sync_v4/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-190668/svc-sync_v4/logs/access.log",
+     "prompt_tokens": 243484,
+     "completion_tokens": 207,
+     "turns": 1,
+     "ttft": 3.2800662517547607,
+     "dt": 6.56011176109314
+    },
+    {
+     "target": "INV-1003-9E35",
+     "path": "/srv/clients/vertexx-cargo-190668/svc-sync_v4/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-190668/svc-sync_v4/logs/access.log",
+     "prompt_tokens": 243484,
+     "completion_tokens": 112,
+     "turns": 1,
+     "ttft": 0.897733211517334,
+     "dt": 2.2331645488739014
+    },
+    {
+     "target": "INV-1004-DC43",
+     "path": "/srv/clients/nordic-freight-7fa907/svc-ingest_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-7fa907/svc-ingest_v2/logs/ingest.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 108,
+     "turns": 1,
+     "ttft": 3.2726666927337646,
+     "dt": 4.481191396713257
+    },
+    {
+     "target": "INV-1004-DC43",
+     "path": "/srv/clients/nordic-freight-7fa907/svc-ingest_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-7fa907/svc-ingest_v2/logs/ingest.log",
+     "prompt_tokens": 243483,
+     "completion_tokens": 142,
+     "turns": 1,
+     "ttft": 0.808178186416626,
+     "dt": 3.5047531127929688
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 34,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/d128k-s4/seed34.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 244407,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 52.556539630889894,
+   "mean_latency": 57.358755350112915,
+   "results": [
+    {
+     "target": "INV-1000-0799",
+     "path": "/srv/clients/orryn-datta-1e629c/svc-export_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-1e629c/svc-export_v1/logs/access.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 112,
+     "turns": 1,
+     "ttft": 510.8069016933441,
+     "dt": 514.1469368934631
+    },
+    {
+     "target": "INV-1000-0799",
+     "path": "/srv/clients/orryn-datta-1e629c/svc-export_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-1e629c/svc-export_v1/logs/access.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 112,
+     "turns": 1,
+     "ttft": 1.677182674407959,
+     "dt": 7.732313632965088
+    },
+    {
+     "target": "INV-1001-11C9",
+     "path": "/srv/clients/acme-billling-541980/svc-relay-v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-541980/svc-relay-v2/logs/ingest.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 203,
+     "turns": 1,
+     "ttft": 1.5875558853149414,
+     "dt": 10.604349851608276
+    },
+    {
+     "target": "INV-1001-11C9",
+     "path": "/srv/clients/acme-billling-541980/svc-relay-v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-541980/svc-relay-v2/logs/ingest.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 203,
+     "turns": 1,
+     "ttft": 1.7573738098144531,
+     "dt": 9.192471027374268
+    },
+    {
+     "target": "INV-1002-52ED",
+     "path": "/srv/clients/nordic-freight-efd47d/svc-ingest_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-efd47d/svc-ingest_v2/logs/ingest.log",
+     "prompt_tokens": 244406,
+     "completion_tokens": 119,
+     "turns": 1,
+     "ttft": 1.5639431476593018,
+     "dt": 6.389050722122192
+    },
+    {
+     "target": "INV-1002-52ED",
+     "path": "/srv/clients/nordic-freight-efd47d/svc-ingest_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-efd47d/svc-ingest_v2/logs/ingest.log",
+     "prompt_tokens": 244406,
+     "completion_tokens": 122,
+     "turns": 1,
+     "ttft": 1.6058399677276611,
+     "dt": 5.186627149581909
+    },
+    {
+     "target": "INV-1003-F7F7",
+     "path": "/srv/clients/acme-billling-668224/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-668224/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244406,
+     "completion_tokens": 162,
+     "turns": 1,
+     "ttft": 1.5267612934112549,
+     "dt": 7.71597146987915
+    },
+    {
+     "target": "INV-1003-F7F7",
+     "path": "/srv/clients/acme-billling-668224/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-668224/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244406,
+     "completion_tokens": 173,
+     "turns": 1,
+     "ttft": 2.1657261848449707,
+     "dt": 7.239865303039551
+    },
+    {
+     "target": "INV-1004-2E56",
+     "path": "/srv/clients/orryn-data-68fc72/svc-sync_v4/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-68fc72/svc-sync_v4/logs/sync.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 101,
+     "turns": 1,
+     "ttft": 1.5597267150878906,
+     "dt": 2.901309013366699
+    },
+    {
+     "target": "INV-1004-2E56",
+     "path": "/srv/clients/orryn-data-68fc72/svc-sync_v4/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-68fc72/svc-sync_v4/logs/sync.log",
+     "prompt_tokens": 244407,
+     "completion_tokens": 111,
+     "turns": 1,
+     "ttft": 1.314384937286377,
+     "dt": 2.478658437728882
+    }
+   ]
+  }
+ ]
+}

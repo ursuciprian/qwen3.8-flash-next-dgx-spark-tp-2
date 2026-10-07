@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "134135",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 54,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/dmax-s4/seed54.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 134135,
+   "actual_prompt_tokens": 256024,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 55.26743898391724,
+   "mean_latency": 59.590148425102235,
+   "results": [
+    {
+     "target": "INV-1000-CB75",
+     "path": "/srv/clients/acme-billing-e66047/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-e66047/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 227,
+     "turns": 1,
+     "ttft": 535.4686915874481,
+     "dt": 545.6574532985687
+    },
+    {
+     "target": "INV-1000-CB75",
+     "path": "/srv/clients/acme-billing-e66047/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-e66047/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 113,
+     "turns": 1,
+     "ttft": 1.6956431865692139,
+     "dt": 5.632258653640747
+    },
+    {
+     "target": "INV-1001-B3BA",
+     "path": "/srv/clients/orryn-datta-af61d1/svc-export_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-af61d1/svc-export_v1/logs/export.log",
+     "prompt_tokens": 256022,
+     "completion_tokens": 106,
+     "turns": 1,
+     "ttft": 1.719146728515625,
+     "dt": 5.3845298290252686
+    },
+    {
+     "target": "INV-1001-B3BA",
+     "path": "/srv/clients/orryn-datta-af61d1/svc-export_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-af61d1/svc-export_v1/logs/export.log",
+     "prompt_tokens": 256022,
+     "completion_tokens": 98,
+     "turns": 1,
+     "ttft": 1.7498233318328857,
+     "dt": 4.025908946990967
+    },
+    {
+     "target": "INV-1002-D8A0",
+     "path": "/srv/clients/umbra-systms-212d43/svc-sync_v4/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-212d43/svc-sync_v4/logs/ingest.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 194,
+     "turns": 1,
+     "ttft": 2.5107901096343994,
+     "dt": 8.064778804779053
+    },
+    {
+     "target": "INV-1002-D8A0",
+     "path": "/srv/clients/umbra-systms-212d43/svc-sync_v4/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-212d43/svc-sync_v4/logs/ingest.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 230,
+     "turns": 1,
+     "ttft": 1.6998164653778076,
+     "dt": 8.467461347579956
+    },
+    {
+     "target": "INV-1003-7B95",
+     "path": "/srv/clients/delta-logix-d8471a/svc-ingest-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-d8471a/svc-ingest-v2/logs/export.log",
+     "prompt_tokens": 256024,
+     "completion_tokens": 177,
+     "turns": 1,
+     "ttft": 1.7962515354156494,
+     "dt": 5.881251811981201
+    },
+    {
+     "target": "INV-1003-7B95",
+     "path": "/srv/clients/delta-logix-d8471a/svc-ingest-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-d8471a/svc-ingest-v2/logs/export.log",
+     "prompt_tokens": 256024,
+     "completion_tokens": 111,
+     "turns": 1,
+     "ttft": 2.0037147998809814,
+     "dt": 3.5517578125
+    },
+    {
+     "target": "INV-1004-31DE",
+     "path": "/srv/clients/orryn-data-8340db/svc-relay_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-8340db/svc-relay_v2/logs/error.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 173,
+     "turns": 1,
+     "ttft": 2.426727533340454,
+     "dt": 4.583787441253662
+    },
+    {
+     "target": "INV-1004-31DE",
+     "path": "/srv/clients/orryn-data-8340db/svc-relay_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-8340db/svc-relay_v2/logs/error.log",
+     "prompt_tokens": 256023,
+     "completion_tokens": 243,
+     "turns": 1,
+     "ttft": 1.6037845611572266,
+     "dt": 4.652296304702759
+    }
+   ]
+  }
+ ]
+}

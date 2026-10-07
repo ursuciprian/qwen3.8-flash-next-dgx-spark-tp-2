@@ -1,0 +1,21 @@
+KV pool of the shipped 2x recipe (b1.4)
+
+Boot of 2026-10-02 on dgx-01 + dgx-02, shipped b1.4 recipe: image b1.4-20261001-b7fbaf96-a7e649d8-warm
+(engine v20260926.dev17+ga7e649d8f.d20261001), checkpoint 7c4f1bc1, TP=2, gpu_memory_utilization 0.8,
+kv_cache_dtype fp8, max_num_seqs 16, max_model_len 262144. Source: results/r9-dense-check-20261002/base/serve.log
+on dgx-01 (the r9 dense-check baseline boot; the full log is not committed).
+
+Serve-log lines (rank 0):
+  [gpu_worker.py:726] Available KV cache memory: 30.53 GiB
+  [kv_cache_utils.py:2258] GPU KV cache size: 3,673,158 tokens, Maximum concurrency for 262,144 tokens per request: 14.01x
+  [gpu_worker.py:994] Free memory on device (109.58/121.69 GiB) on startup. Desired GPU memory utilization is
+    (0.8, 97.35 GiB). Actual usage is 63.89 GiB for consumed memory (weights + non-torch), 2.0 GiB for peak
+    activation, and 0.44 GiB for CUDAGraph memory. [...] Current kv cache memory in use is 30.53 GiB.
+
+vLLM sizes the pool by profiling memory at each boot, so the figure moves between boots:
+  max_num_seqs 32 boot (2026-10-05, k46b)   3,615,479 tokens, 13.79x   (results/high-conc-k46b-20261005/summary.md)
+  other 2x boots of the b1.x builds         3.57M to 3.69M tokens
+
+14.01x is vLLM's capacity figure. 14 concurrent requests of 262,144 tokens have not been run.
+
+For comparison, 1x v3d: 14 GiB pool, 993,754 tokens, 3.79x at 262,144 (results/tp1-v3c-20261005/kv-capacity.txt).

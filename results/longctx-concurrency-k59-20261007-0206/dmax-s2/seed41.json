@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "134135",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 41,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/dmax-s2/seed41.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 134135,
+   "actual_prompt_tokens": 255893,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 27.361636638641357,
+   "mean_latency": 30.565544414520264,
+   "results": [
+    {
+     "target": "INV-1000-547D",
+     "path": "/srv/clients/nordic-freight-591e06/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-591e06/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 255893,
+     "completion_tokens": 117,
+     "turns": 1,
+     "ttft": 257.8271312713623,
+     "dt": 264.2533378601074
+    },
+    {
+     "target": "INV-1000-547D",
+     "path": "/srv/clients/nordic-freight-591e06/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-591e06/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 255893,
+     "completion_tokens": 253,
+     "turns": 1,
+     "ttft": 1.5467615127563477,
+     "dt": 6.6954052448272705
+    },
+    {
+     "target": "INV-1001-D7F5",
+     "path": "/srv/clients/delta-logic-719b0f/svc-ingest-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-719b0f/svc-ingest-v2/logs/sync.log",
+     "prompt_tokens": 255892,
+     "completion_tokens": 193,
+     "turns": 1,
+     "ttft": 1.5806095600128174,
+     "dt": 4.822505474090576
+    },
+    {
+     "target": "INV-1001-D7F5",
+     "path": "/srv/clients/delta-logic-719b0f/svc-ingest-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-719b0f/svc-ingest-v2/logs/sync.log",
+     "prompt_tokens": 255892,
+     "completion_tokens": 174,
+     "turns": 1,
+     "ttft": 1.5862903594970703,
+     "dt": 4.619543552398682
+    },
+    {
+     "target": "INV-1002-8E1C",
+     "path": "/srv/clients/acme-billling-64de35/svc-export_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-64de35/svc-export_v1/logs/access.log",
+     "prompt_tokens": 255893,
+     "completion_tokens": 107,
+     "turns": 1,
+     "ttft": 1.6065030097961426,
+     "dt": 2.926661491394043
+    },
+    {
+     "target": "INV-1002-8E1C",
+     "path": "/srv/clients/acme-billling-64de35/svc-export_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-64de35/svc-export_v1/logs/access.log",
+     "prompt_tokens": 255893,
+     "completion_tokens": 128,
+     "turns": 1,
+     "ttft": 2.19889497756958,
+     "dt": 3.9042763710021973
+    },
+    {
+     "target": "INV-1003-33CD",
+     "path": "/srv/clients/nordic-freight-ed9486/svc-relay-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-ed9486/svc-relay-v2/logs/access.log",
+     "prompt_tokens": 255892,
+     "completion_tokens": 116,
+     "turns": 1,
+     "ttft": 2.406160831451416,
+     "dt": 3.932380199432373
+    },
+    {
+     "target": "INV-1003-33CD",
+     "path": "/srv/clients/nordic-freight-ed9486/svc-relay-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-ed9486/svc-relay-v2/logs/access.log",
+     "prompt_tokens": 255892,
+     "completion_tokens": 119,
+     "turns": 1,
+     "ttft": 1.6377007961273193,
+     "dt": 3.2260372638702393
+    },
+    {
+     "target": "INV-1004-ABC9",
+     "path": "/srv/clients/orryn-data-a75355/svc-sync_v4/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a75355/svc-sync_v4/logs/error.log",
+     "prompt_tokens": 255891,
+     "completion_tokens": 176,
+     "turns": 1,
+     "ttft": 1.6037442684173584,
+     "dt": 4.897876024246216
+    },
+    {
+     "target": "INV-1004-ABC9",
+     "path": "/srv/clients/orryn-data-a75355/svc-sync_v4/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a75355/svc-sync_v4/logs/error.log",
+     "prompt_tokens": 255891,
+     "completion_tokens": 235,
+     "turns": 1,
+     "ttft": 1.6225697994232178,
+     "dt": 6.377420663833618
+    }
+   ]
+  }
+ ]
+}

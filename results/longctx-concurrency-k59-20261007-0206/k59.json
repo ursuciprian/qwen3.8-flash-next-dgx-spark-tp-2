@@ -1,0 +1,533 @@
+{
+ "dmax": 134135,
+ "dmax_tokens": 256514,
+ "target": 257024,
+ "runs": [
+  {
+   "run": "d128k-c1",
+   "depth": 128000,
+   "concurrency": 1,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 245267,
+   "ttft_mean": 7.974404537677765,
+   "ttft_p50": 1.8460273742675781,
+   "ttft_max": 124.09969425201416,
+   "decode_tps_mean": 95.92396884388188,
+   "decode_tps_p50": 96.0672196738799,
+   "decode_n": 20,
+   "agg_output_tps": 14.105285328335173,
+   "wall_s": 187.30567574501038,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9429249641002893,
+   "kv_usage_max": 0.0687222893994357,
+   "running_max": 1.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.9,
+   "min_mem_dgx02": 14.35,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 4905332.0,
+    "vllm:prefix_cache_hits_total": 4625360.0,
+    "vllm:generation_tokens_total": 2642.0,
+    "vllm:prompt_tokens_total": 4905332.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2044.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2472.0
+   },
+   "t0": 1791327997.296117,
+   "t1": 1791328184.6017928,
+   "ok": true
+  },
+  {
+   "run": "d128k-c2",
+   "depth": 128000,
+   "concurrency": 2,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 245267,
+   "ttft_mean": 2.2365511655807495,
+   "ttft_p50": 2.012861490249634,
+   "ttft_max": 3.4269535541534424,
+   "decode_tps_mean": 52.731798990346284,
+   "decode_tps_p50": 41.67915657476447,
+   "decode_n": 20,
+   "agg_output_tps": 51.5434513108157,
+   "wall_s": 50.32647085189819,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9925525937897781,
+   "kv_usage_max": 0.07562474808544939,
+   "running_max": 2.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.91,
+   "min_mem_dgx02": 14.35,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 4905332.0,
+    "vllm:prefix_cache_hits_total": 4868800.0,
+    "vllm:generation_tokens_total": 2594.0,
+    "vllm:prompt_tokens_total": 4905332.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2002.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2488.0
+   },
+   "t0": 1791328184.6153846,
+   "t1": 1791328234.9418554,
+   "ok": true
+  },
+  {
+   "run": "d128k-c4",
+   "depth": 128000,
+   "concurrency": 4,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 245267,
+   "ttft_mean": 3.463554787635803,
+   "ttft_p50": 3.0325210094451904,
+   "ttft_max": 6.146883249282837,
+   "decode_tps_mean": 31.40817827761232,
+   "decode_tps_p50": 25.85844939363927,
+   "decode_n": 20,
+   "agg_output_tps": 61.17001372946217,
+   "wall_s": 41.294743061065674,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9925525937897781,
+   "kv_usage_max": 0.09744054816606207,
+   "running_max": 4.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.75,
+   "min_mem_dgx02": 14.22,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 4905332.0,
+    "vllm:prefix_cache_hits_total": 4868800.0,
+    "vllm:generation_tokens_total": 2526.0,
+    "vllm:prompt_tokens_total": 4905332.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 1956.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2380.0
+   },
+   "t0": 1791328234.9542234,
+   "t1": 1791328276.2489665,
+   "ok": true
+  },
+  {
+   "run": "d128k-s2",
+   "depth": 128000,
+   "concurrency": 1,
+   "sessions": 2,
+   "seeds": [
+    21,
+    22
+   ],
+   "trials": 2,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0,
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 244387,
+   "ttft_mean": 26.17037374973297,
+   "ttft_p50": 1.547327995300293,
+   "ttft_max": 247.60534954071045,
+   "decode_tps_mean": 64.18557616625574,
+   "decode_tps_p50": 65.45112711972776,
+   "decode_n": 20,
+   "agg_output_tps": 9.737546294945055,
+   "wall_s": 288.98450541496277,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.8958258945316968,
+   "kv_usage_max": 0.1374445787988714,
+   "running_max": 2.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.68,
+   "min_mem_dgx02": 14.16,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 4878698.0,
+    "vllm:prefix_cache_hits_total": 4370464.0,
+    "vllm:generation_tokens_total": 2814.0,
+    "vllm:prompt_tokens_total": 4878698.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2140.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2744.0
+   },
+   "t0": 1791328276.262709,
+   "t1": 1791328565.2472143,
+   "ok": true
+  },
+  {
+   "run": "d128k-s4",
+   "depth": 128000,
+   "concurrency": 1,
+   "sessions": 4,
+   "seeds": [
+    31,
+    32,
+    33,
+    34
+   ],
+   "trials": 2,
+   "expected": 40,
+   "returned": 40,
+   "probe_exit": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 40,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 244407,
+   "ttft_mean": 40.863789498806,
+   "ttft_p50": 2.665426015853882,
+   "ttft_max": 511.7116177082062,
+   "decode_tps_mean": 30.94062612289002,
+   "decode_tps_p50": 31.661177177439534,
+   "decode_n": 40,
+   "agg_output_tps": 9.82516994918908,
+   "wall_s": 573.7305338382721,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.8951584351212604,
+   "kv_usage_max": 0.2700523982265216,
+   "running_max": 4.0,
+   "waiting_max": 1.0,
+   "min_mem_dgx01": 10.51,
+   "min_mem_dgx02": 14.14,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 9761472.0,
+    "vllm:prefix_cache_hits_total": 8738064.0,
+    "vllm:generation_tokens_total": 5637.0,
+    "vllm:prompt_tokens_total": 9761472.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 4307.0,
+    "vllm:spec_decode_num_draft_tokens_total": 5476.0
+   },
+   "t0": 1791328565.2566392,
+   "t1": 1791329138.987173,
+   "ok": true
+  },
+  {
+   "run": "dmax-c1",
+   "depth": 134135,
+   "concurrency": 1,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 256515,
+   "ttft_mean": 8.329059684276581,
+   "ttft_p50": 1.8476519584655762,
+   "ttft_max": 131.79598546028137,
+   "decode_tps_mean": 89.33327204806011,
+   "decode_tps_p50": 92.54728459563286,
+   "decode_n": 20,
+   "agg_output_tps": 18.326812565564886,
+   "wall_s": 212.25731348991394,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9440062624164569,
+   "kv_usage_max": 0.07199717855703347,
+   "running_max": 1.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.68,
+   "min_mem_dgx02": 14.13,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 5130288.0,
+    "vllm:prefix_cache_hits_total": 4843024.0,
+    "vllm:generation_tokens_total": 3890.0,
+    "vllm:prompt_tokens_total": 5130288.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2913.0,
+    "vllm:spec_decode_num_draft_tokens_total": 3980.0
+   },
+   "t0": 1791329141.7195992,
+   "t1": 1791329353.9769127,
+   "ok": true
+  },
+  {
+   "run": "dmax-c2",
+   "depth": 134135,
+   "concurrency": 2,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 256515,
+   "ttft_mean": 2.081458044052124,
+   "ttft_p50": 1.989560842514038,
+   "ttft_max": 3.2541263103485107,
+   "decode_tps_mean": 52.4105206636941,
+   "decode_tps_p50": 47.88097706604225,
+   "decode_n": 20,
+   "agg_output_tps": 59.62081990753939,
+   "wall_s": 52.46489405632019,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9936908025436388,
+   "kv_usage_max": 0.08010882708585243,
+   "running_max": 2.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.68,
+   "min_mem_dgx02": 14.15,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 5130288.0,
+    "vllm:prefix_cache_hits_total": 5097920.0,
+    "vllm:generation_tokens_total": 3128.0,
+    "vllm:prompt_tokens_total": 5130288.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2401.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2960.0
+   },
+   "t0": 1791329353.990058,
+   "t1": 1791329406.454952,
+   "ok": true
+  },
+  {
+   "run": "dmax-c4",
+   "depth": 134135,
+   "concurrency": 4,
+   "sessions": 1,
+   "seeds": [
+    7
+   ],
+   "trials": 4,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 256515,
+   "ttft_mean": 3.057101047039032,
+   "ttft_p50": 2.1293184757232666,
+   "ttft_max": 5.849496603012085,
+   "decode_tps_mean": 33.53669316941461,
+   "decode_tps_p50": 29.533591865648958,
+   "decode_n": 20,
+   "agg_output_tps": 77.8078835310559,
+   "wall_s": 44.78980588912964,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.9936908025436388,
+   "kv_usage_max": 0.10006045949214026,
+   "running_max": 4.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.62,
+   "min_mem_dgx02": 14.1,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 5130288.0,
+    "vllm:prefix_cache_hits_total": 5097920.0,
+    "vllm:generation_tokens_total": 3485.0,
+    "vllm:prompt_tokens_total": 5130288.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2669.0,
+    "vllm:spec_decode_num_draft_tokens_total": 3352.0
+   },
+   "t0": 1791329406.468841,
+   "t1": 1791329451.258647,
+   "ok": true
+  },
+  {
+   "run": "dmax-s2",
+   "depth": 134135,
+   "concurrency": 1,
+   "sessions": 2,
+   "seeds": [
+    41,
+    42
+   ],
+   "trials": 2,
+   "expected": 20,
+   "returned": 20,
+   "probe_exit": [
+    0,
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 255932,
+   "ttft_mean": 27.601375782489775,
+   "ttft_p50": 1.6109719276428223,
+   "ttft_max": 262.8787205219269,
+   "decode_tps_mean": 63.64089242157426,
+   "decode_tps_p50": 62.122592947562225,
+   "decode_n": 20,
+   "agg_output_tps": 11.102605940290918,
+   "wall_s": 307.4953770637512,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.8964275973206394,
+   "kv_usage_max": 0.1426844014510278,
+   "running_max": 2.0,
+   "waiting_max": 0.0,
+   "min_mem_dgx01": 10.64,
+   "min_mem_dgx02": 14.16,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 5118236.0,
+    "vllm:prefix_cache_hits_total": 4588128.0,
+    "vllm:generation_tokens_total": 3414.0,
+    "vllm:prompt_tokens_total": 5118236.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2621.0,
+    "vllm:spec_decode_num_draft_tokens_total": 3260.0
+   },
+   "t0": 1791329451.273245,
+   "t1": 1791329758.7686222,
+   "ok": true
+  },
+  {
+   "run": "dmax-s4",
+   "depth": 134135,
+   "concurrency": 1,
+   "sessions": 4,
+   "seeds": [
+    51,
+    52,
+    53,
+    54
+   ],
+   "trials": 2,
+   "expected": 40,
+   "returned": 40,
+   "probe_exit": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "errors": 0,
+   "counts": {
+    "exact": 40,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "prompt_tokens_max": 256024,
+   "ttft_mean": 42.81275473237038,
+   "ttft_p50": 2.178710460662842,
+   "ttft_max": 540.3963630199432,
+   "decode_tps_mean": 34.652557758789875,
+   "decode_tps_p50": 35.086944525733024,
+   "decode_n": 40,
+   "agg_output_tps": 9.412112165352083,
+   "wall_s": 596.040495634079,
+   "preemptions": 0.0,
+   "prefix_hit_rate": 0.8971185465677178,
+   "kv_usage_max": 0.27856711003627566,
+   "running_max": 4.0,
+   "waiting_max": 1.0,
+   "min_mem_dgx01": 10.59,
+   "min_mem_dgx02": 14.14,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 10228588.0,
+    "vllm:prefix_cache_hits_total": 9176256.0,
+    "vllm:generation_tokens_total": 5610.0,
+    "vllm:prompt_tokens_total": 10228588.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 4308.0,
+    "vllm:spec_decode_num_draft_tokens_total": 5384.0
+   },
+   "t0": 1791329758.783644,
+   "t1": 1791330354.8241396,
+   "ok": true
+  }
+ ]
+}

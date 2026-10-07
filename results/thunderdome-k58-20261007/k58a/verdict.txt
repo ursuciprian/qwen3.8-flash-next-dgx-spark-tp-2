@@ -1,0 +1,32 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.815 arm 0.820 shift +0.005
+  pos 1: control 0.660 arm 0.681 shift +0.021
+  pos 2: control 0.532 arm 0.564 shift +0.033  > 0.03
+  pos 3: control 0.434 arm 0.470 shift +0.035  > 0.03
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1     missing
+  probe  fresh-c4     missing
+  probe  fresh-c8     missing
+  probe  d16k-c4      missing
+  probe  count-c8     missing
+  wall   d16k-c8      missing
+  benchy pp2048 (c1)  missing
+  benchy tg512 (c1)   missing
+  benchy tg512 (c8)   missing
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 10/20 prompts identical, |dlogprob| mean 0.0384 max 0.6081
+  self  arm-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0389 max 0.6680
+  cross ctl-p1/arm-p1: 13/20 prompts identical, |dlogprob| mean 0.0386 max 0.4896
+reason: acceptance pos 2 moved +0.033
+reason: acceptance pos 3 moved +0.035
+reason: probe fresh-c1: missing
+reason: probe fresh-c4: missing
+reason: probe fresh-c8: missing
+reason: probe d16k-c4: missing
+reason: probe count-c8: missing
+reason: wall d16k-c8: missing
+reason: benchy pp2048 (c1): missing
+reason: benchy tg512 (c1): missing
+reason: benchy tg512 (c8): missing
+better: none
+VERDICT=KILL
