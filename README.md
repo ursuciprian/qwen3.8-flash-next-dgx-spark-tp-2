@@ -62,11 +62,16 @@ hf download local-inference-lab/Qwen3.8-Flash-Next-NVFP4 --revision 7c4f1bc1a2d6
 
 ## Measured
 
-Two kinds of workload, labelled per row, because they differ by about 2× in tokens per decode step:
+Workloads are labelled per row, because they differ by about 2× in tokens per decode step:
 
 - High-acceptance workloads (copying, counting) accept nearly every MTP draft (~4.9–5.0 tokens per step). They show
   the decode rate when drafts land, which bounds what MTP can give.
-- Coding is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the rate an agent sees.
+- Coding (llama-benchy) is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the
+  rate an agent sees.
+- Coding (36 prompts) sends 36 short coding requests (12 Python, 8 each C++, Rust and Go) one at a time, up to 768
+  tokens out, once at temperature 0 with thinking off and once with the server defaults (thinking on). The cell is
+  the median decode tok/s of the 36 requests, with the max in brackets
+  ([details](docs/BENCHMARKS.md#coding-probe-36-prompts-in-four-languages-2026-10-06)).
 
 ### 2× Spark (TP=2), build b1.4
 
@@ -76,10 +81,18 @@ Two kinds of workload, labelled per row, because they differ by about 2× in tok
 | **High-acceptance:** counting, T=0, max of 5 rounds | 4.91–5.00 | 122.4 | 389.8 | 558.0 | 795.3 | b1.4 (2026-10-05) |
 | **Coding:** llama-benchy tg512, depth 0 | 2.7–2.8 | 62.2 | 150.9 | 195.5 | 242.8 | b1.4 (2026-10-01) |
 | **Coding:** llama-benchy tg512, 16k cached depth | 2.6–2.7 | 63.8 | 117.5 | 145.9 | 176.5 | b1.4 (2026-10-01) |
+| **Coding:** 36 prompts, T=0, thinking off, median (max) | 4.01 | 106.2 (120.6) | | | | b1.4 (2026-10-06) |
+| **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.44 | 87.5 (97.2) | | | | b1.4 (2026-10-06) |
 
 Prefill (c1): 2,784–2,855 tok/s for a 2,048-token prompt; 2,895–2,920 tok/s filling a 16k context (two boots).
 TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached context). c2/c5/c10 cells:
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md#b14-image-2026-10-01).
+
+KV pool (fp8 KV, `gpu_memory_utilization` 0.80, boot of 2026-10-02): 30.53 GiB, 3,673,158 tokens, which vLLM reports
+as 14.01x concurrency at 262,144 tokens per request. vLLM sizes the pool by profiling memory at boot, so it varies a
+little: other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens, and the `max_num_seqs` 32 boot logged
+3,615,479 (13.79x). This is vLLM's capacity figure; 14 concurrent 262K requests have not been run. Serve-log lines:
+[`kv-pool-2x.txt`](results/b1.4-20261001/kv-pool-2x.txt).
 
 ### 1× Spark (TP=1, experimental), build v3d
 
@@ -89,6 +102,8 @@ TTFT at c1: 0.75 s (2k new tokens) / 1.70 s (2k new tokens on a 16k cached conte
 | **High-acceptance:** counting, T=0, max of 5 rounds | 4.82–5.00 | 84.8 | 239.8 | 377.8 | v3d (2026-10-05) |
 | **Coding:** llama-benchy tg512, depth 0 | 3.3–3.5 | 59.8 | 111.4 | 139.5 | v3d (2026-10-05) |
 | **Coding:** llama-benchy tg512, 16k cached depth | 3.1–3.4 | 62.6 | 101.4 | 111.0 | v3d (2026-10-05) |
+| **Coding:** 36 prompts, T=0, thinking off, median (max) | 3.96 | 72.9 (81.8) | | | v3d (2026-10-06) |
+| **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.38 | 59.7 (67.2) | | | v3d (2026-10-06) |
 
 v3d serves [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE):
 
@@ -104,6 +119,9 @@ between runs.
 
 Prefill (c1): 1,788 tok/s for a 2,048-token prompt; 2,088 tok/s filling a 16k context. TTFT at c1: 1.18 s (2k new
 tokens) / 1.94 s (2k new tokens on a 16k cached context).
+
+KV pool: 14 GiB, 993,754 tokens, which vLLM reports as 3.79x concurrency at 262,144 tokens per request (2× b1.4:
+3,673,158 tokens, 14.01x).
 
 | Context length | Requests that fit in the KV pool at once, v3b (6 GiB) | v3c / v3d (14 GiB) |
 |---|:---:|:---:|
@@ -258,7 +276,7 @@ Stop with `sparkrun stop --all`.
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
 | **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (171 s) with the compile cache from the image and a warm page cache, once the checkpoint is downloaded |
-| **Concurrency** | `max_num_seqs` 16 | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens) |
+| **Concurrency** | `max_num_seqs` 16, KV pool 30.53 GiB (3,673,158 tokens, 14.01x at 262,144; varies by boot, see [Measured](#2-spark-tp2-build-b14)) | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens, 3.79x at 262,144) |
 
 <!-- TODO: 1x kernel/linger requirements and the cold first-boot time with the shipped seed. -->
 
@@ -276,6 +294,8 @@ Image and video input are not tested on these builds.
 
 ## Known limits
 
+- 2× Spark: by vLLM's count the KV pool holds about 14 requests at 262,144 tokens (3,673,158 tokens on the
+  2026-10-02 boot), under the 16-request cap. 14 concurrent full-length requests have not been run.
 - 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
   8 × 64K fits.
 - 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host

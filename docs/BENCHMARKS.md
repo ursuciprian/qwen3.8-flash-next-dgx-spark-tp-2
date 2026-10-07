@@ -1,5 +1,35 @@
 # Benchmarks: full tables
 
+## Coding probe, 36 prompts in four languages (2026-10-06)
+
+Single-request decode speed on short coding requests: 12 Python and 8 each C++, Rust and Go (write a function, fix a
+bug, refactor, write tests). One request at a time, up to 768 tokens out, each prompt sent once per setting:
+
+- T=0, thinking off: temperature 0, `enable_thinking=false`.
+- Server defaults: only model, messages and `max_tokens`, so the recipe's sampling and its `medium` thinking default
+  apply. 34 of 36 requests (2×) and 33 of 36 (1×) stopped at 768 tokens, and about two thirds of the streamed chunks
+  were reasoning, so these rows measure thinking plus the start of the answer.
+
+Decode tok/s = (completion tokens − 1) / (time of last token − time of first token). Tokens/step comes from the
+`vllm:spec_decode_*` counters around each request. Setups: 2× Spark b1.4 (the shipped recipe, dgx-01 + dgx-02) and
+1× Spark v3d (the shipped recipe and published image `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm`, alone on dgx-02).
+Raw files and the probe script: [`results/coding-probe-k55-20261006/`](../results/coding-probe-k55-20261006/).
+
+Decode tok/s, median of the prompts (max in brackets):
+
+| Prompts | 2× b1.4, T=0, thinking off | 1× v3d, T=0, thinking off | 2× b1.4, server defaults | 1× v3d, server defaults |
+|---|:---:|:---:|:---:|:---:|
+| 12 Python | 103.1 (109.9) | 73.2 (77.0) | 87.7 (97.2) | 60.0 (65.8) |
+| 8 C++ | 113.5 (120.6) | 75.6 (81.8) | 88.3 (93.8) | 62.1 (67.2) |
+| 8 Rust | 108.5 (115.7) | 76.3 (79.7) | 86.3 (90.7) | 58.1 (66.3) |
+| 8 Go | 104.8 (115.5) | 71.6 (77.4) | 85.3 (93.2) | 59.1 (64.2) |
+| All 36 | 106.2 (120.6) | 72.9 (81.8) | 87.5 (97.2) | 59.7 (67.2) |
+| Tokens/step, all 36 | 4.01 | 3.96 | 3.44 | 3.38 |
+| TTFT median, all 36 | 129 ms | 206 ms | 131 ms | 199 ms |
+
+Each cell is one pass over its prompts on one boot. An earlier 1× v3d boot that ran only the 12 Python prompts gave
+71.0 (T=0, thinking off) and 62.3 (server defaults), against 73.2 and 60.0 above.
+
 ## High concurrency, max_num_seqs 32 (2026-10-05)
 
 Measured with `max_num_seqs` 32 and CUDA graphs up to 160 rows. The shipped recipes use 16 (2×) and 8 (1×), and the
@@ -402,6 +432,9 @@ Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm`
 (`sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd`), checkpoint revision `7c4f1bc1`.
 A/B against the previous build (2026-09-29) on 2026-10-01, two separate boots per build, means of both boots.
 Raw files and verdict: [`results/b1.4-20261001/`](../results/b1.4-20261001/). The 2026-09-29 build's tables follow below.
+KV pool of the shipped recipe (fp8 KV, `gpu_memory_utilization` 0.80, boot of 2026-10-02): 30.53 GiB, 3,673,158 tokens,
+14.01x at 262,144 tokens per request by vLLM's count. Other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens;
+the `max_num_seqs` 32 boot logged 3,615,479 (13.79x). Serve-log lines: [`kv-pool-2x.txt`](../results/b1.4-20261001/kv-pool-2x.txt).
 What changed: the MTP draft head scores 131,072 of the 248,320 vocab ids (lossless via rejection sampling), the vllm#923
 QSA prefill-flag race fix, the vllm#914 Triton recompile fix, and the server default thinking effort `medium` (a recipe
 flag; the speed and gate numbers below were measured without it, at the template default).
