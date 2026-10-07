@@ -22,9 +22,11 @@ Known gaps, settled by the phase 2 GPU parity test, not here:
   steps of the same chain wrote (not even their own). Measured against the served per-step top-20 draft logits
   (recheck2 capture, 500 docs, logit rel err per depth): with the chain keys 0.0044/0.0249/0.0450/0.0637 (GPU),
   without 0.0062/0.0078/0.0087/0.0093 (CPU); live T=0 step replay minus live counters at positions 3-4 goes from
-  -0.013/-0.017 to -0.003/-0.004. The vLLM/b12x code read (cbee9971, b12x 21e0b201) shows no step that drops
-  them, so the cause is open; zero-valued chain K/V fit as well as absent ones. chain_kv=True restores the
-  attended chain (EAGLE-style TTT) for comparison
+  -0.013/-0.017 to -0.003/-0.004. Cause (GPU probe probe97, #97): steps 1+ run b12x DraftSelectionReuse, whose
+  attention launches the sparse-GQA program compiled for selection width 2051 on the 2055-wide reuse selection;
+  the kernel's column mask drops the 4 tail columns, which hold every chain position (b12x 21e0b201
+  attention/qsa/_contract.py:1270/3691, paged/_selected_forward.py:371). chain_kv=True restores the attended
+  chain (EAGLE-style TTT) for comparison
 - K/V: kv_fp8=True rounds K/V to fp8 e4m3 (scale 1.0) as --kv-cache-dtype fp8 serves them (vLLM qsa.py writes
   K/V with reshape_and_cache_flash before attention; b12x converts fp8 -> BF16 in shared memory, k_scale folded
   into the score scale). Measured on the p2 live set (T=0 step replay vs live counters, positions 1-4): fp8
