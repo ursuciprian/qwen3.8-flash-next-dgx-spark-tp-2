@@ -3,6 +3,7 @@
     python -m tools.mtp_refit.parity drafts --snapshot S --draft-vocab V --data data/heldout data/train \
         --max-docs 500 --out parity-drafts.json
     python -m tools.mtp_refit.parity live --offline eval-t0.json --key t0 --metrics gen-live-t0 --out live-t0.json
+    python -m tools.mtp_refit.parity gate --drafts parity-drafts.json --live live-t0.json live-t1.json [--accepted A]
 
 drafts: for captured documents short enough to be stored whole and attended densely (<= --max-len
 rows, starting at position 0), MtpRef runs the vLLM drafter's own greedy chain recorded by the
@@ -28,6 +29,10 @@ that produced the same documents (gen.py run --metrics). The offline side is eva
 anchor-averaged per_position, which over-states position 1 by ~0.035 at T=0 on the p2 live set. T=1
 uses the top-k lower bound and reports the upper bound next to it. Pass: |offline - live| <= --tol at
 every served position.
+
+gate: the phase 2 verdict from the drafts and live JSONs. --accepted coverage-<YYYY-MM-DD> records a user
+decision to train despite the decisive fraction (< 0.9 at delta 3.5 on the served margins, 2026-10-07); it
+waives that criterion only, logit error, decisive argmax and both live checks still have to pass.
 """
 from __future__ import annotations
 
@@ -169,6 +174,37 @@ def live(a):
     return 0 if ok else 1
 
 
+ACCEPT_RE = re.compile(r"^coverage-\d{4}-\d{2}-\d{2}$")
+
+
+def gate_verdict(drafts_res, live_res, accepted=""):
+    """(pass, reasons) of the phase 2 gate from `drafts` and `live` JSONs. accepted="coverage-<date>" (a user
+    decision, REFIT_USER_ACCEPTED) waives only the decisive-fraction criterion; every other criterion stays."""
+    if accepted and not ACCEPT_RE.match(accepted):
+        raise ValueError(f"unknown acceptance {accepted!r}: only coverage-<YYYY-MM-DD> waives a criterion")
+    why, d = [], drafts_res
+    if "logit_rel_err" not in d:
+        why.append("drafts: no logit criterion (draft_topk missing)")
+    else:
+        if not all(e < d["logit_rel_err_max"] for e in d["logit_rel_err"]):
+            why.append(f"drafts: logit rel err {d['logit_rel_err']} >= {d['logit_rel_err_max']}")
+        if not all(x is not None and x >= d["argmax_min"] for x in d["decisive_agree"]):
+            why.append(f"drafts: decisive argmax {d['decisive_agree']} < {d['argmax_min']}")
+        if not all(f >= d["decisive_min"] for f in d["decisive_frac"]) and not accepted:
+            why.append(f"drafts: decisive fraction {d['decisive_frac']} < {d['decisive_min']}")
+    for r in live_res:
+        if not r["pass"]:
+            why.append(f"live {r['key']}: diff {r['diff']} beyond {r['tol']}")
+    return not why, why
+
+
+def gate(a):
+    ok, why = gate_verdict(json.load(open(a.drafts)), [json.load(open(f)) for f in a.live], a.accepted or "")
+    note = f" (user accepted {a.accepted}: decisive fraction waived)" if a.accepted else ""
+    print(("PASS" + note) if ok else "FAIL: " + "; ".join(why))
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -196,8 +232,12 @@ def main():
     z.add_argument("--a", required=True)
     z.add_argument("--b", required=True)
     z.add_argument("--out", required=True)
+    g = sub.add_parser("gate")
+    g.add_argument("--drafts", required=True, help="parity drafts JSON")
+    g.add_argument("--live", nargs="+", required=True, help="parity live JSONs (t0, t1)")
+    g.add_argument("--accepted", help="REFIT_USER_ACCEPTED: coverage-<YYYY-MM-DD> waives the decisive fraction only")
     a = ap.parse_args()
-    raise SystemExit({"drafts": drafts, "live": live, "noise": noise}[a.cmd](a))
+    raise SystemExit({"drafts": drafts, "live": live, "noise": noise, "gate": gate}[a.cmd](a))
 
 
 if __name__ == "__main__":

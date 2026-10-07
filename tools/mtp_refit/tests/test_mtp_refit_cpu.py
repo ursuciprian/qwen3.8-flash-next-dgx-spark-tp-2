@@ -2,6 +2,7 @@
 
     PYTHONPATH=<b12x checkout> python -m pytest tools/mtp_refit/tests -q
 """
+import argparse
 import gzip
 import json
 import os
@@ -615,3 +616,27 @@ def test_serve_hc_mxfp8_touches_only_hc(snap):
     assert serve_hc_mxfp8(m) == 5  # down x3 + inject x2 (in 256); up has in = hc_lowrank 8, not a block of 32
     changed = {n for n, p in m.named_parameters() if not torch.equal(p, before[n])}
     assert changed and all(any(k in n for k in ("input_mix_weight", "block_inject")) for n in changed)
+
+
+def test_gate_coverage_acceptance_waives_only_decisive_fraction(tmp_path):
+    d = {"logit_rel_err": [0.006, 0.008, 0.009, 0.009], "logit_rel_err_max": 0.01, "decisive_frac": [0.72, 0.71, 0.69, 0.69],
+         "decisive_agree": [1.0, 1.0, 1.0, 1.0], "argmax_min": 0.995, "decisive_min": 0.9}
+    lv = [{"key": "t0", "pass": True, "diff": [0.0], "tol": 0.01}, {"key": "t1", "pass": True, "diff": [0.0], "tol": 0.01}]
+    ok, why = parity.gate_verdict(d, lv)
+    assert not ok and len(why) == 1 and "decisive fraction" in why[0]
+    assert parity.gate_verdict(d, lv, "coverage-2026-10-07") == (True, [])
+    # the acceptance waives nothing else
+    assert not parity.gate_verdict({**d, "logit_rel_err": [0.006, 0.02, 0.009, 0.009]}, lv, "coverage-2026-10-07")[0]
+    assert not parity.gate_verdict({**d, "decisive_agree": [1.0, 1.0, 1.0, 0.99]}, lv, "coverage-2026-10-07")[0]
+    assert not parity.gate_verdict(d, [lv[0], {**lv[1], "pass": False}], "coverage-2026-10-07")[0]
+    assert not parity.gate_verdict({"pass": True}, lv, "coverage-2026-10-07")[0]
+    with pytest.raises(ValueError):
+        parity.gate_verdict(d, lv, "all")
+    # CLI
+    (tmp_path / "d.json").write_text(json.dumps(d))
+    for r in lv:
+        (tmp_path / f"{r['key']}.json").write_text(json.dumps(r))
+    a = argparse.Namespace(drafts=str(tmp_path / "d.json"), live=[str(tmp_path / "t0.json"), str(tmp_path / "t1.json")], accepted=None)
+    assert parity.gate(a) == 1
+    a.accepted = "coverage-2026-10-07"
+    assert parity.gate(a) == 0
