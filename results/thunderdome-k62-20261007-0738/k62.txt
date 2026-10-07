@@ -1,0 +1,147 @@
+k62 2026-10-07 07:38:47 EEST: full evaluation of k58a on both Sparks vs v3d (#101; vLLM exp/k58-drafter-kv e810d56ae)
+image spark-vllm-b12x:k58-21e0b201-e810d56a; screen with TD_ACC_RISE_OK=1 (acceptance rises are reported, not a KILL reason; drops stay strict)
+
+== k58a (dgx-01) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.47GiB
+-- KV pool (serve.log)
+  ctl-p1: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+  arm-p1: GPU KV cache size: 926,837 tokens, Maximum concurrency for 262,144 tokens per request: 3.54x
+-- kvcap (one request's share of the pool; requests that fit = 1/share)
+  ctl-p1: kvcap num_gpu_blocks=4568
+  ctl-p1: kvcap 16364 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.0 s)
+  ctl-p1: kvcap 65145 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (36.5 s)
+  ctl-p2: kvcap num_gpu_blocks=4568
+  ctl-p2: kvcap 16363 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.3 s)
+  ctl-p2: kvcap 65144 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (37.2 s)
+  arm-p1: kvcap num_gpu_blocks=4568
+  arm-p1: kvcap 16364 prompt + 256 out: peak usage 0.0396 -> requests that fit 25.23 (11.4 s)
+  arm-p1: kvcap 65145 prompt + 256 out: peak usage 0.0917 -> requests that fit 10.9 (36.9 s)
+  arm-p2: kvcap num_gpu_blocks=4568
+  arm-p2: kvcap 16364 prompt + 256 out: peak usage 0.0396 -> requests that fit 25.23 (11.3 s)
+  arm-p2: kvcap 65145 prompt + 256 out: peak usage 0.0917 -> requests that fit 10.9 (36.7 s)
+-- b12x ready lines (arm boots incl. bake)
+      3 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      3 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.815 arm 0.825 shift +0.010
+  pos 1: control 0.664 arm 0.690 shift +0.025
+  pos 2: control 0.538 arm 0.574 shift +0.035  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 3: control 0.437 arm 0.476 shift +0.039  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -0.86%  noise  1.70%            n=4 CI [-2.4,+0.7] control boot-to-boot -1.70%, step -0.68%
+  probe  fresh-c4      +4.92%  noise  3.96%  better    n=16 CI [+2.1,+8.4] control boot-to-boot +3.96%, step -0.53%
+  probe  fresh-c8      +3.00%  noise  1.95%  better    n=32 CI [+1.1,+5.0] control boot-to-boot -0.10%, step +0.10%
+  probe  d16k-c4       +3.09%  noise  2.88%  better    n=16 CI [+0.7,+5.4] control boot-to-boot -2.88%, step -1.02%
+  probe  count-c8      +3.96%  noise  1.09%  better    n=32 CI [+2.9,+5.0] control boot-to-boot -0.88%, step -2.74%
+  wall   d16k-c8       -7.72%  noise  2.36%  WORSE>2x  wall s control 127/124 arm 137/135 (cut counts as the time)
+  benchy pp2048 (c1)  -10.96%  noise  5.75%  worse     control 1731.9 arm 1542.1 t/s (boots 2/2)
+  benchy tg512 (c1)    -4.11%  noise 11.10%            control 57.0 arm 54.7 t/s (boots 2/2)
+  benchy tg512 (c8)    +7.35%  noise  5.31%  better    control 127.8 arm 137.2 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0369 max 0.6435
+  self  ctl-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0422 max 0.5091
+  self  arm-p1 a/b: 13/20 prompts identical, |dlogprob| mean 0.0321 max 0.4423
+  self  arm-p2 a/b: 9/20 prompts identical, |dlogprob| mean 0.0387 max 0.4465
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0414 max 0.6175
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0289 max 0.2524
+reason: wall d16k-c8 -7.72% (noise 2.36%)
+reason: benchy pp2048 (c1) -10.96% (noise 5.75%)
+better: probe fresh-c4 +4.92% (noise 3.96%); probe fresh-c8 +3.00% (noise 1.95%); probe d16k-c4 +3.09% (noise 2.88%); probe count-c8 +3.96% (noise 1.09%); benchy tg512 (c8) +7.35% (noise 5.31%)
+VERDICT=KILL
+-- single-request hook cells (arm vs control, same pass)
+pass 1 copy-1    ctl     80.6  arm     81.0    +0.4%   tok/step ctl 4.935 arm 4.954   acc/pos ctl [0.992, 0.987, 0.981, 0.975] arm [0.994, 0.991, 0.986, 0.983]
+pass 1 copy-2    ctl    127.4  arm    126.0    -1.1%   tok/step ctl 4.935 arm 4.954   acc/pos ctl [0.992, 0.987, 0.981, 0.975] arm [0.994, 0.991, 0.986, 0.983]
+pass 1 count-c1  ctl     83.2  arm     84.2    +1.2%   tok/step ctl 4.934 arm 4.992   acc/pos ctl [0.997, 0.987, 0.982, 0.967] arm [1.0, 0.997, 0.997, 0.997]
+pass 1 count-c2  ctl    145.4  arm    144.5    -0.6%   tok/step ctl 4.94 arm 4.981   acc/pos ctl [0.997, 0.986, 0.979, 0.979] arm [1.0, 0.994, 0.994, 0.994]
+pass 1 teb       ctl     60.2  arm     64.0    +6.3%   tok/step ctl 3.35 arm 3.602   acc/pos ctl [0.803, 0.624, 0.53, 0.393] arm [0.843, 0.694, 0.583, 0.481]
+pass 1 teb-t1    ctl     58.7  arm     57.1    -2.7%   tok/step ctl 3.371 arm 3.364   acc/pos ctl [0.845, 0.629, 0.526, 0.371] arm [0.763, 0.653, 0.525, 0.424]
+pass 2 copy-1    ctl     81.0  arm     80.7    -0.4%   tok/step ctl 4.948 arm 4.937   acc/pos ctl [0.992, 0.989, 0.985, 0.981] arm [0.989, 0.987, 0.981, 0.98]
+pass 2 copy-2    ctl    128.9  arm    125.0    -3.1%   tok/step ctl 4.948 arm 4.937   acc/pos ctl [0.992, 0.989, 0.985, 0.981] arm [0.989, 0.987, 0.981, 0.98]
+pass 2 count-c1  ctl     83.3  arm     83.9    +0.7%   tok/step ctl 4.874 arm 4.985   acc/pos ctl [0.985, 0.975, 0.96, 0.955] arm [1.0, 0.995, 0.995, 0.995]
+pass 2 count-c2  ctl    145.3  arm    151.1    +4.0%   tok/step ctl 4.922 arm 4.981   acc/pos ctl [0.992, 0.983, 0.974, 0.973] arm [1.0, 0.994, 0.994, 0.994]
+pass 2 teb       ctl     66.5  arm     64.2    -3.5%   tok/step ctl 3.731 arm 3.651   acc/pos ctl [0.875, 0.731, 0.635, 0.49] arm [0.78, 0.706, 0.633, 0.532]
+pass 2 teb-t1    ctl     60.2  arm     59.1    -1.8%   tok/step ctl 3.434 arm 3.421   acc/pos ctl [0.805, 0.681, 0.531, 0.416] arm [0.825, 0.658, 0.518, 0.421]
+mean of passes: copy-1 +0.0%, copy-2 -2.1%, count-c1 +1.0%, count-c2 +1.7%, teb +1.4%, teb-t1 -2.3%
+
+== k58a (dgx-02) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.82GiB
+-- KV pool (serve.log)
+  ctl-p1: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+  arm-p1: GPU KV cache size: 926,837 tokens, Maximum concurrency for 262,144 tokens per request: 3.54x
+-- kvcap (one request's share of the pool; requests that fit = 1/share)
+  ctl-p1: kvcap num_gpu_blocks=4568
+  ctl-p1: kvcap 16364 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.9 s)
+  ctl-p1: kvcap 65145 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (37.7 s)
+  ctl-p2: kvcap num_gpu_blocks=4568
+  ctl-p2: kvcap 16363 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.4 s)
+  ctl-p2: kvcap 65146 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (39.0 s)
+  arm-p1: kvcap num_gpu_blocks=4568
+  arm-p1: kvcap 16364 prompt + 256 out: peak usage 0.0396 -> requests that fit 25.23 (11.5 s)
+  arm-p1: kvcap 65146 prompt + 256 out: peak usage 0.0917 -> requests that fit 10.9 (37.1 s)
+  arm-p2: kvcap num_gpu_blocks=4568
+  arm-p2: kvcap 16364 prompt + 256 out: peak usage 0.0396 -> requests that fit 25.23 (13.1 s)
+  arm-p2: kvcap 65146 prompt + 256 out: peak usage 0.0917 -> requests that fit 10.9 (36.7 s)
+-- b12x ready lines (arm boots incl. bake)
+      1 b12x ready gemm.blockscaled_precision: 278/278 ready, 0 measured, 10 cached
+      3 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      3 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.818 arm 0.822 shift +0.003
+  pos 1: control 0.662 arm 0.682 shift +0.020
+  pos 2: control 0.536 arm 0.568 shift +0.032  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 3: control 0.435 arm 0.472 shift +0.036  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +4.89%  noise  8.81%            n=4 CI [-1.7,+15.9] control boot-to-boot -5.15%, step -0.09%
+  probe  fresh-c4      +3.67%  noise  3.11%  better    n=16 CI [+0.6,+6.8] control boot-to-boot -1.88%, step +0.76%
+  probe  fresh-c8      +1.72%  noise  1.82%            n=32 CI [-0.1,+3.5] control boot-to-boot -1.04%, step +0.87%
+  probe  d16k-c4       +3.61%  noise  4.70%            n=16 CI [-0.8,+8.6] control boot-to-boot -1.77%, step +0.73%
+  probe  count-c8      +1.79%  noise  3.99%            n=32 CI [+0.2,+3.3] control boot-to-boot +3.99%, step +0.05%
+  wall   d16k-c8       -7.74%  noise  1.00%  WORSE>2x  wall s control 125/125 arm 134/137 (cut counts as the time)
+  benchy pp2048 (c1)  -12.90%  noise  6.02%  WORSE>2x  control 1770.1 arm 1541.8 t/s (boots 2/2)
+  benchy tg512 (c1)    +6.99%  noise  8.28%            control 59.0 arm 63.1 t/s (boots 2/2)
+  benchy tg512 (c8)    +4.33%  noise  6.15%            control 133.4 arm 139.2 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0401 max 0.6802
+  self  ctl-p2 a/b: 15/20 prompts identical, |dlogprob| mean 0.0434 max 0.5270
+  self  arm-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0380 max 0.7025
+  self  arm-p2 a/b: 10/20 prompts identical, |dlogprob| mean 0.0352 max 0.6592
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0305 max 0.3872
+  cross ctl-p2/arm-p2: 12/20 prompts identical, |dlogprob| mean 0.0374 max 0.5794
+reason: wall d16k-c8 -7.74% (noise 1.00%)
+reason: benchy pp2048 (c1) -12.90% (noise 6.02%)
+better: probe fresh-c4 +3.67% (noise 3.11%)
+VERDICT=KILL
+-- single-request hook cells (arm vs control, same pass)
+pass 1 copy-1    ctl     80.7  arm     80.5    -0.3%   tok/step ctl 4.954 arm 4.95   acc/pos ctl [0.995, 0.99, 0.987, 0.981] arm [0.995, 0.989, 0.984, 0.981]
+pass 1 copy-2    ctl    123.6  arm    123.1    -0.3%   tok/step ctl 4.954 arm 4.95   acc/pos ctl [0.995, 0.99, 0.987, 0.981] arm [0.995, 0.989, 0.984, 0.981]
+pass 1 count-c1  ctl     80.3  arm     84.0    +4.6%   tok/step ctl 4.919 arm 4.992   acc/pos ctl [0.992, 0.985, 0.972, 0.97] arm [1.0, 0.997, 0.997, 0.997]
+pass 1 count-c2  ctl    145.8  arm    153.5    +5.3%   tok/step ctl 4.919 arm 4.991   acc/pos ctl [0.994, 0.983, 0.973, 0.97] arm [1.0, 0.997, 0.997, 0.997]
+pass 1 teb       ctl     62.4  arm     62.3    -0.2%   tok/step ctl 3.55 arm 3.473   acc/pos ctl [0.847, 0.721, 0.559, 0.423] arm [0.777, 0.67, 0.571, 0.455]
+pass 1 teb-t1    ctl     55.9  arm     63.4   +13.4%   tok/step ctl 3.244 arm 3.724   acc/pos ctl [0.773, 0.588, 0.479, 0.403] arm [0.905, 0.752, 0.571, 0.495]
+pass 2 copy-1    ctl     80.9  arm     80.9    +0.1%   tok/step ctl 4.944 arm 4.956   acc/pos ctl [0.994, 0.99, 0.983, 0.976] arm [0.994, 0.991, 0.987, 0.984]
+pass 2 copy-2    ctl    122.8  arm    122.5    -0.2%   tok/step ctl 4.944 arm 4.956   acc/pos ctl [0.994, 0.99, 0.983, 0.976] arm [0.994, 0.991, 0.987, 0.984]
+pass 2 count-c1  ctl     80.8  arm     83.6    +3.5%   tok/step ctl 4.869 arm 4.969   acc/pos ctl [0.99, 0.975, 0.955, 0.95] arm [1.0, 0.99, 0.99, 0.99]
+pass 2 count-c2  ctl    144.6  arm    153.3    +6.0%   tok/step ctl 4.924 arm 4.995   acc/pos ctl [0.997, 0.986, 0.973, 0.968] arm [1.0, 0.998, 0.998, 0.998]
+pass 2 teb       ctl     63.3  arm     63.5    +0.3%   tok/step ctl 3.657 arm 3.62   acc/pos ctl [0.88, 0.685, 0.611, 0.481] arm [0.843, 0.704, 0.583, 0.491]
+pass 2 teb-t1    ctl     58.3  arm     61.6    +5.7%   tok/step ctl 3.288 arm 3.569   acc/pos ctl [0.763, 0.661, 0.475, 0.39] arm [0.807, 0.697, 0.578, 0.486]
+mean of passes: copy-1 -0.1%, copy-2 -0.3%, count-c1 +4.0%, count-c2 +5.6%, teb +0.1%, teb-t1 +9.5%
+guard dgx01: min MemAvailable over the screen 11.54 GiB
+guard dgx02: min MemAvailable over the screen 13.77 GiB
+
+== gate k58a: PASS
+gate k58a spark-vllm-b12x:k58-21e0b201-e810d56a
+│    Quality:        94/100                                                    │
+│    Score:  100 / 100                                                         │
+│    Score:   100.0 ± 0.0 / 100                                                │
+depth    8000 | actual_tokens   15709 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   2.58s | lat    4.1s
+depth   32000 | actual_tokens   61730 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   4.33s | lat    6.1s
+depth   64000 | actual_tokens  122614 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   4.88s | lat    6.8s
+depth  128000 | actual_tokens  245267 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft  11.14s | lat   13.0s
+depth  128000 | actual_tokens  244166 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft  10.06s | lat   11.7s
+depth  128000 | actual_tokens  244893 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft  10.56s | lat   12.9s
+c=8 round wall 6.5s | per request (submit order): #0:6.37s/320t #1:6.37s/320t #2:6.37s/320t #3:6.47s/320t #4:6.37s/320t #5:6.47s/320t #6:6.47s/320t #7:6.47s/320t
+      preemptions +0 | queue time total 0.89s over 8 req | prefill total 4.08s | decode total 47.3s | accept 4.00/draft
+c=12 round wall 11.2s | per request (submit order): #0:6.37s/320t #1:6.37s/320t #2:6.37s/320t #3:6.68s/320t #4:6.37s/320t #5:6.68s/320t #6:11.21s/320t #7:11.21s/320t #8:6.69s/320t #9:6.68s/320t #10:11.21s/320t #11:11.21s/320t
+      preemptions +0 | queue time total 26.17s over 12 req | prefill total 30.76s | decode total 66.3s | accept 4.00/draft
+c=16 round wall 12.8s | per request (submit order): #0:6.61s/320t #1:6.30s/320t #2:6.30s/320t #3:6.30s/320t #4:6.30s/320t #5:6.61s/320t #6:6.61s/320t #7:6.61s/320t #8:12.66s/320t #9:12.66s/320t #10:12.66s/320t #11:12.76s/320t #12:12.66s/320t #13:12.76s/320t #14:12.76s/320t #15:12.76s/320t
+      preemptions +0 | queue time total 52.06s over 16 req | prefill total 58.55s | decode total 94.8s | accept 4.00/draft
+min MemAvailable dgx01 09:23:52 14.53 dgx02 09:16:47 13.84
+K62=FAIL (dgx-01 KILL (wall d16k-c8 -7.72% (noise 2.36%),benchy pp2048 (c1) -10.96% (noise 5.75%),); dgx-02 KILL (wall d16k-c8 -7.74% (noise 1.00%),benchy pp2048 (c1) -12.90% (noise 6.02%),); no Spark PROMOTE)
