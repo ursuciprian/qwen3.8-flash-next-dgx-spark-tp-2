@@ -1,0 +1,58 @@
+{
+ "label": "k54-c2",
+ "model": "qwen3.8-flash-next",
+ "base": "http://192.168.100.53:8000",
+ "rounds": 3,
+ "gen_tokens": 300,
+ "rows": [
+  {
+   "c": 2,
+   "agg_tok_s": 143.5,
+   "per_stream_tok_s": 72.3,
+   "w2w_med_s": 4.43,
+   "w2w_p90_s": 4.62,
+   "ttft_med_s": 1.64,
+   "agg_tok_s_max": 153.1,
+   "rounds": [
+    {
+     "round": 1,
+     "agg_tok_s": 138.5,
+     "wall_s": 4.621,
+     "per_stream_tok_s": [
+      69.3,
+      69.3
+     ],
+     "completion_tokens": 640,
+     "tokens_per_step": 5.0
+    },
+    {
+     "round": 2,
+     "agg_tok_s": 153.1,
+     "wall_s": 4.179,
+     "per_stream_tok_s": [
+      76.6,
+      76.6
+     ],
+     "completion_tokens": 640,
+     "tokens_per_step": 5.0
+    },
+    {
+     "round": 3,
+     "agg_tok_s": 143.5,
+     "wall_s": 4.46,
+     "per_stream_tok_s": [
+      71.8,
+      72.8
+     ],
+     "completion_tokens": 640,
+     "tokens_per_step": 4.977
+    }
+   ],
+   "ttft_all_s": [
+    1.641,
+    1.641
+   ]
+  }
+ ],
+ "ts": "2026-10-07 05:49:28"
+}

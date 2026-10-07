@@ -1,0 +1,138 @@
+k58 2026-10-07 00:03:42 EEST: MTP drafter KV without the k57 pool loss (#101; vLLM exp/k58-drafter-kv e810d56ae528c02eeb7953f430cb2f43e26b8384)
+image spark-vllm-b12x:k58-21e0b201-e810d56a; arm A k58a (dgx-01, BF16 drafter KV, fitted page), arm B k58b (dgx-02, fp8 drafter KV, K scale 0.25), both vs v3d
+cputest: 6 passed, 16 warnings in 13.94s
+
+== k58a (dgx-01) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.47GiB -> KILL
+-- KV pool (serve.log)
+  ctl-p1: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+  arm-p1: GPU KV cache size: 926,837 tokens, Maximum concurrency for 262,144 tokens per request: 3.54x
+-- kvcap (one request's share of the pool; requests that fit = 1/share)
+  ctl-p1: kvcap num_gpu_blocks=4568
+  ctl-p1: kvcap 16363 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (12.8 s)
+  ctl-p1: kvcap 65145 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (38.2 s)
+  arm-p1: kvcap num_gpu_blocks=4568
+  arm-p1: kvcap 16364 prompt + 256 out: peak usage 0.0396 -> requests that fit 25.23 (11.4 s)
+  arm-p1: kvcap 65145 prompt + 256 out: peak usage 0.0917 -> requests that fit 10.9 (37.0 s)
+-- b12x ready lines (arm boots incl. bake)
+      1 b12x ready gemm.blockscaled_precision: 278/278 ready, 0 measured, 10 cached
+      2 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      2 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+reason: acceptance pos 2 moved +0.033
+reason: acceptance pos 3 moved +0.035
+reason: probe fresh-c1: missing
+reason: probe fresh-c4: missing
+reason: probe fresh-c8: missing
+reason: probe d16k-c4: missing
+reason: probe count-c8: missing
+reason: wall d16k-c8: missing
+reason: benchy pp2048 (c1): missing
+reason: benchy tg512 (c1): missing
+reason: benchy tg512 (c8): missing
+better: none
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.815 arm 0.820 shift +0.005
+  pos 1: control 0.660 arm 0.681 shift +0.021
+  pos 2: control 0.532 arm 0.564 shift +0.033  > 0.03
+  pos 3: control 0.434 arm 0.470 shift +0.035  > 0.03
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1     missing
+  probe  fresh-c4     missing
+  probe  fresh-c8     missing
+  probe  d16k-c4      missing
+  probe  count-c8     missing
+  wall   d16k-c8      missing
+  benchy pp2048 (c1)  missing
+  benchy tg512 (c1)   missing
+  benchy tg512 (c8)   missing
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 10/20 prompts identical, |dlogprob| mean 0.0384 max 0.6081
+  self  arm-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0389 max 0.6680
+  cross ctl-p1/arm-p1: 13/20 prompts identical, |dlogprob| mean 0.0386 max 0.4896
+reason: acceptance pos 2 moved +0.033
+reason: acceptance pos 3 moved +0.035
+reason: probe fresh-c1: missing
+reason: probe fresh-c4: missing
+reason: probe fresh-c8: missing
+reason: probe d16k-c4: missing
+reason: probe count-c8: missing
+reason: wall d16k-c8: missing
+reason: benchy pp2048 (c1): missing
+reason: benchy tg512 (c1): missing
+reason: benchy tg512 (c8): missing
+better: none
+VERDICT=KILL
+-- single-request hook cells (arm vs control, same pass; acc/pos = acceptance per draft position)
+pass 1 copy-1    ctl     80.6  arm     80.4    -0.3%   tok/step ctl 4.936 arm 4.935   acc/pos ctl [0.992, 0.987, 0.98, 0.977] arm [0.991, 0.987, 0.98, 0.978]
+pass 1 copy-2    ctl    123.0  arm    122.9    -0.0%   tok/step ctl 4.936 arm 4.935   acc/pos ctl [0.992, 0.987, 0.98, 0.977] arm [0.991, 0.987, 0.98, 0.978]
+pass 1 count-c1  ctl     83.4  arm     83.6    +0.2%   tok/step ctl 4.977 arm 4.969   acc/pos ctl [1.0, 0.992, 0.992, 0.992] arm [1.0, 0.99, 0.99, 0.99]
+pass 1 count-c2  ctl    140.8  arm    143.6    +2.0%   tok/step ctl 4.903 arm 4.981   acc/pos ctl [0.992, 0.979, 0.968, 0.964] arm [1.0, 0.994, 0.994, 0.994]
+pass 1 teb       ctl     58.9  arm     68.7   +16.6%   tok/step ctl 3.331 arm 3.891   acc/pos ctl [0.805, 0.602, 0.508, 0.415] arm [0.931, 0.792, 0.644, 0.525]
+pass 1 teb-t1    ctl     60.5  arm     60.0    -0.8%   tok/step ctl 3.434 arm 3.482   acc/pos ctl [0.814, 0.673, 0.531, 0.416] arm [0.795, 0.67, 0.571, 0.446]
+pass 2: missing stats
+mean of passes: copy-1 -0.3%, copy-2 -0.0%, count-c1 +0.2%, count-c2 +2.0%, teb +16.6%, teb-t1 -0.8%
+
+== k58b (dgx-02) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.86GiB -> KILL
+-- KV pool (serve.log)
+  ctl-p1: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+  arm-p1: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+-- kvcap (one request's share of the pool; requests that fit = 1/share)
+  ctl-p1: kvcap num_gpu_blocks=4568
+  ctl-p1: kvcap 16364 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.7 s)
+  ctl-p1: kvcap 65146 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (37.3 s)
+  ctl-p2: kvcap num_gpu_blocks=4568
+  ctl-p2: kvcap 16364 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.2 s)
+  ctl-p2: kvcap 65144 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (37.5 s)
+  arm-p1: kvcap num_gpu_blocks=4568
+  arm-p1: kvcap 16363 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.3 s)
+  arm-p1: kvcap 65145 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (37.8 s)
+  arm-p2: kvcap num_gpu_blocks=4568
+  arm-p2: kvcap 16363 prompt + 256 out: peak usage 0.0414 -> requests that fit 24.16 (11.2 s)
+  arm-p2: kvcap 65144 prompt + 256 out: peak usage 0.0869 -> requests that fit 11.5 (38.3 s)
+-- b12x ready lines (arm boots incl. bake)
+      1 b12x ready gemm.blockscaled_precision: 271/271 ready, 0 measured, 10 cached
+      3 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      3 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+reason: benchy pp2048 (c1) -4.32% (noise 1.00%)
+better: probe fresh-c1 +4.45% (noise 3.24%); probe fresh-c8 +1.89% (noise 1.61%); benchy tg512 (c1) +7.87% (noise 4.82%); benchy tg512 (c8) +3.62% (noise 2.20%)
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.816 arm 0.819 shift +0.003
+  pos 1: control 0.662 arm 0.666 shift +0.004
+  pos 2: control 0.538 arm 0.540 shift +0.002
+  pos 3: control 0.440 arm 0.440 shift -0.000
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +4.45%  noise  3.24%  better    n=4 CI [+0.7,+7.2] control boot-to-boot +0.36%, step -0.05%
+  probe  fresh-c4      -0.02%  noise  1.89%            n=16 CI [-1.8,+1.9] control boot-to-boot -0.29%, step -0.49%
+  probe  fresh-c8      +1.89%  noise  1.61%  better    n=32 CI [+0.3,+3.5] control boot-to-boot -0.91%, step -1.43%
+  probe  d16k-c4       -1.15%  noise  2.47%            n=16 CI [-3.7,+1.3] control boot-to-boot +0.22%, step +0.45%
+  probe  count-c8      +2.08%  noise  3.29%            n=32 CI [+0.4,+3.9] control boot-to-boot -3.29%, step -1.11%
+  wall   d16k-c8       +0.00%  noise  1.60%            wall s control 125/127 arm 125/127 (cut counts as the time)
+  benchy pp2048 (c1)   -4.32%  noise  1.00%  WORSE>2x  control 1835.3 arm 1756.0 t/s (boots 2/2)
+  benchy tg512 (c1)    +7.87%  noise  4.82%  better    control 55.8 arm 60.1 t/s (boots 2/2)
+  benchy tg512 (c8)    +3.62%  noise  2.20%  better    control 127.1 arm 131.7 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0384 max 0.4768
+  self  ctl-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0371 max 0.3269
+  self  arm-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0430 max 0.5487
+  self  arm-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0404 max 0.6566
+  cross ctl-p1/arm-p1: 10/20 prompts identical, |dlogprob| mean 0.0339 max 0.5493
+  cross ctl-p2/arm-p2: 11/20 prompts identical, |dlogprob| mean 0.0419 max 0.6387
+reason: benchy pp2048 (c1) -4.32% (noise 1.00%)
+better: probe fresh-c1 +4.45% (noise 3.24%); probe fresh-c8 +1.89% (noise 1.61%); benchy tg512 (c1) +7.87% (noise 4.82%); benchy tg512 (c8) +3.62% (noise 2.20%)
+VERDICT=KILL
+-- single-request hook cells (arm vs control, same pass; acc/pos = acceptance per draft position)
+pass 1 copy-1    ctl     80.7  arm     80.5    -0.2%   tok/step ctl 4.948 arm 4.947   acc/pos ctl [0.996, 0.988, 0.984, 0.98] arm [0.994, 0.989, 0.985, 0.979]
+pass 1 copy-2    ctl    127.5  arm    130.8    +2.5%   tok/step ctl 4.948 arm 4.947   acc/pos ctl [0.996, 0.988, 0.984, 0.98] arm [0.994, 0.989, 0.985, 0.979]
+pass 1 count-c1  ctl     81.9  arm     84.2    +2.8%   tok/step ctl 4.906 arm 4.926   acc/pos ctl [0.992, 0.98, 0.97, 0.965] arm [0.995, 0.987, 0.975, 0.969]
+pass 1 count-c2  ctl    145.1  arm    149.8    +3.2%   tok/step ctl 4.963 arm 4.969   acc/pos ctl [0.998, 0.989, 0.988, 0.988] arm [0.998, 0.991, 0.991, 0.989]
+pass 1 teb       ctl     60.7  arm     59.0    -2.8%   tok/step ctl 3.345 arm 3.379   acc/pos ctl [0.776, 0.655, 0.5, 0.414] arm [0.819, 0.707, 0.466, 0.388]
+pass 1 teb-t1    ctl     54.6  arm     52.6    -3.7%   tok/step ctl 3.152 arm 3.008   acc/pos ctl [0.784, 0.592, 0.448, 0.328] arm [0.746, 0.508, 0.415, 0.338]
+pass 2 copy-1    ctl     80.9  arm     80.8    -0.1%   tok/step ctl 4.953 arm 4.956   acc/pos ctl [0.997, 0.991, 0.985, 0.98] arm [0.995, 0.991, 0.987, 0.982]
+pass 2 copy-2    ctl    124.7  arm    127.1    +1.9%   tok/step ctl 4.953 arm 4.956   acc/pos ctl [0.997, 0.991, 0.985, 0.98] arm [0.995, 0.991, 0.987, 0.982]
+pass 2 count-c1  ctl     84.0  arm     82.4    -1.9%   tok/step ctl 4.962 arm 4.936   acc/pos ctl [0.997, 0.992, 0.987, 0.985] arm [0.995, 0.985, 0.98, 0.977]
+pass 2 count-c2  ctl    137.5  arm    143.3    +4.2%   tok/step ctl 4.88 arm 4.934   acc/pos ctl [0.989, 0.979, 0.959, 0.952] arm [0.995, 0.986, 0.979, 0.974]
+pass 2 teb       ctl     62.2  arm     60.3    -3.1%   tok/step ctl 3.435 arm 3.409   acc/pos ctl [0.809, 0.678, 0.522, 0.426] arm [0.817, 0.678, 0.522, 0.391]
+pass 2 teb-t1    ctl     59.3  arm     54.4    -8.3%   tok/step ctl 3.383 arm 3.187   acc/pos ctl [0.774, 0.643, 0.548, 0.417] arm [0.789, 0.602, 0.455, 0.341]
+mean of passes: copy-1 -0.1%, copy-2 +2.2%, count-c1 +0.5%, count-c2 +3.7%, teb -2.9%, teb-t1 -6.0%
+guard dgx01: min MemAvailable over the run 10.87 GiB at 00:04:00
+guard dgx02: min MemAvailable over the run 13.70 GiB at 00:26:14
+eligible for gate: none

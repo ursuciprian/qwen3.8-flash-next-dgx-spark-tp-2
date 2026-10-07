@@ -208,6 +208,56 @@ measurements only, not a supported configuration. One fresh boot per setup (2026
 Full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05), raw files:
 [`results/high-conc-k46b-20261005/`](results/high-conc-k46b-20261005/).
 
+### Several long contexts at once, 2× b1.4
+
+The quality gate runs the long-context tool-call probe one request at a time. On 2026-10-07 the shipped 2× recipe ran
+it with up to four requests at once (thinking on, temperature 0.6, one boot). "Same transcript" rows send N requests
+on one prompt (prefix cache warm); "different transcripts" rows run N probes with their own prompts, all starting cold.
+
+| Prompt tokens | Requests at once | Exact tool calls | TTFT mean / max (s) | Decode tok/s per request | KV max |
+|---|---|:---:|:---:|:---:|:---:|
+| 245,267 | 1 | 20/20 | 8.0 / 124.1 | 95.9 | 7% |
+| 245,267 | 4, same transcript | 20/20 | 3.5 / 6.1 | 31.4 | 10% |
+| 244,407 | 4, different transcripts | 40/40 | 40.9 / 511.7 | 30.9 | 27% |
+| 256,515 | 1 | 20/20 | 8.3 / 131.8 | 89.3 | 7% |
+| 256,515 | 4, same transcript | 20/20 | 3.1 / 5.8 | 33.5 | 10% |
+| 256,024 | 4, different transcripts | 40/40 | 42.8 / 540.4 | 34.7 | 28% |
+
+All 10 runs (these plus 2 at once): 240 of 240 exact, 0 preemptions, lowest MemAvailable 10.51 GiB. The TTFT max is
+the cold prefill: about 2 minutes for one ~250K prompt, and with four different cold contexts the last one waits for
+the other three. More than four ~256K contexts at once was not run. Full table:
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#long-contexts-at-once-on-2-b14-2026-10-07), raw files:
+[`results/longctx-concurrency-k59-20261007-0206/`](results/longctx-concurrency-k59-20261007-0206/).
+
+### DP=2 against 2× TP=2
+
+DP=2 here is the shipped 1× v3d recipe (experimental) on each Spark behind a minimal prefix-affinity router
+([`pa_router.py`](results/dp2-vs-tp2-k60-20261007-0248/scripts/pa_router.py) on dgx-01: the sha1 of the first two
+non-system messages picks the replica, no load balancing). Both setups ran the same synthetic agent replay
+([`drive.py`](results/dp2-vs-tp2-k60-20261007-0248/drive.py): tools on, thinking off, temperature 0.6, all sessions
+starting together), one boot each, 2026-10-07:
+
+| Workload | Wall time, TP=2 / DP=2 (s) | Follow-up TTFT mean, TP=2 / DP=2 (s) | Decode tok/s per request, TP=2 / DP=2 |
+|---|:---:|:---:|:---:|
+| 8 sessions x 6 turns from ~32K tokens | 156.1 / 149.5 | 5.4 / 4.0 | 8.1 / 11.8 |
+| 16 sessions x 4 turns from ~32K tokens | 253.6 / 303.1 | 10.0 / 14.4 | 6.5 / 10.6 |
+| 4 sessions x 2 turns from ~128K tokens | 224.2 / 141.8 | 5.2 / 2.8 | 35.3 / 50.4 |
+| 8 sessions x 2 turns from ~128K tokens | 449.6 / 353.8 | 7.2 / 7.3 | 15.3 / 19.2 |
+| 12 sessions x 2 turns from ~128K tokens | 672.2 / 496.1 | 43.5 / 7.6 | 10.3 / 16.5 |
+| 16 sessions x 2 turns from ~128K tokens | 891.9 / 638.1 | 90.3 / 8.0 | 7.6 / 13.6 |
+
+- On ~128K sessions DP=2 finished 21–37% sooner. These runs are prefill-bound, and two replicas prefill two sessions at
+  once.
+- With 16 sessions from ~32K, the router put 13 sessions on one Spark, and DP=2 was slower.
+- DP=2's total output tok/s is higher on all six workloads, but on the ~32K workloads it wrote 48% more output tokens
+  than TP=2 (temperature 0.6, different builds), so compare wall time there.
+- 0 preemptions on both setups; both ran 16 sessions of ~129,540 tokens, the largest step tested.
+- Quality through the router has not been checked yet.
+
+Full table (output tok/s, TTFT, prefix hits, KV usage and sessions per replica, MemAvailable):
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#dp2-against-2-tp2-on-an-agent-replay-2026-10-07), raw files:
+[`results/dp2-vs-tp2-k60-20261007-0248/`](results/dp2-vs-tp2-k60-20261007-0248/).
+
 ## Quality gate
 
 A build ships only if it passes every check.
@@ -294,8 +344,9 @@ Image and video input are not tested on these builds.
 
 ## Known limits
 
-- 2× Spark: by vLLM's count the KV pool holds about 14 requests at 262,144 tokens (3,673,158 tokens on the
-  2026-10-02 boot), under the 16-request cap. 14 concurrent full-length requests have not been run.
+- 2× Spark: by vLLM's count the KV pool fits about 14 requests at 262,144 tokens (3,673,158 tokens on the
+  2026-10-02 boot), under the 16-request cap. Four different ~256K contexts at once used 28% of the pool
+  ([measured](#several-long-contexts-at-once-2-b14)); more than four at once have not been run.
 - 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
   8 × 64K fits.
 - 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host

@@ -1,0 +1,30 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 4: only on the arm side (not judged)
+  pos 5: only on the arm side (not judged)
+  pos 0: control 0.814 arm 0.815 shift +0.001
+  pos 1: control 0.659 arm 0.658 shift -0.001
+  pos 2: control 0.538 arm 0.532 shift -0.005
+  pos 3: control 0.436 arm 0.431 shift -0.005
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -3.63%  noise  6.46%            n=4 CI [-9.7,+3.2] control boot-to-boot -2.86%, step +4.82%
+  probe  fresh-c4      -4.31%  noise  2.09%  WORSE>2x  n=16 CI [-6.5,-2.3] control boot-to-boot -1.93%, step +2.92%
+  probe  fresh-c8      -5.56%  noise  1.84%  WORSE>2x  n=32 CI [-7.4,-3.7] control boot-to-boot -1.35%, step +4.42%
+  probe  d16k-c4       -3.90%  noise  7.82%            n=16 CI [-6.7,-1.4] control boot-to-boot +7.82%, step +2.19%
+  probe  count-c8      -7.38%  noise  2.69%  WORSE>2x  n=32 CI [-8.3,-6.4] control boot-to-boot +2.69%, step +7.72%
+  wall   d16k-c8       -1.18%  noise  2.36%            wall s control 127/124 arm 127/127 (cut counts as the time)
+  benchy pp2048 (c1)   -0.52%  noise  1.00%            control 1825.1 arm 1815.7 t/s (boots 2/2)
+  benchy tg512 (c1)   +15.81%  noise  4.00%  better    control 54.0 arm 62.5 t/s (boots 2/2)
+  benchy tg512 (c8)    -8.18%  noise  1.04%  WORSE>2x  control 137.6 arm 126.3 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0404 max 0.8549
+  self  ctl-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0391 max 1.0828
+  self  arm-p1 a/b: 13/20 prompts identical, |dlogprob| mean 0.0311 max 0.3688
+  self  arm-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0337 max 0.3993
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0358 max 0.3196
+  cross ctl-p2/arm-p2: 11/20 prompts identical, |dlogprob| mean 0.0338 max 0.7046
+reason: probe fresh-c4 -4.31% (noise 2.09%)
+reason: probe fresh-c8 -5.56% (noise 1.84%)
+reason: probe count-c8 -7.38% (noise 2.69%)
+reason: benchy tg512 (c8) -8.18% (noise 1.04%)
+better: benchy tg512 (c1) +15.81% (noise 4.00%)
+VERDICT=KILL

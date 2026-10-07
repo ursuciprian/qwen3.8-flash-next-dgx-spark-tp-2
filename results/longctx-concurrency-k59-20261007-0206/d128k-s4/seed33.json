@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 33,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/d128k-s4/seed33.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 244371,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 53.622660756111145,
+   "mean_latency": 56.847284293174745,
+   "results": [
+    {
+     "target": "INV-1000-9F23",
+     "path": "/srv/clients/acme-biling-43fdb2/svc-export_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-43fdb2/svc-export_v1/logs/export.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 112,
+     "turns": 1,
+     "ttft": 511.7116177082062,
+     "dt": 514.4019205570221
+    },
+    {
+     "target": "INV-1000-9F23",
+     "path": "/srv/clients/acme-biling-43fdb2/svc-export_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-43fdb2/svc-export_v1/logs/export.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 82,
+     "turns": 1,
+     "ttft": 4.136382579803467,
+     "dt": 5.65392279624939
+    },
+    {
+     "target": "INV-1001-5E99",
+     "path": "/srv/clients/acme-billing-a2489b/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-a2489b/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 106,
+     "turns": 1,
+     "ttft": 1.5399096012115479,
+     "dt": 6.058984279632568
+    },
+    {
+     "target": "INV-1001-5E99",
+     "path": "/srv/clients/acme-billing-a2489b/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-a2489b/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 110,
+     "turns": 1,
+     "ttft": 1.644554853439331,
+     "dt": 4.019356727600098
+    },
+    {
+     "target": "INV-1002-4766",
+     "path": "/srv/clients/delta-logic-efee56/svc-ingest-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-efee56/svc-ingest-v2/logs/sync.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 120,
+     "turns": 1,
+     "ttft": 3.2098140716552734,
+     "dt": 6.596251964569092
+    },
+    {
+     "target": "INV-1002-4766",
+     "path": "/srv/clients/delta-logic-efee56/svc-ingest-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-efee56/svc-ingest-v2/logs/sync.log",
+     "prompt_tokens": 244371,
+     "completion_tokens": 132,
+     "turns": 1,
+     "ttft": 3.2262628078460693,
+     "dt": 6.933200836181641
+    },
+    {
+     "target": "INV-1003-2FD3",
+     "path": "/srv/clients/umbra-systms-82f96d/svc-ingest-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-82f96d/svc-ingest-v2/logs/export.log",
+     "prompt_tokens": 244370,
+     "completion_tokens": 124,
+     "turns": 1,
+     "ttft": 3.633908271789551,
+     "dt": 7.2236316204071045
+    },
+    {
+     "target": "INV-1003-2FD3",
+     "path": "/srv/clients/umbra-systms-82f96d/svc-ingest-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-82f96d/svc-ingest-v2/logs/export.log",
+     "prompt_tokens": 244370,
+     "completion_tokens": 117,
+     "turns": 1,
+     "ttft": 1.5223190784454346,
+     "dt": 4.284635782241821
+    },
+    {
+     "target": "INV-1004-FF82",
+     "path": "/srv/clients/acme-billling-aa83e4/svc-relay_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-aa83e4/svc-relay_v2/logs/ingest.log",
+     "prompt_tokens": 244370,
+     "completion_tokens": 91,
+     "turns": 1,
+     "ttft": 3.9507782459259033,
+     "dt": 5.427746772766113
+    },
+    {
+     "target": "INV-1004-FF82",
+     "path": "/srv/clients/acme-billling-aa83e4/svc-relay_v2/logs/ingest.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billling-aa83e4/svc-relay_v2/logs/ingest.log",
+     "prompt_tokens": 244370,
+     "completion_tokens": 197,
+     "turns": 1,
+     "ttft": 1.6510603427886963,
+     "dt": 7.873191595077515
+    }
+   ]
+  }
+ ]
+}

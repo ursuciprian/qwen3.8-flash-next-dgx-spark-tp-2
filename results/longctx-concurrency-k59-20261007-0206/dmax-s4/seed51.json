@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "134135",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 51,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/dmax-s4/seed51.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 134135,
+   "actual_prompt_tokens": 255450,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 29.622127842903136,
+   "mean_latency": 58.22959668636322,
+   "results": [
+    {
+     "target": "INV-1000-DA32",
+     "path": "/srv/clients/orryn-datta-5e2df4/svc-relay_v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-5e2df4/svc-relay_v2/logs/export.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 108,
+     "turns": 1,
+     "ttft": 265.7374014854431,
+     "dt": 337.73444271087646
+    },
+    {
+     "target": "INV-1000-DA32",
+     "path": "/srv/clients/orryn-datta-5e2df4/svc-relay_v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-datta-5e2df4/svc-relay_v2/logs/export.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 183,
+     "turns": 1,
+     "ttft": 7.623673915863037,
+     "dt": 149.4581332206726
+    },
+    {
+     "target": "INV-1001-5833",
+     "path": "/srv/clients/delta-logic-8daa40/svc-ingest_v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-8daa40/svc-ingest_v2/logs/export.log",
+     "prompt_tokens": 255450,
+     "completion_tokens": 102,
+     "turns": 1,
+     "ttft": 9.699347496032715,
+     "dt": 53.9591281414032
+    },
+    {
+     "target": "INV-1001-5833",
+     "path": "/srv/clients/delta-logic-8daa40/svc-ingest_v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-8daa40/svc-ingest_v2/logs/export.log",
+     "prompt_tokens": 255450,
+     "completion_tokens": 186,
+     "turns": 1,
+     "ttft": 1.4408645629882812,
+     "dt": 6.262124061584473
+    },
+    {
+     "target": "INV-1002-C7E1",
+     "path": "/srv/clients/delta-logic-2a1621/svc-export-v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-2a1621/svc-export-v1/logs/sync.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 103,
+     "turns": 1,
+     "ttft": 1.4586248397827148,
+     "dt": 3.9457154273986816
+    },
+    {
+     "target": "INV-1002-C7E1",
+     "path": "/srv/clients/delta-logic-2a1621/svc-export-v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-2a1621/svc-export-v1/logs/sync.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 107,
+     "turns": 1,
+     "ttft": 2.3276467323303223,
+     "dt": 5.529748916625977
+    },
+    {
+     "target": "INV-1003-F6D4",
+     "path": "/srv/clients/umbra-systms-5df407/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-5df407/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 162,
+     "turns": 1,
+     "ttft": 2.2069787979125977,
+     "dt": 7.903440952301025
+    },
+    {
+     "target": "INV-1003-F6D4",
+     "path": "/srv/clients/umbra-systms-5df407/svc-relay_v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/umbra-systms-5df407/svc-relay_v2/logs/sync.log",
+     "prompt_tokens": 255449,
+     "completion_tokens": 131,
+     "turns": 1,
+     "ttft": 1.4416272640228271,
+     "dt": 6.825725317001343
+    },
+    {
+     "target": "INV-1004-427A",
+     "path": "/srv/clients/nordic-frieght-c1b802/svc-ingest-v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-frieght-c1b802/svc-ingest-v2/logs/error.log",
+     "prompt_tokens": 255450,
+     "completion_tokens": 191,
+     "turns": 1,
+     "ttft": 1.4113574028015137,
+     "dt": 6.120859146118164
+    },
+    {
+     "target": "INV-1004-427A",
+     "path": "/srv/clients/nordic-frieght-c1b802/svc-ingest-v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-frieght-c1b802/svc-ingest-v2/logs/error.log",
+     "prompt_tokens": 255450,
+     "completion_tokens": 104,
+     "turns": 1,
+     "ttft": 2.873755931854248,
+     "dt": 4.5566489696502686
+    }
+   ]
+  }
+ ]
+}

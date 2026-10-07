@@ -1,0 +1,340 @@
+{
+ "setup": "dp2",
+ "base": "http://localhost:8100",
+ "metrics": [
+  "http://192.168.100.62:8000/metrics",
+  "http://192.168.100.53:8000/metrics"
+ ],
+ "workloads": [
+  {
+   "workload": "agent8",
+   "sessions": 8,
+   "turns": 6,
+   "start_tokens": 32000,
+   "add_tokens": 2000,
+   "max_tokens": 512,
+   "expected": 48,
+   "completed": 48,
+   "errors": 0,
+   "prompt_tokens_max": 44584,
+   "wall_s": 149.50505542755127,
+   "agg_output_tps": 20.166542137172346,
+   "ttft_first_mean": 51.457664757966995,
+   "ttft_first_max": 83.4025251865387,
+   "ttft_follow_mean": 4.013108670711517,
+   "ttft_follow_p90": 5.944194078445435,
+   "decode_tps_mean": 11.84088311503273,
+   "prefix_hit_rate": 0.7734711295930193,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.25355813444274145,
+    0.15765272607838843
+   ],
+   "running_max": [
+    5.0,
+    3.0
+   ],
+   "waiting_max": [
+    2.0,
+    0.0
+   ],
+   "min_mem_dgx01": 14.11,
+   "min_mem_dgx02": 14.14,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 1833625.0,
+    "vllm:prefix_cache_hits_total": 1418256.0,
+    "vllm:generation_tokens_total": 3015.0,
+    "vllm:prompt_tokens_total": 1833625.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2212.0,
+    "vllm:spec_decode_num_draft_tokens_total": 3336.0
+   },
+   "t0": 1791333352.7529233,
+   "t1": 1791333502.2579787,
+   "router_sessions": [
+    5,
+    3
+   ],
+   "router_requests": [
+    30,
+    18
+   ],
+   "clean": true
+  },
+  {
+   "workload": "agent16",
+   "sessions": 16,
+   "turns": 4,
+   "start_tokens": 32000,
+   "add_tokens": 2000,
+   "max_tokens": 512,
+   "expected": 64,
+   "completed": 64,
+   "errors": 0,
+   "prompt_tokens_max": 39913,
+   "wall_s": 303.1320712566376,
+   "agg_output_tps": 11.81333266768812,
+   "ttft_first_mean": 119.37179704010487,
+   "ttft_first_max": 258.3495583534241,
+   "ttft_follow_mean": 14.360940665006638,
+   "ttft_follow_p90": 36.74555444717407,
+   "decode_tps_mean": 10.568772251210596,
+   "prefix_hit_rate": 0.6966379984362784,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.1287497262973506,
+    0.389971534924458
+   ],
+   "running_max": [
+    3.0,
+    8.0
+   ],
+   "waiting_max": [
+    0.0,
+    10.0
+   ],
+   "min_mem_dgx01": 14.14,
+   "min_mem_dgx02": 13.98,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 2291968.0,
+    "vllm:prefix_cache_hits_total": 1596672.0,
+    "vllm:generation_tokens_total": 3581.0,
+    "vllm:prompt_tokens_total": 2291968.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 2655.0,
+    "vllm:spec_decode_num_draft_tokens_total": 3900.0
+   },
+   "t0": 1791333502.2916625,
+   "t1": 1791333805.4237337,
+   "router_sessions": [
+    3,
+    13
+   ],
+   "router_requests": [
+    12,
+    52
+   ],
+   "clean": true
+  },
+  {
+   "workload": "long-4",
+   "sessions": 4,
+   "turns": 2,
+   "start_tokens": 128000,
+   "add_tokens": 1000,
+   "max_tokens": 256,
+   "expected": 8,
+   "completed": 8,
+   "errors": 0,
+   "prompt_tokens_max": 129418,
+   "wall_s": 141.81219458580017,
+   "agg_output_tps": 2.087267606742466,
+   "ttft_first_mean": 136.47547775506973,
+   "ttft_first_max": 137.32138442993164,
+   "ttft_follow_mean": 2.8064882159233093,
+   "ttft_follow_p90": 3.0291032791137695,
+   "decode_tps_mean": 50.379823873677374,
+   "prefix_hit_rate": 0.4949779466139503,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.2905627326472521,
+    0.2905627326472521
+   ],
+   "running_max": [
+    2.0,
+    2.0
+   ],
+   "waiting_max": [
+    0.0,
+    0.0
+   ],
+   "min_mem_dgx01": 14.11,
+   "min_mem_dgx02": 13.94,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 1026373.0,
+    "vllm:prefix_cache_hits_total": 508032.0,
+    "vllm:generation_tokens_total": 296.0,
+    "vllm:prompt_tokens_total": 1026373.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 234.0,
+    "vllm:spec_decode_num_draft_tokens_total": 260.0
+   },
+   "t0": 1791333805.457827,
+   "t1": 1791333947.2700217,
+   "router_sessions": [
+    2,
+    2
+   ],
+   "router_requests": [
+    4,
+    4
+   ],
+   "clean": true
+  },
+  {
+   "workload": "long-8",
+   "sessions": 8,
+   "turns": 2,
+   "start_tokens": 128000,
+   "add_tokens": 1000,
+   "max_tokens": 256,
+   "expected": 16,
+   "completed": 16,
+   "errors": 0,
+   "prompt_tokens_max": 129317,
+   "wall_s": 353.7610161304474,
+   "agg_output_tps": 1.8289183106637799,
+   "ttft_first_mean": 212.451561242342,
+   "ttft_first_max": 351.11165142059326,
+   "ttft_follow_mean": 7.2646843791008,
+   "ttft_follow_p90": 9.514739513397217,
+   "decode_tps_mean": 19.20835746507082,
+   "prefix_hit_rate": 0.4948709081965137,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.40201445149989057,
+    0.4116487847602365
+   ],
+   "running_max": [
+    3.0,
+    5.0
+   ],
+   "waiting_max": [
+    0.0,
+    2.0
+   ],
+   "min_mem_dgx01": 14.07,
+   "min_mem_dgx02": 13.89,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 2053190.0,
+    "vllm:prefix_cache_hits_total": 1016064.0,
+    "vllm:generation_tokens_total": 647.0,
+    "vllm:prompt_tokens_total": 2053190.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 514.0,
+    "vllm:spec_decode_num_draft_tokens_total": 572.0
+   },
+   "t0": 1791333947.3058062,
+   "t1": 1791334301.0668223,
+   "router_sessions": [
+    3,
+    5
+   ],
+   "router_requests": [
+    6,
+    10
+   ],
+   "clean": true
+  },
+  {
+   "workload": "long-12",
+   "sessions": 12,
+   "turns": 2,
+   "start_tokens": 128000,
+   "add_tokens": 1000,
+   "max_tokens": 256,
+   "expected": 24,
+   "completed": 24,
+   "errors": 0,
+   "prompt_tokens_max": 129409,
+   "wall_s": 496.0971210002899,
+   "agg_output_tps": 1.7617518082703996,
+   "ttft_first_mean": 292.9150940378507,
+   "ttft_first_max": 491.60667991638184,
+   "ttft_follow_mean": 7.570728421211243,
+   "ttft_follow_p90": 9.543586492538452,
+   "decode_tps_mean": 16.54961819030278,
+   "prefix_hit_rate": 0.49351629451372775,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.5474052988832931,
+    0.4116487847602365
+   ],
+   "running_max": [
+    7.0,
+    5.0
+   ],
+   "waiting_max": [
+    4.0,
+    2.0
+   ],
+   "min_mem_dgx01": 13.9,
+   "min_mem_dgx02": 13.89,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 3082111.0,
+    "vllm:prefix_cache_hits_total": 1521072.0,
+    "vllm:generation_tokens_total": 874.0,
+    "vllm:prompt_tokens_total": 3082111.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 708.0,
+    "vllm:spec_decode_num_draft_tokens_total": 732.0
+   },
+   "t0": 1791334301.099471,
+   "t1": 1791334797.196592,
+   "router_sessions": [
+    7,
+    5
+   ],
+   "router_requests": [
+    14,
+    10
+   ],
+   "clean": true
+  },
+  {
+   "workload": "long-16",
+   "sessions": 16,
+   "turns": 2,
+   "start_tokens": 128000,
+   "add_tokens": 1000,
+   "max_tokens": 256,
+   "expected": 32,
+   "completed": 32,
+   "errors": 0,
+   "prompt_tokens_max": 129540,
+   "wall_s": 638.1081774234772,
+   "agg_output_tps": 1.886827410457979,
+   "ttft_first_mean": 369.0191784501076,
+   "ttft_first_max": 633.7860424518585,
+   "ttft_follow_mean": 8.00798736512661,
+   "ttft_follow_p90": 9.61958360671997,
+   "decode_tps_mean": 13.550960047693469,
+   "prefix_hit_rate": 0.49458702272742205,
+   "preemptions": 0.0,
+   "kv_usage_max": [
+    0.4933216553536238,
+    0.564484344208452
+   ],
+   "running_max": [
+    8.0,
+    7.0
+   ],
+   "waiting_max": [
+    6.0,
+    4.0
+   ],
+   "min_mem_dgx01": 13.72,
+   "min_mem_dgx02": 13.87,
+   "metrics_delta": {
+    "vllm:num_preemptions_total": 0.0,
+    "vllm:prefix_cache_queries_total": 4108737.0,
+    "vllm:prefix_cache_hits_total": 2032128.0,
+    "vllm:generation_tokens_total": 1204.0,
+    "vllm:prompt_tokens_total": 4108737.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 969.0,
+    "vllm:spec_decode_num_draft_tokens_total": 1072.0
+   },
+   "t0": 1791334797.2315936,
+   "t1": 1791335435.339771,
+   "router_sessions": [
+    9,
+    7
+   ],
+   "router_requests": [
+    18,
+    14
+   ],
+   "clean": true
+  }
+ ]
+}

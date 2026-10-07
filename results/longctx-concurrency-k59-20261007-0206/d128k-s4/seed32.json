@@ -1,0 +1,166 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 2,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 32,
+  "timeout": 3600,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/longctx-concurrency-k59-20261007-0206/d128k-s4/seed32.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 243938,
+   "counts": {
+    "exact": 10,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 28.185715126991273,
+   "mean_latency": 56.41346964836121,
+   "results": [
+    {
+     "target": "INV-1000-C494",
+     "path": "/srv/clients/vertex-cargo-e2aa22/svc-export-v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-e2aa22/svc-export-v1/logs/sync.log",
+     "prompt_tokens": 243937,
+     "completion_tokens": 120,
+     "turns": 1,
+     "ttft": 251.03454422950745,
+     "dt": 324.65736651420593
+    },
+    {
+     "target": "INV-1000-C494",
+     "path": "/srv/clients/vertex-cargo-e2aa22/svc-export-v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-e2aa22/svc-export-v1/logs/sync.log",
+     "prompt_tokens": 243937,
+     "completion_tokens": 146,
+     "turns": 1,
+     "ttft": 7.793833255767822,
+     "dt": 126.78304386138916
+    },
+    {
+     "target": "INV-1001-4C0E",
+     "path": "/srv/clients/nordic-freight-608bd7/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-608bd7/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 129,
+     "turns": 1,
+     "ttft": 9.40668773651123,
+     "dt": 61.32201862335205
+    },
+    {
+     "target": "INV-1001-4C0E",
+     "path": "/srv/clients/nordic-freight-608bd7/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-608bd7/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 116,
+     "turns": 1,
+     "ttft": 1.3204870223999023,
+     "dt": 6.575199365615845
+    },
+    {
+     "target": "INV-1002-6B84",
+     "path": "/srv/clients/acme-billing-2e42ed/svc-sync_v4/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-2e42ed/svc-sync_v4/logs/access.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 112,
+     "turns": 1,
+     "ttft": 1.3420329093933105,
+     "dt": 6.819218873977661
+    },
+    {
+     "target": "INV-1002-6B84",
+     "path": "/srv/clients/acme-billing-2e42ed/svc-sync_v4/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-billing-2e42ed/svc-sync_v4/logs/access.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 126,
+     "turns": 1,
+     "ttft": 2.2250068187713623,
+     "dt": 8.060297012329102
+    },
+    {
+     "target": "INV-1003-7253",
+     "path": "/srv/clients/acme-biling-3ced73/svc-relay-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-3ced73/svc-relay-v2/logs/sync.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 123,
+     "turns": 1,
+     "ttft": 1.2585179805755615,
+     "dt": 6.086211681365967
+    },
+    {
+     "target": "INV-1003-7253",
+     "path": "/srv/clients/acme-biling-3ced73/svc-relay-v2/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-3ced73/svc-relay-v2/logs/sync.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 155,
+     "turns": 1,
+     "ttft": 1.3029909133911133,
+     "dt": 7.891957759857178
+    },
+    {
+     "target": "INV-1004-3F53",
+     "path": "/srv/clients/nordic-frieght-5f6f49/svc-sync_v4/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-frieght-5f6f49/svc-sync_v4/logs/sync.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 181,
+     "turns": 1,
+     "ttft": 2.110313653945923,
+     "dt": 6.82446026802063
+    },
+    {
+     "target": "INV-1004-3F53",
+     "path": "/srv/clients/nordic-frieght-5f6f49/svc-sync_v4/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-frieght-5f6f49/svc-sync_v4/logs/sync.log",
+     "prompt_tokens": 243938,
+     "completion_tokens": 198,
+     "turns": 1,
+     "ttft": 4.062736749649048,
+     "dt": 9.114922523498535
+    }
+   ]
+  }
+ ]
+}

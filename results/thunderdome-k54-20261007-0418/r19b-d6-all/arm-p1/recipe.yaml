@@ -1,0 +1,165 @@
+# k54 arm r19b-d6-all (opus-adaptive, 2026-10-06, vLLM exp/r19b-depth4-zero-overhead): v3d + confidence-gated MTP depth: depth up to 6 at every batch size, base 4, threshold 0.90
+# k45 Thunderdome arm (opus-v3d, 2026-10-05), CANDIDATE single-Spark (TP=1) recipe v3d, MXFP8 cutoff 41 rows:
+#   v3c + GDN NVFP4/MXFP8 dispatch (#63, vLLM exp/v3d 5dad364d = exp/v3c 50330171 + r12-gdn-dispatch 0e0263f0,
+#   a84ba4af, 506cb78a; b12x 21e0b201). Served model: local gdn+mse requant f4..03 (GDN qkvz/out W4A16 NVFP4,
+#   MSE block-scale search; not published). Each GDN projection also holds its MXFP8 weights from the published
+#   snapshot 7c4f1bc1 (container path) and serves calls of >= 41 rows with them (prefill), NVFP4 below (decode).
+#   +~1.1 GiB over v3c. Image spark-vllm-b12x:v3d-21e0b201-5dad364d = v3c warm + the 4 dispatch files.
+#   The dispatch knobs are compile factors: the image seed is the v3c key, so the first boot compiles (bake).
+#
+# Base: v3c header below.
+# k41 Thunderdome arm (opus-v3c, 2026-10-05), CANDIDATE single-Spark (TP=1) recipe v3c with a 14 GiB KV pool:
+#   v3b + shared GDN prefill staging (#76/#77, vLLM exp/r18-mem 3152b385, VLLM_GDN_SHARED_PREFILL_STAGING=1:
+#   one 257.5 MiB staging for all 36 GDN layers instead of one per layer, frees ~8.8 GiB) + compact GDN records
+#   (#61, vLLM exp/gdn-compact 73a5e1e3 + b12x exp/gdn-compact 21e0b201, VLLM_GDN_COMPACT_RECORDS=1: MTP draft-step
+#   records in a 4.3 MiB per-layer side buffer, mamba groups hold 1 block per request (2 at a boundary step) instead of 5/6).
+#   - vLLM exp/v3c 50330171 = r13-ple-prefill + r18-mem + gdn-compact. Image spark-vllm-b12x:v3c-21e0b201-50330171 = gdnc image
+#     (v3a warm + compact files) + envs.py, ple_mmap.py, ops/b12x_gdn_prefill.py of exp/v3c.
+#   - Pool: ~4568 blocks of 3,024 tokens. A request holds 13 x ceil(tokens / 3,024) attention blocks + 37 mamba
+#     blocks (74 at a boundary step).
+#   - Compact on changes the compile key: the image seed is the compact-off key, so the first boot compiles (bake).
+#
+# Base: v3b header below.
+# CANDIDATE single-Spark (TP=1) recipe v3b (2026-10-04): v3a + read-ahead for prefill-sized PLE gathers.
+#   - VLLM_PLE_MMAP_PREFILL_WILLNEED=1 (r13, vLLM exp/r13-ple-prefill 0632e506): prefill-sized gathers
+#     (above VLLM_PLE_MMAP_WILLNEED_MAX) now get fadvise WILLNEED on their rows from a helper thread
+#     before the copy, so rows evicted from the page cache no longer fault in one by one. Host-side
+#     only, same numerics; an ignored compile factor, so the v3a AOT/plan seed stays valid.
+#   - r13 A/B vs v3a env on the same image (6 fresh boots per arm, llama-benchy T=0, 3 reps):
+#     pp2048 c1 +50.2%, c4 +19.3%, c8 +9.3%; 16k ctx_pp c1 +4.6%; pp2048 c1 sd 32.0 -> 14.9; no tg cell worse.
+#   - Image: v3a warm (vLLM exp/v3-tp1 7fa812b3, b12x 5bf24021, AOT + plan seed) + ple_mmap.py/envs.py
+#     of 0632e506.
+# Pending: full TP=1 gate (results/v3b-tp1-20261004).
+#
+# Base: v3a header below.
+#   - VLLM_PLE_MMAP_KEEPALIVE_MS=50 (r11, vLLM exp/r11-tp1-gaps 1e41784f): one 4 KiB O_DIRECT read of the
+#     PLE table every 50 ms while gathers are recent, so the NVMe drive does not drop into APST (100 ms
+#     idle timeout, ~10 ms exit) between decode steps. Host-side only, same numerics. r11 screen vs v2 on
+#     the same image: step fresh c4 -7.7%, c8 -5.5%, d16k c4 -8.7%, count c8 -8.9%, c1 -0.5%.
+#   - Image: vLLM exp/v3-tp1 7fa812b3 (= 1e41784f + B12X_MOE_WM_SCHEDULE declared in envs.py, default
+#     "item", inert when unset), b12x 5bf24021, plan seed as v2, plus the torch AOT compile cache of a
+#     cold boot in /opt/b12x-seed/torch_compile_cache (copied into the runtime cache when absent, so the
+#     first boot on a new Spark skips the compile).
+# Pending: paired A/B vs v2 and the full TP=1 gate (results/v3a-tp1-20261003).
+#
+# Base: v2 header below.
+# EXPERIMENTAL single-Spark (TP=1) recipe, v2 (2026-10-02, opus-kernel-17). One GB10, no CX-7.
+#
+# Fit: the checkpoint is 98.5 GiB, 26.8 GiB of it the PLE n-gram table, which cannot sit
+# resident beside the other ~72 GiB on one 121.7 GiB GB10. VLLM_PLE_MMAP=1 serves the table
+# from the checkpoint files through the evictable page cache (buffered reads, hot rows stay
+# cached; approach from dime-online/qwen3.8-Flash-DGX-UltraFast v16b, Apache-2.0), and the KV
+# pool is sized explicitly (6 GiB, ~350k tokens fp8: 2 x 128k or 5 x 64k sequences).
+# B12X_COMPILE_WORKERS=1 keeps the first (cold) boot clear of earlyoom.
+#
+# v2 changes vs the r8 tp1-safe recipe, each screened on one image against a same-image control
+# (2 passes ABBA over both Sparks, paired temperature-0 probes):
+#   - VLLM_PLE_MMAP_WILLNEED_MAX=8192 (r8 tp1-ple-willneed, 2026-10-01): fadvise WILLNEED on every
+#     row of a decode-sized PLE gather before reading it, so its page faults overlap instead of
+#     running serially. fresh c1 step -16.9%, fresh c2-c8 -8..-9%, 16k c1-c4 -8..-11%.
+#   - VLLM_MTP_DRAFT_VOCAB 131,072 ids (as in the TP=2 b1.4 recipe; r8 k17 tp1-dv128): step -2.7..-4.3%
+#     at c1-c4, acceptance per position unchanged (Jev keep 0.69; the 16k c8 cell is dominated by
+#     prefill stalls on the 6 GiB KV pool in every arm, control included).
+#   Rejected at TP=1: d3 (3 drafts), mtpq (MXFP8 drafter: acceptance -3..-6 pts), mtpq-d3, wm MoE decode,
+#   b12x SIMT GEMV for the drafter/router (step +2..+7% at c2-c8).
+#
+# Image: b1.4 vLLM (a7e649d8) + the TP=1 page-cache PLE reader (exp/r8-tp1-screen) +
+# feat/r8-mtp-gemv (off), b12x exp/r8-tp1-wm 5bf24021 (off), warm layer docker/b0-warm with the
+# TP=1 b12x plan seed. Numbers: README "Single Spark (experimental)".
+#
+# Run on one Spark: sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo
+
+recipe_version: "1"
+name: qwen3.8-flash-next-1x-dgx-spark-r19b-d6-all
+description: "Candidate v3d (GDN NVFP4 decode / MXFP8 >= 41 rows, 14 GiB KV, shared GDN prefill staging, compact GDN records). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, PLE table through the page cache, NVMe keepalive, prefill read-ahead), OpenAI-compatible API on port 8000 (2026-10-04)."
+
+model: /home/nvidia/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/f400000000000000000000000000000000000003
+container: spark-vllm-b12x:r19b-21e0b201-a91c4b2c
+runtime: vllm
+
+build_args: []
+
+solo_only: true
+min_nodes: 1
+max_nodes: 1
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 1
+  pipeline_parallel: 1
+  block_size: 16
+  max_model_len: 262144
+  max_num_seqs: 8
+  max_num_batched_tokens: 8192
+  num_speculative_tokens: 6
+  # 14 GiB (v3c). With explicit KV bytes vLLM skips memory profiling; the utilization only gates
+  # startup (free >= util x total), which the page cache would otherwise trip.
+  kv_cache_memory_bytes: 15032385536
+  gpu_memory_utilization: 0.01
+
+env:
+  VLLM_MTP_CONFIDENCE_THRESHOLD: "0.90"
+  VLLM_MTP_CONFIDENCE_BASE_DEPTH: "4"
+  VLLM_CACHE_ROOT: "/cache/runtime/vllm-k54-r19b-d6-all"
+  VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
+  VLLM_B12X_NVFP4_MXFP8_CHECKPOINT: "/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
+  VLLM_GDN_SHARED_PREFILL_STAGING: "1"
+  VLLM_GDN_COMPACT_RECORDS: "1"
+  VLLM_PLE_MMAP: "1"
+  VLLM_PLE_MMAP_WILLNEED_MAX: "8192"
+  VLLM_PLE_MMAP_KEEPALIVE_MS: "50"
+  VLLM_PLE_MMAP_PREFILL_WILLNEED: "1"
+  VLLM_MTP_DRAFT_VOCAB: "/opt/mtp-vocab/ids-v2-K131072.txt.gz"
+  VLLM_QWEN38_HC_MXFP8: "hc"
+  VLLM_GDN_UNIFORM_DECODE_META_SKIP: "1"
+  B12X_AUTOTUNE: "1"
+  CUTE_DSL_ARCH: "sm_121a"
+  SAFETENSORS_FAST_GPU: "1"
+  VLLM_WORKER_MULTIPROC_METHOD: "spawn"
+  VLLM_SSM_CONV_STATE_LAYOUT: "DS"
+  VLLM_USE_AOT_COMPILE: "1"
+  VLLM_USE_MEGA_AOT_ARTIFACT: "1"
+  VLLM_USE_V2_MODEL_RUNNER: "1"
+  B12X_POLICY_MODE: "auto"
+  VLLM_MXFP8_LM_HEAD: "1"
+  B12X_COMPILE_WORKERS: "1"
+  VLLM_GDN_DEFERRED_CHECKPOINTS: "1"
+  VLLM_PREFIX_DROP_EXACT: "1"
+
+command: |
+  S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
+  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
+  vllm serve {model} \
+    --host {host} \
+    --port {port} \
+    --trust-remote-code \
+    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --tensor-parallel-size {tensor_parallel} \
+    --pipeline-parallel-size {pipeline_parallel} \
+    --mamba-cache-mode align \
+    --enable-prefix-caching \
+    --enable-chunked-prefill \
+    --max-parallel-prefills 4 \
+    --prefill-policy decode-aware \
+    --decode-refill-target auto \
+    --dtype bfloat16 \
+    --kv-cache-dtype fp8 \
+    --quantization modelopt_mixed \
+    --block-size {block_size} \
+    --load-format b12x \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --max-num-batched-tokens {max_num_batched_tokens} \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":{num_speculative_tokens},"draft_sample_method":"probabilistic","num_speculative_tokens_per_batch_size":[[1,8,6]]}}' \
+    --gdn-decode-kernel b12x \
+    --linear-backend b12x \
+    --moe-backend b12x \
+    --no-enable-flashinfer-autotune \
+    --reasoning-parser qwen3 \
+    --tool-call-parser qwen3_xml \
+    --enable-auto-tool-choice \
+    --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
+    --compilation-config '{{"pass_config":{{"fuse_act_quant":true}},"max_cudagraph_capture_size":80}}' \
+    --kv-cache-memory-bytes {kv_cache_memory_bytes} \
+    --gpu-memory-utilization {gpu_memory_utilization}
