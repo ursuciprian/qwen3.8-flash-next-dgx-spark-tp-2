@@ -243,5 +243,8 @@ stage's own check on the boot dirs before the arm is promoted.
   only decides large KV changes. kv10 vs v2 was +397 % in benchy tg512 at 16K c8.
 - The acceptance rule is two-sided. A drafter change that raises T=0 acceptance by more than 0.03 at any
   position also reads KILL. Read the acceptance lines before dropping such an arm.
+- `TD_ACC_RISE_OK=1` (opt-in, set per run for an arm whose intended effect is a higher acceptance): a rise past
+  0.03 is printed but is not a KILL reason, so pass 2 runs and the verdict rests on the speed cells and the gate.
+  Drops past 0.03 still KILL. Unset, the rule stays two-sided.
 - llama-benchy runs at T=1 with 2 runs per boot. Its noise band is wider than the probes'.
 - The gate is summarized, not judged.

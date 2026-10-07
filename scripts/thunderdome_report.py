@@ -28,6 +28,9 @@ ctl-pK (same prompts, same Spark). Fixed rules:
                 1x but not 2x noise, or nothing better than noise
 
 Logits (logits_equiv.py captured twice per boot) are reported, not judged.
+TD_ACC_RISE_OK=1 (opt-in, for an arm whose intended effect is higher acceptance): an acceptance RISE past 0.03 is
+reported but is not a KILL reason (also not in --acc-only, so pass 2 runs); the verdict then rests on the speed cells.
+Drops past 0.03 still KILL. Default (unset): two-sided.
 --acc-only checks acceptance on the boots done so far and exits 3 when that alone means KILL.
 Last line: VERDICT=KILL|PROMOTE|INCONCLUSIVE.
 """
@@ -36,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paired_decode_ab import compare, load  # noqa: E402
 
 NOISE_FLOOR, KILL_X, ACC_TOL = 1.0, 2.0, 0.03
+ACC_RISE_OK = os.environ.get("TD_ACC_RISE_OK") == "1"
 PROBES = ("fresh-c1", "fresh-c4", "fresh-c8", "d16k-c4", "count-c8")
 WALL = ("d16k-c8",)
 BENCHY = ("pp2048 (c1)", "tg512 (c1)", "tg512 (c8)")
@@ -211,8 +215,10 @@ def main(d, acc_only=False):
     for pos in sorted(set(ca) & set(aa)):
         c, a = ca[pos], aa[pos]
         bad = abs(a - c) > ACC_TOL
-        print(f"  pos {pos}: control {c:.3f} arm {a:.3f} shift {a - c:+.3f}{'  > 0.03' if bad else ''}")
-        if bad:
+        rise_ok = bad and a > c and ACC_RISE_OK
+        print(f"  pos {pos}: control {c:.3f} arm {a:.3f} shift {a - c:+.3f}{'  > 0.03' if bad else ''}"
+              f"{' (rise allowed: TD_ACC_RISE_OK=1)' if rise_ok else ''}")
+        if bad and not rise_ok:
             kill.append(f"acceptance pos {pos} moved {a - c:+.3f}")
     if acc_only:
         print("ACC=" + ("KILL" if kill else "OK"))
@@ -308,6 +314,17 @@ def selftest():
     assert run(arm=1.05, cell_arm={"fresh-c1": 0.985})[0] == "INCONCLUSIVE"     # -1.5 %: between 1x and 2x noise
     assert run(arm=1.05, acc=-0.05) == ("KILL", 3)                             # acceptance moved 0.05
     assert run(arm=1.05, acc=0.02) == ("PROMOTE", 0)                           # within 0.03
+    global ACC_RISE_OK
+    env, ACC_RISE_OK = ACC_RISE_OK, False
+    try:
+        assert run(arm=1.05, acc=0.05) == ("KILL", 3)                          # rise is a KILL by default
+        ACC_RISE_OK = True
+        assert run(arm=1.05, acc=0.05) == ("PROMOTE", 0)                       # knob: rise passes on the speed cells
+        assert run(arm=1.05, acc=-0.05) == ("KILL", 3)                         # knob: drops stay strict
+        assert run(arm=1.0, acc=0.05, cell_arm={"d16k-c4": 0.95})[0] == "KILL"  # knob: a slow cell still kills
+        assert run(arm=1.0, acc=0.05, arm_wall=(300, 310))[0] == "INCONCLUSIVE"  # knob: a rise alone is not a win
+    finally:
+        ACC_RISE_OK = env
     assert run(arm=1.05, fail="arm-p2")[0] == "KILL"
     assert run(arm=1.05, fail="ctl-p2")[0] == "INCONCLUSIVE"
     assert run(arm=1.05, arm_wall=(480, 480))[0] == "KILL"                     # cut both times: -37 % on the wall cell
