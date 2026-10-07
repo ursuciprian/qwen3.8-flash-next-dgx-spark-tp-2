@@ -1,0 +1,31 @@
+k63 2026-10-07 11:08:55 EEST: DP=2 production candidate, replicas = 1x v3d (ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-hf-20261005-21e0b201-5dad364d-warm) per Spark behind pa_router.py (prefix affinity, dgx-01:8100), vs the shipped 2x TP=2 (k60 replay, same seeds)
+spot check through the router: SPOT=PASS
+│    Score:  100 / 100                                                         │
+│    Score:   100.0 ± 0.0 / 100                                                │
+depth    8000 | actual_tokens   15709 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   0.95s | lat    2.9s
+depth   32000 | actual_tokens   61730 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   2.47s | lat    4.5s
+depth   64000 | actual_tokens  122614 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   4.66s | lat    6.7s
+depth  128000 | actual_tokens  245267 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   8.59s | lat   10.7s
+
+2x TP=2 (dgx-01 rank): Available KV cache memory: 30.43 GiB
+2x TP=2 (dgx-01 rank): GPU KV cache size: 3,661,881 tokens, Maximum concurrency for 262,144 tokens per request: 13.97x
+1x v3d on 192.168.100.62: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+1x v3d on 192.168.100.53: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+
+| workload | setup | turns done | output tok/s total | TTFT first turn mean / max (s) | TTFT follow-up mean / p90 (s) | decode tok/s per request | prefix hit | preemptions | KV max per replica | sessions per replica | min MemAvailable dgx-01 / dgx-02 (GiB) |
+|---|---|---:|---:|---|---|---:|---:|---:|---|---|---|
+| agent8 | 2x TP=2 | 48/48 | 11.3 | 68.3 / 104.6 | 4.9 / 7.6 | 6.9 | 78% | 0 | 15% | - | 10.97 / 14.35 |
+| agent8 | DP=2 (2 x 1x v3d) | 48/48 | 18.7 | 49.5 / 65.7 | 4.0 / 5.5 | 13.8 | 78% | 0 | 21% / 20% | 4/4 | 14.16 / 14.03 |
+| agent16 | 2x TP=2 | 64/64 | 11.0 | 121.9 / 233.5 | 9.7 / 20.5 | 6.5 | 70% | 0 | 21% | - | 10.30 / 14.13 |
+| agent16 | DP=2 (2 x 1x v3d) | 64/64 | 15.7 | 87.3 / 144.1 | 6.7 / 10.4 | 8.1 | 70% | 0 | 35% / 35% | 8/8 | 13.84 / 13.91 |
+| long-4 | 2x TP=2 | 8/8 | 1.5 | 165.8 / 220.0 | 5.2 / 7.4 | 33.0 | 49% | 0 | 14% | - | 10.69 / 14.10 |
+| long-4 | DP=2 (2 x 1x v3d) | 8/8 | 2.1 | 136.3 / 137.5 | 2.9 / 3.1 | 49.2 | 49% | 0 | 29% / 29% | 2/2 | 13.81 / 13.84 |
+| long-8 | 2x TP=2 | 16/16 | 1.3 | 283.7 / 448.6 | 7.3 / 8.7 | 16.3 | 49% | 0 | 19% | - | 10.64 / 14.08 |
+| long-8 | DP=2 (2 x 1x v3d) | 16/16 | 2.2 | 210.6 / 279.4 | 5.9 / 9.2 | 27.3 | 49% | 0 | 43% / 40% | 4/4 | 13.75 / 13.82 |
+| long-12 | 2x TP=2 | 24/24 | 1.4 | 409.3 / 670.6 | 44.6 / 150.0 | 9.2 | 49% | 0 | 27% | - | 10.61 / 13.92 |
+| long-12 | DP=2 (2 x 1x v3d) | 24/24 | 2.1 | 283.4 / 423.0 | 7.3 / 9.2 | 18.5 | 49% | 0 | 45% / 46% | 6/6 | 13.69 / 13.77 |
+| long-16 | 2x TP=2 | 32/32 | 1.2 | 520.0 / 897.2 | 62.4 / 157.2 | 7.1 | 49% | 0 | 29% | - | 10.44 / 14.00 |
+| long-16 | DP=2 (2 x 1x v3d) | 32/32 | 2.8 | 359.9 / 563.4 | 7.7 / 9.5 | 10.4 | 49% | 0 | 58% / 58% | 8/8 | 13.65 / 13.75 |
+
+- 2x TP=2: 16 sessions of ~129,531 tokens ran with no preemption or error (the largest step of the ladder).
+- DP=2: 16 sessions of ~129,531 tokens ran with no preemption or error (the largest step of the ladder).
