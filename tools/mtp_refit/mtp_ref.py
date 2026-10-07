@@ -17,7 +17,11 @@ Known gaps, settled by the phase 2 GPU parity test, not here:
 - QSA sparse selection: off by default (windows <= indexer_budget tokens make it dense and exact); qsa_select=True
   applies the indexer's block top-k (transformers Qwen4ExpTextQSAIndexer semantics, vectorized) to the depth-0
   keys, for eval on whole long documents. Draft-step queries select with their own index query over the same
-  depth-0 blocks; their chain keys are always attended (the served raw ring)
+  depth-0 blocks
+- chain K/V: served draft steps 1+ attend the depth-0 keys of rows 0..t only, never the K/V that earlier draft
+  steps of the same chain wrote (not even their own). Measured against the served per-step top-20 draft logits
+  (recheck2 capture, 60 docs, logit rel err per depth): with the chain keys 0.0055/0.034/0.044/0.057, without
+  0.0055/0.0078/0.0081/0.0122. chain_kv=True restores the attended chain (EAGLE-style TTT) for comparison
 - K/V: kv_fp8=True rounds K/V to fp8 e4m3 (scale 1.0) as --kv-cache-dtype fp8 serves them (vLLM qsa.py writes
   K/V with reshape_and_cache_flash before attention; b12x converts fp8 -> BF16 in shared memory, k_scale folded
   into the score scale). Measured on the p2 live set (T=0 step replay vs live counters, positions 1-4): fp8
@@ -148,6 +152,7 @@ class MtpRef(nn.Module):
         self.compute_dtype = torch.bfloat16  # the b12x feedback oracle is BF16-only; tests use float64
         self.kv_fp8 = True  # served with --kv-cache-dtype fp8: K/V pass through e4m3 (scale 1.0, no MTP k/v scales)
         self.qsa_select = False  # eval: QSA block top-k over depth-0 keys (see module docstring)
+        self.chain_kv = False  # served draft steps never attend the chain's own K/V (see module docstring)
 
     # -- one draft pass over rows, attention supplied by the caller
     def _qkv(self, x: torch.Tensor, pos: torch.Tensor):
@@ -224,7 +229,7 @@ class MtpRef(nn.Module):
 
         Depth k, anchor t: input token x[t+1+k], state hidden[t] (k=0) or the depth k-1
         multi_hidden of the same anchor, position pos[t]+k. Attention: depth-0 keys of rows
-        0..t plus this anchor's own keys at depths 1..k. Rows past the end take token 0 and
+        0..t, as served (plus this anchor's own keys at depths 1..k with chain_kv). Rows past the end take token 0 and
         must be masked by the caller. Returns the per-depth sample hidden states [n, H].
         """
         n = tokens.shape[0]
@@ -239,7 +244,7 @@ class MtpRef(nn.Module):
                 mask = causal if ix is None else self.qsa_mask(ix[0], ictx, causal)
                 if k == 0:
                     return _attention(q, kk, vv, mask, [])
-                return _attention(q, ctx[0], ctx[1], mask, chain + [(kk, vv)])
+                return _attention(q, ctx[0], ctx[1], mask, chain + [(kk, vv)] if self.chain_kv else [])
             state, sample, kk, vv = self.block(shifted[k : k + n], state, pos + k, attend)
             if k == 0:
                 ctx = (kk, vv)

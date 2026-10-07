@@ -153,11 +153,14 @@ def _feedback_f64(emb, multi, tok_w, state_w, emb_fc, hid_fc, eps=1e-6):
     return norm(multi.flatten(-2), state_w).view(n, s, h) @ hid_fc.T + (norm(emb, tok_w) @ emb_fc.T)[:, None]
 
 
-def test_unroll_matches_sequential_chain(snap, monkeypatch):
+@pytest.mark.parametrize("chain_kv", [False, True])
+def test_unroll_matches_sequential_chain(snap, monkeypatch, chain_kv):
     """Parallel TTT unroll == a draft loop with an explicit KV cache, as vLLM drafts (float64, so any
-    mask, position or state-carry error shows far above rounding)."""
+    mask, position or state-carry error shows far above rounding). Served (chain_kv False): draft steps
+    write their K/V but attend only the prefill rows 0..t."""
     d, _ = snap
     m = load_mtp_ref(str(d), None)
+    m.chain_kv = chain_kv
     monkeypatch.setattr(mtp_ref, "feedback", _feedback_f64)
     m.double()
     m.compute_dtype = torch.float64
@@ -175,8 +178,9 @@ def test_unroll_matches_sequential_chain(snap, monkeypatch):
             cache = []
 
             def attend(q, k, v):
-                ks = torch.cat([c[0] for c in cache] + [k])
-                vs = torch.cat([c[1] for c in cache] + [v])
+                seen = cache if chain_kv or not cache else cache[:1]
+                ks = torch.cat([c[0] for c in seen] + ([k] if chain_kv or not cache else []))
+                vs = torch.cat([c[1] for c in seen] + ([v] if chain_kv or not cache else []))
                 mask = torch.ones(q.shape[0], ks.shape[0], dtype=torch.bool).tril(ks.shape[0] - q.shape[0])
                 return _attention(q, ks, vs, mask, [])
 
