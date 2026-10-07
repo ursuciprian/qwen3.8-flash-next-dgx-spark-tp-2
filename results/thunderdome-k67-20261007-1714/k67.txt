@@ -1,0 +1,151 @@
+k67 2026-10-07 17:14:20 EEST: MTP draft-reuse attention width/stride arms vs the shipped v3d (#113)
+k67a (dgx-01) spark-vllm-b12x:k67a-b53c5263-v3d: stride fix, tail not attended; k67b (dgx-02) spark-vllm-b12x:k67b-fea34e1d-v3d: full width, tail attended
+screen with TD_ACC_RISE_OK=1 (acceptance rises are reported, not a KILL reason; drops stay strict)
+
+== GPU stride check (gpu_stride_check.py, dgx-01; exit 0 = the variant's expected read set, 3 = another set, other = error)
+-- served
+  File "/usr/local/lib/python3.12/dist-packages/b12x/_lib/compiler.py", line 2931, in run_compiled
+    return compiled(*args)
+           ^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not callable
+-- k67a
+  File "/usr/local/lib/python3.12/dist-packages/b12x/_lib/compiler.py", line 2931, in run_compiled
+    return compiled(*args)
+           ^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not callable
+-- k67b
+  File "/usr/local/lib/python3.12/dist-packages/b12x/_lib/compiler.py", line 2931, in run_compiled
+    return compiled(*args)
+           ^^^^^^^^^^^^^^^
+TypeError: 'NoneType' object is not callable
+
+== k67a (dgx-01) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.52GiB
+-- b12x ready lines (arm boots incl. bake)
+      2 b12x ready gemm.blockscaled_precision: 271/271 ready, 0 measured, 10 cached
+      1 b12x ready gemm.blockscaled_precision: 297/297 ready, 0 measured, 279 cached
+      3 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      3 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.814 arm 0.821 shift +0.007
+  pos 1: control 0.658 arm 0.670 shift +0.012
+  pos 2: control 0.534 arm 0.546 shift +0.011
+  pos 3: control 0.435 arm 0.444 shift +0.010
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -1.88%  noise  7.17%            n=4 CI [-8.0,+4.2] control boot-to-boot -7.17%, step -0.35%
+  probe  fresh-c4      +4.25%  noise  3.16%  better    n=16 CI [+1.1,+7.4] control boot-to-boot -1.30%, step +0.84%
+  probe  fresh-c8      +2.11%  noise  1.78%  better    n=32 CI [+0.3,+3.8] control boot-to-boot +0.45%, step +0.20%
+  probe  d16k-c4       +0.67%  noise  3.54%            n=16 CI [-2.8,+4.3] control boot-to-boot +3.05%, step +1.22%
+  probe  count-c8      -0.40%  noise  1.74%            n=32 CI [-1.9,+1.1] control boot-to-boot +1.74%, step +0.60%
+  wall   d16k-c8       -0.40%  noise  1.00%            wall s control 124/125 arm 125/125 (cut counts as the time)
+  benchy pp2048 (c1)   +0.27%  noise  2.42%            control 1818.1 arm 1823.1 t/s (boots 2/2)
+  benchy tg512 (c1)    +7.64%  noise  8.21%            control 54.7 arm 58.9 t/s (boots 2/2)
+  benchy tg512 (c8)    -5.14%  noise  2.00%  WORSE>2x  control 131.1 arm 124.3 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0423 max 0.5071
+  self  ctl-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0339 max 0.3954
+  self  arm-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0336 max 0.3548
+  self  arm-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0350 max 0.4251
+  cross ctl-p1/arm-p1: 12/20 prompts identical, |dlogprob| mean 0.0384 max 0.5542
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0402 max 0.3753
+reason: benchy tg512 (c8) -5.14% (noise 2.00%)
+better: probe fresh-c4 +4.25% (noise 3.16%); probe fresh-c8 +2.11% (noise 1.78%)
+VERDICT=KILL
+-- acceptance per draft position per probe cell (pooled boots; positions 1-3 are the reuse steps, 0 is the anchor run)
+control (v3d):
+  cell       boots drafts/pos   acc p0  p1    p2    p3  | cond p1|p0 p2|p1 p3|p2
+  fresh-c1       2       1216   0.812 0.636 0.507 0.418 | 0.783     0.798     0.823
+  fresh-c4       2       4967   0.790 0.627 0.495 0.390 | 0.794     0.790     0.788
+  fresh-c8       2       9820   0.805 0.637 0.503 0.393 | 0.792     0.789     0.781
+  d16k-c4        2       5028   0.781 0.619 0.483 0.378 | 0.793     0.781     0.782
+  d16k-c8        2       4904   0.812 0.635 0.505 0.393 | 0.782     0.796     0.778
+  count-c8       2       2071   0.996 0.991 0.985 0.984 | 0.995     0.994     0.999
+arm (k67a):
+  cell       boots drafts/pos   acc p0  p1    p2    p3  | cond p1|p0 p2|p1 p3|p2
+  fresh-c1       2       1219   0.802 0.646 0.509 0.411 | 0.805     0.788     0.808
+  fresh-c4       2       4842   0.810 0.648 0.519 0.410 | 0.800     0.801     0.789
+  fresh-c8       2       9764   0.809 0.643 0.510 0.397 | 0.794     0.794     0.778
+  d16k-c4        2       4919   0.795 0.640 0.501 0.396 | 0.804     0.783     0.791
+  d16k-c8        2       4863   0.808 0.648 0.511 0.403 | 0.802     0.789     0.788
+  count-c8       2       2076   0.997 0.989 0.983 0.978 | 0.993     0.993     0.996
+-- single-request hook cells (arm vs control, same pass; count c1 vs c2 = same prompt at two concurrencies)
+pass 1 copy-1    ctl     80.7  arm     81.2    +0.6%   tok/step ctl 4.944 arm 4.947   acc/pos ctl [0.995, 0.987, 0.984, 0.978] arm [0.994, 0.988, 0.984, 0.98]
+pass 1 copy-2    ctl    122.8  arm    123.4    +0.6%   tok/step ctl 4.944 arm 4.947   acc/pos ctl [0.995, 0.987, 0.984, 0.978] arm [0.994, 0.988, 0.984, 0.98]
+pass 1 count-c1  ctl     83.9  arm     80.8    -3.7%   tok/step ctl 4.982 arm 4.867   acc/pos ctl [0.997, 0.995, 0.995, 0.995] arm [0.987, 0.975, 0.955, 0.95]
+pass 1 count-c2  ctl    152.7  arm    151.7    -0.7%   tok/step ctl 4.975 arm 4.942   acc/pos ctl [0.998, 0.994, 0.992, 0.991] arm [0.995, 0.988, 0.98, 0.979]
+pass 1 teb       ctl     65.5  arm     61.9    -5.5%   tok/step ctl 3.762 arm 3.559   acc/pos ctl [0.886, 0.762, 0.638, 0.476] arm [0.865, 0.676, 0.55, 0.468]
+pass 1 teb-t1    ctl     54.3  arm     60.1   +10.7%   tok/step ctl 3.087 arm 3.439   acc/pos ctl [0.77, 0.556, 0.421, 0.341] arm [0.825, 0.702, 0.526, 0.386]
+pass 2 copy-1    ctl     80.6  arm     81.1    +0.6%   tok/step ctl 4.958 arm 4.956   acc/pos ctl [0.995, 0.992, 0.987, 0.983] arm [0.995, 0.992, 0.987, 0.983]
+pass 2 copy-2    ctl    122.9  arm    123.0    +0.1%   tok/step ctl 4.958 arm 4.956   acc/pos ctl [0.995, 0.992, 0.987, 0.983] arm [0.995, 0.992, 0.987, 0.983]
+pass 2 count-c1  ctl     85.1  arm     81.5    -4.2%   tok/step ctl 4.939 arm 4.874   acc/pos ctl [0.995, 0.99, 0.982, 0.972] arm [0.99, 0.975, 0.957, 0.952]
+pass 2 count-c2  ctl    154.1  arm    153.2    -0.6%   tok/step ctl 4.98 arm 4.98   acc/pos ctl [1.0, 0.994, 0.994, 0.992] arm [1.0, 0.995, 0.992, 0.992]
+pass 2 teb       ctl     63.1  arm     60.5    -4.1%   tok/step ctl 3.555 arm 3.505   acc/pos ctl [0.855, 0.718, 0.582, 0.4] arm [0.847, 0.694, 0.55, 0.414]
+pass 2 teb-t1    ctl     51.2  arm     62.4   +21.9%   tok/step ctl 2.955 arm 3.555   acc/pos ctl [0.774, 0.519, 0.406, 0.256] arm [0.818, 0.7, 0.573, 0.464]
+mean of passes: copy-1 +0.6%, copy-2 +0.3%, count-c1 -4.0%, count-c2 -0.6%, teb -4.8%, teb-t1 +16.3%
+
+== k67b (dgx-02) vs v3d: screen=KILL post=[PASS] min_MemAvailable=13.96GiB
+-- b12x ready lines (arm boots incl. bake)
+      3 b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached
+      3 b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.815 arm 0.818 shift +0.002
+  pos 1: control 0.663 arm 0.655 shift -0.008
+  pos 2: control 0.537 arm 0.515 shift -0.022
+  pos 3: control 0.434 arm 0.403 shift -0.031  > 0.03
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -3.47%  noise  2.69%  worse     n=4 CI [-6.1,-0.7] control boot-to-boot +1.97%, step +0.31%
+  probe  fresh-c4      -0.78%  noise  2.70%            n=16 CI [-3.1,+1.5] control boot-to-boot +2.70%, step -0.27%
+  probe  fresh-c8      +0.91%  noise  2.71%            n=32 CI [-1.1,+3.1] control boot-to-boot -2.71%, step -0.23%
+  probe  d16k-c4       +1.65%  noise  5.37%            n=16 CI [-2.8,+5.6] control boot-to-boot +5.37%, step -0.06%
+  probe  count-c8      -3.88%  noise  2.87%  worse     n=32 CI [-5.1,-2.7] control boot-to-boot +2.87%, step +4.22%
+  wall   d16k-c8       +0.00%  noise  1.00%            wall s control 127/126 arm 126/127 (cut counts as the time)
+  benchy pp2048 (c1)   +4.11%  noise  4.51%            control 1713.2 arm 1783.6 t/s (boots 2/2)
+  benchy tg512 (c1)    -2.36%  noise  6.61%            control 59.8 arm 58.4 t/s (boots 2/2)
+  benchy tg512 (c8)    -5.33%  noise  5.49%            control 128.2 arm 121.4 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 13/20 prompts identical, |dlogprob| mean 0.0401 max 0.4878
+  self  ctl-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0346 max 0.3942
+  self  arm-p1 a/b: 10/20 prompts identical, |dlogprob| mean 0.0401 max 0.5427
+  self  arm-p2 a/b: 10/20 prompts identical, |dlogprob| mean 0.0404 max 0.7156
+  cross ctl-p1/arm-p1: 10/20 prompts identical, |dlogprob| mean 0.0436 max 0.5199
+  cross ctl-p2/arm-p2: 9/20 prompts identical, |dlogprob| mean 0.0404 max 0.5491
+reason: acceptance pos 3 moved -0.031
+reason: probe fresh-c1 -3.47% (noise 2.69%)
+reason: probe count-c8 -3.88% (noise 2.87%)
+better: none
+VERDICT=KILL
+-- acceptance per draft position per probe cell (pooled boots; positions 1-3 are the reuse steps, 0 is the anchor run)
+control (v3d):
+  cell       boots drafts/pos   acc p0  p1    p2    p3  | cond p1|p0 p2|p1 p3|p2
+  fresh-c1       2       1244   0.795 0.630 0.492 0.381 | 0.793     0.781     0.775
+  fresh-c4       2       4932   0.802 0.639 0.496 0.389 | 0.797     0.776     0.784
+  fresh-c8       2       9830   0.803 0.638 0.503 0.393 | 0.795     0.788     0.781
+  d16k-c4        2       4943   0.801 0.629 0.502 0.387 | 0.785     0.797     0.771
+  d16k-c8        2       4926   0.797 0.640 0.502 0.392 | 0.803     0.784     0.780
+  count-c8       2       2068   0.998 0.991 0.988 0.986 | 0.993     0.997     0.999
+arm (k67b):
+  cell       boots drafts/pos   acc p0  p1    p2    p3  | cond p1|p0 p2|p1 p3|p2
+  fresh-c1       2       1290   0.796 0.594 0.455 0.334 | 0.746     0.766     0.734
+  fresh-c4       2       5031   0.807 0.629 0.473 0.349 | 0.779     0.753     0.737
+  fresh-c8       2      10053   0.804 0.627 0.474 0.357 | 0.780     0.756     0.752
+  d16k-c4        2       4997   0.795 0.633 0.486 0.367 | 0.796     0.768     0.756
+  d16k-c8        2       4971   0.807 0.636 0.489 0.368 | 0.788     0.769     0.752
+  count-c8       2       2080   0.998 0.989 0.982 0.971 | 0.991     0.992     0.989
+-- single-request hook cells (arm vs control, same pass; count c1 vs c2 = same prompt at two concurrencies)
+pass 1 copy-1    ctl     80.7  arm     76.5    -5.2%   tok/step ctl 4.96 arm 4.732   acc/pos ctl [0.997, 0.993, 0.987, 0.982] arm [0.992, 0.949, 0.92, 0.871]
+pass 1 copy-2    ctl    124.6  arm    117.8    -5.4%   tok/step ctl 4.96 arm 4.732   acc/pos ctl [0.997, 0.993, 0.987, 0.982] arm [0.992, 0.949, 0.92, 0.871]
+pass 1 count-c1  ctl     83.4  arm     83.1    -0.4%   tok/step ctl 4.904 arm 4.916   acc/pos ctl [0.992, 0.98, 0.967, 0.965] arm [0.99, 0.982, 0.975, 0.97]
+pass 1 count-c2  ctl    143.0  arm    151.3    +5.8%   tok/step ctl 4.934 arm 4.965   acc/pos ctl [0.997, 0.989, 0.979, 0.969] arm [1.0, 0.994, 0.989, 0.982]
+pass 1 teb       ctl     63.8  arm     59.2    -7.2%   tok/step ctl 3.578 arm 3.333   acc/pos ctl [0.817, 0.716, 0.587, 0.459] arm [0.821, 0.658, 0.487, 0.368]
+pass 1 teb-t1    ctl     57.6  arm     56.4    -2.1%   tok/step ctl 3.46 arm 3.331   acc/pos ctl [0.832, 0.664, 0.54, 0.425] arm [0.797, 0.661, 0.508, 0.364]
+pass 2 copy-1    ctl     80.3  arm     77.8    -3.2%   tok/step ctl 4.952 arm 4.767   acc/pos ctl [0.995, 0.992, 0.985, 0.981] arm [0.996, 0.956, 0.933, 0.882]
+pass 2 copy-2    ctl    123.2  arm    119.9    -2.6%   tok/step ctl 4.952 arm 4.767   acc/pos ctl [0.995, 0.992, 0.985, 0.981] arm [0.996, 0.956, 0.933, 0.882]
+pass 2 count-c1  ctl     82.8  arm     81.8    -1.2%   tok/step ctl 4.931 arm 4.862   acc/pos ctl [0.99, 0.985, 0.98, 0.977] arm [0.995, 0.98, 0.962, 0.925]
+pass 2 count-c2  ctl    151.0  arm    137.8    -8.7%   tok/step ctl 4.955 arm 4.93   acc/pos ctl [0.998, 0.991, 0.983, 0.983] arm [0.998, 0.991, 0.976, 0.965]
+pass 2 teb       ctl     59.9  arm     56.7    -5.3%   tok/step ctl 3.345 arm 3.171   acc/pos ctl [0.81, 0.621, 0.517, 0.397] arm [0.732, 0.602, 0.463, 0.374]
+pass 2 teb-t1    ctl     57.2  arm     59.0    +3.1%   tok/step ctl 3.261 arm 3.333   acc/pos ctl [0.857, 0.613, 0.454, 0.336] arm [0.863, 0.632, 0.47, 0.368]
+mean of passes: copy-1 -4.2%, copy-2 -4.0%, count-c1 -0.8%, count-c2 -1.5%, teb -6.3%, teb-t1 +0.5%
+guard dgx01: min MemAvailable over the screen 11.03 GiB
+guard dgx02: min MemAvailable over the screen 13.86 GiB
+
+K67A=FAIL (dgx-01 KILL (benchy tg512 (c8) -5.14% (noise 2.00%),))
+K67B=FAIL (dgx-02 KILL (acceptance pos 3 moved -0.031,probe fresh-c1 -3.47% (noise 2.69%),probe count-c8 -3.88% (noise 2.87%),))
