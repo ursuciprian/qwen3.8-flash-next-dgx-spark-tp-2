@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-08: single-Spark v3e promoted
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-1x-dgx-spark` | v3e: v3d + the retrained MTP drafter, checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`, image `tp1-v3e-hf-20261008-21e0b201-5dad364d-warm` (experimental) |
+| `qwen3.8-flash-next-1x-dgx-spark-previous` | the v3d recipe that was `qwen3.8-flash-next-1x-dgx-spark` from 2026-10-05 to 2026-10-08 |
+| (was `-previous`, v3c) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-v3c-20261005.yaml` (not listed; run by path) |
+
 ## 2026-10-05: single-Spark v3d promoted
 
 | name | content now |

@@ -1,0 +1,24 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.818 arm 0.854 shift +0.037  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 1: control 0.666 arm 0.708 shift +0.042  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 2: control 0.539 arm 0.589 shift +0.050  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 3: control 0.438 arm 0.488 shift +0.050  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +2.84%  noise  8.54%            n=4 CI [-5.7,+11.4] control boot-to-boot +0.50%, step +0.09%
+  probe  fresh-c4      +7.90%  noise  2.82%  better    n=16 CI [+5.1,+10.7] control boot-to-boot -0.96%, step +0.75%
+  probe  fresh-c8      +8.08%  noise  2.61%  better    n=32 CI [+5.5,+10.7] control boot-to-boot +2.58%, step -0.71%
+  probe  d16k-c4       +5.74%  noise  3.23%  better    n=16 CI [+2.5,+9.0] control boot-to-boot +1.07%, step +0.08%
+  probe  count-c8      -0.11%  noise  2.77%            n=32 CI [-1.0,+0.8] control boot-to-boot +2.77%, step +0.75%
+  wall   d16k-c8       +2.04%  noise  1.00%  better    wall s control 125/126 arm 124/122 (cut counts as the time)
+  benchy pp2048 (c1)   -0.89%  noise  2.02%            control 1833.2 arm 1816.9 t/s (boots 2/2)
+  benchy tg512 (c1)    +1.60%  noise 10.26%            control 58.1 arm 59.0 t/s (boots 2/2)
+  benchy tg512 (c8)    +1.20%  noise  3.58%            control 130.7 arm 132.3 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0379 max 0.3980
+  self  ctl-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0424 max 0.5832
+  self  arm-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0369 max 0.6847
+  self  arm-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0355 max 0.5117
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0419 max 0.3830
+  cross ctl-p2/arm-p2: 12/20 prompts identical, |dlogprob| mean 0.0339 max 0.5215
+better: probe fresh-c4 +7.90% (noise 2.82%); probe fresh-c8 +8.08% (noise 2.61%); probe d16k-c4 +5.74% (noise 3.23%); wall d16k-c8 +2.04% (noise 1.00%)
+VERDICT=PROMOTE

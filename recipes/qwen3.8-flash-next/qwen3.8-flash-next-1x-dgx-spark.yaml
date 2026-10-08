@@ -1,3 +1,20 @@
+# EXPERIMENTAL single-Spark (TP=1) recipe v3e (2026-10-08): v3d + the retrained MTP drafter.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 = 244cb6fe (v3d) with the 24 dense BF16 mtp.* tensors
+#     of model-00034 retrained (#97 refit run 1): 72 steps of 8192 anchors (0.66 epoch) on ~3.5M tokens of v3d's own
+#     outputs, KL to the served target's top-20 at 6 draft depths, fp8 drafter KV as served. Drafter experts and the
+#     K131072 draft head stay at the served NVFP4 values. Every other file is byte-identical to 244cb6fe.
+#   - Offline held-out acceptance per position, T=0: 0.878/0.750/0.635/0.534/0.449/0.377 -> 0.905/0.797/0.699/0.614/0.542/0.480.
+#   - Screen vs v3d (k56 Thunderdome, one arm per Spark, 2 passes, T=0): acceptance pos 1-4
+#     dgx-01 0.819/0.661/0.535/0.431 -> 0.856/0.713/0.593/0.489, dgx-02 0.818/0.666/0.539/0.438 -> 0.854/0.708/0.589/0.488;
+#     fresh c4 +4.9% (noise 3.1%) / +7.9% (2.8%), fresh c8 +6.8% (3.6%) / +8.1% (2.6%), 16K c4 +5.5% (3.7%) / +5.7% (3.2%),
+#     16K c8 wall +2.9% (1.0%) / +2.0% (1.0%), pp2048 c1 +0.0% (1.0%) / -0.9% (2.0%); no cell worse beyond noise.
+#   - Gate (both Sparks): hardmode 91, TC-45 100, fidelity 20/20 at 8k-128k (one extra 128k seed on dgx-01 19/20),
+#     stragglers c8-c16 0 preemptions. Jev ship 0.97.
+#   - Image: the v3d HF image + the b12x plan seed re-keyed to the 16c9bd54 snapshot path (3205a613) and the torch AOT
+#     compile cache of boots of this recipe. Nothing else changes.
+#   Results: results/thunderdome-k56-20261007. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3d).
+#
+# Base: v3d header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3d (2026-10-05): v3c + NVFP4 GDN weights for decode, MXFP8 for prefill.
 #   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE = local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1 with
 #     the GDN in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16 base to weight-only
@@ -91,11 +108,11 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark
-description: "Experimental (v3d). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
+description: "Experimental (v3e: v3d + retrained MTP drafter). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-08)."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
-model_revision: 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-hf-20261005-21e0b201-5dad364d-warm
+model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm
 runtime: vllm
 
 build_args: []
@@ -150,7 +167,7 @@ command: |
   A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
-    --revision 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b \
+    --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d \
     --host {host} \
     --port {port} \
     --trust-remote-code \

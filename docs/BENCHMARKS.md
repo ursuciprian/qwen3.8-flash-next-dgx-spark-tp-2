@@ -162,6 +162,54 @@ Tokens per step 4.91–5.00 in both workloads.
 **Memory**: lowest MemAvailable 5.19 GiB (dgx-01) / 6.58 GiB (dgx-02) on 2×, 4.46 GiB on 1×. A 1× boot at
 `max_num_seqs` 16 on the other Spark was stopped by the 4 GiB MemAvailable guard during startup.
 
+## Single Spark v3e: retrained MTP drafter (2026-10-08)
+
+v3e = v3d with the 24 dense BF16 `mtp.*` tensors retrained (#97 refit run 1). Checkpoint
+`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54` (v3d: `244cb6fe`); only `model-00034-of-00036.safetensors`
+differs. Training: 72 optimizer steps of 8192 anchors (0.66 epoch) on about 3.5M tokens of v3d's own outputs (1,466
+training documents, 896,564 anchors; 70 held-out documents, 64,425 anchors), KL to the served target's top-20 at 6
+chained draft depths, learning rate 2e-5 after a 20-step warm-up, fp8 drafter KV emulated as served. Drafter experts
+and the 131,072-id draft head stay at the served NVFP4 values.
+
+Offline acceptance per draft position on the held-out set (vLLM's cumulative rate), v3d → v3e:
+
+| Category | T | pos 1 | pos 2 | pos 3 | pos 4 | pos 5 | pos 6 | tokens/step at 4 drafts |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| all | 0 | 0.878 → 0.905 | 0.750 → 0.797 | 0.635 → 0.699 | 0.534 → 0.614 | 0.449 → 0.542 | 0.377 → 0.480 | 3.797 → 4.015 |
+| all | 1 | 0.853 → 0.876 | 0.680 → 0.713 | 0.514 → 0.551 | 0.372 → 0.409 | 0.260 → 0.294 | 0.177 → 0.206 | 3.419 → 3.548 |
+| agentic | 0 | 0.824 → 0.860 | 0.660 → 0.716 | 0.527 → 0.590 | 0.420 → 0.488 | 0.340 → 0.410 | 0.278 → 0.351 | 3.431 → 3.655 |
+| chat | 0 | 0.793 → 0.827 | 0.587 → 0.643 | 0.434 → 0.502 | 0.323 → 0.393 | 0.245 → 0.315 | 0.186 → 0.257 | 3.136 → 3.365 |
+| code | 0 | 0.924 → 0.944 | 0.830 → 0.870 | 0.729 → 0.792 | 0.631 → 0.717 | 0.540 → 0.646 | 0.457 → 0.580 | 4.114 → 4.324 |
+| math | 0 | 0.954 → 0.968 | 0.883 → 0.917 | 0.794 → 0.853 | 0.705 → 0.785 | 0.617 → 0.714 | 0.536 → 0.645 | 4.335 → 4.522 |
+| tools | 0 | 0.897 → 0.924 | 0.775 → 0.831 | 0.669 → 0.735 | 0.574 → 0.655 | 0.492 → 0.586 | 0.429 → 0.531 | 3.914 → 4.145 |
+
+Live screen (k56): Thunderdome, one arm per Spark (dgx-01, dgx-02), v3d control and v3e arm booted alternately, 2
+passes, T=0 probe cells plus llama-benchy (T=1, 2 runs). Noise band = the cell's control boot-to-boot spread, at least
+1%. Acceptance per draft position, T=0 probe cells pooled:
+
+| Spark | pos 1 | pos 2 | pos 3 | pos 4 |
+|---|:---:|:---:|:---:|:---:|
+| dgx-01 | 0.819 → 0.856 | 0.661 → 0.713 | 0.535 → 0.593 | 0.431 → 0.489 |
+| dgx-02 | 0.818 → 0.854 | 0.666 → 0.708 | 0.539 → 0.589 | 0.438 → 0.488 |
+
+| Cell | dgx-01 | dgx-02 |
+|---|:---:|:---:|
+| probe fresh c1 | +5.66% (4.73%) | +2.84% (8.54%) |
+| probe fresh c4 | +4.88% (3.05%) | +7.90% (2.82%) |
+| probe fresh c8 | +6.79% (3.56%) | +8.08% (2.61%) |
+| probe 16K c4 | +5.47% (3.65%) | +5.74% (3.23%) |
+| probe counting c8 | +1.19% (1.00%) | −0.11% (2.77%) |
+| 16K c8 wall time | +2.86% (1.00%) | +2.04% (1.00%) |
+| llama-benchy pp2048 c1 | +0.01% (1.00%), 1819.0 → 1819.2 t/s | −0.89% (2.02%), 1833.2 → 1816.9 t/s |
+| llama-benchy tg512 c1 | +4.31% (7.55%), 53.2 → 55.5 t/s | +1.60% (10.26%), 58.1 → 59.0 t/s |
+| llama-benchy tg512 c8 | +3.68% (4.85%), 124.9 → 129.5 t/s | +1.20% (3.58%), 130.7 → 132.3 t/s |
+
+Verdict PROMOTE on both Sparks. Gate (both Sparks): hardmode 91, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k
+(~245k seeds: dgx-01 one seed 19/20, 119/120 overall; dgx-02 120/120), stragglers c8/c12/c16 with 0 preemptions, min
+MemAvailable 13.92 GiB. Jev (TypeSafe System One) on the same numbers: ship, confidence 0.97
+([`jev-ship.json`](../results/thunderdome-k56-20261007/jev-ship.json)). Raw files:
+[`results/thunderdome-k56-20261007/`](../results/thunderdome-k56-20261007/).
+
 ## Single Spark v3d (2026-10-05)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image

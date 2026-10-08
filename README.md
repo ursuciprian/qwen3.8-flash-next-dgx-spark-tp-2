@@ -3,7 +3,7 @@
 # Qwen3.8-Flash-Next on DGX Spark: one or two GB10s
 
 NVFP4 Qwen3.8-Flash-Next on vLLM V2 with b12x kernels and 4-token MTP, launched with sparkrun. 262k context, OpenAI-compatible API.<br>
-Two recipes: **2× Spark** (TP=2 over ConnectX-7) and **1× Spark** (TP=1, experimental, NVFP4 GDN weights).<br>
+Two recipes: **2× Spark** (TP=2 over ConnectX-7) and **1× Spark** (TP=1, experimental, NVFP4 GDN weights, retrained MTP drafter).<br>
 A build is promoted only if it passes the [quality gate](#quality-gate) and no c1–c4 cell is slower beyond noise.
 
 <img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark b1.4: copy-heavy 439 at 8 concurrent tasks (max of 3 rounds), counting 558 at c8 and 795 at c16 (max of 5 rounds), coding 196 at c8 and 243 at c16. 1× Spark v3d: copy-heavy 282 at 8 (max of 3 rounds), counting 378 at c8 (max of 5 rounds), coding 139 at c8 and 111 at c8 on a 16k context." width="900">
@@ -19,8 +19,9 @@ A build is promoted only if it passes the [quality gate](#quality-gate) and no c
 | **Prefill**, 2,048-token prompt | | 2,784–2,855 | | 1,788 | |
 | **Prefill**, filling a 16k context | | 2,895–2,920 | | 2,088 | |
 
-Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3d (2026-10-05). Workloads, dates
-and raw files: [Measured](#measured).
+Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3d (2026-10-05). The current 1× build,
+v3e (2026-10-08), is v3d with a retrained MTP drafter; its paired screen against v3d is under
+[1× Spark](#1-spark-tp1-experimental-build-v3e). Workloads, dates and raw files: [Measured](#measured).
 
 <div align="center">
 
@@ -30,7 +31,7 @@ and raw files: [Measured](#measured).
 [![stragglers](https://img.shields.io/badge/batch%20stragglers-none-2ea44f)](#quality-gate)
 <br>
 [![2x build](https://img.shields.io/badge/2×%20Spark-b1.4%20·%202026--10--01-blue)](#changelog)
-[![1x build](https://img.shields.io/badge/1×%20Spark-v3d%20·%202026--10--05-blue)](#changelog)
+[![1x build](https://img.shields.io/badge/1×%20Spark-v3e%20·%202026--10--08-blue)](#changelog)
 [![Engine](https://img.shields.io/badge/engine-vLLM%20V2%20+%20b12x-blue)](docs/REFERENCE.md#what-is-in-the-image)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 
@@ -94,7 +95,37 @@ little: other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens, and the
 3,615,479 (13.79x). This is vLLM's capacity figure; 14 concurrent 262K requests have not been run. Serve-log lines:
 [`kv-pool-2x.txt`](results/b1.4-20261001/kv-pool-2x.txt).
 
-### 1× Spark (TP=1, experimental), build v3d
+### 1× Spark (TP=1, experimental), build v3e
+
+v3e is v3d with a retrained MTP drafter, published as revision
+[`16c9bd54`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE/tree/16c9bd54788d12390838a65ce4a4ecda97fa5f1d)
+of the same checkpoint. Only the drafter's 24 dense BF16 tensors changed. I trained them for 72 steps (0.66 epoch) on
+about 3.5M tokens of v3d's own outputs, with a KL loss to the served target's top-20 distribution at 6 draft depths,
+in the served fp8 drafter KV format ([#97](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/97)).
+
+Screen against v3d (k56, Thunderdome, one arm per Spark, control and arm booted alternately, 2 passes, T=0). Change
+in tok/s, noise band in brackets; no cell was worse beyond its noise band:
+
+| Cell | dgx-01 | dgx-02 |
+|---|:---:|:---:|
+| Acceptance per draft position 1 / 2 / 3 / 4, v3d → v3e | 0.819 / 0.661 / 0.535 / 0.431 → 0.856 / 0.713 / 0.593 / 0.489 | 0.818 / 0.666 / 0.539 / 0.438 → 0.854 / 0.708 / 0.589 / 0.488 |
+| Fresh, 1 request | +5.7% (4.7%) | +2.8% (8.5%) |
+| Fresh, 4 requests | +4.9% (3.1%) | +7.9% (2.8%) |
+| Fresh, 8 requests | +6.8% (3.6%) | +8.1% (2.6%) |
+| 16K context, 4 requests | +5.5% (3.7%) | +5.7% (3.2%) |
+| Counting, 8 requests | +1.2% (1.0%) | −0.1% (2.8%) |
+| 16K context, 8 requests, wall time | +2.9% (1.0%) | +2.0% (1.0%) |
+| llama-benchy pp2048, 1 request | +0.0% (1.0%) | −0.9% (2.0%) |
+| llama-benchy tg512, 1 request | +4.3% (7.6%) | +1.6% (10.3%) |
+| llama-benchy tg512, 8 requests | +3.7% (4.9%) | +1.2% (3.6%) |
+
+Offline, on the held-out 5% of the data, acceptance per position at T=0 went from 0.878 / 0.750 / 0.635 / 0.534 /
+0.449 / 0.377 to 0.905 / 0.797 / 0.699 / 0.614 / 0.542 / 0.480 (positions 1 to 6), and every prompt category improved.
+The gate passed on both Sparks (see [Quality gate](#quality-gate)). Raw files:
+[`results/thunderdome-k56-20261007/`](results/thunderdome-k56-20261007/), Jev ship verdict 0.97 in
+[`jev-ship.json`](results/thunderdome-k56-20261007/jev-ship.json).
+
+The table below is v3d's full benchmark run (2026-10-05); v3e has not been re-run on that set.
 
 | Workload | Tokens/step | c1 | c4 | c8 | Build |
 |---|:---:|:---:|:---:|:---:|---|
@@ -105,7 +136,7 @@ little: other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens, and the
 | **Coding:** 36 prompts, T=0, thinking off, median (max) | 3.96 | 72.9 (81.8) | | | v3d (2026-10-06) |
 | **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.38 | 59.7 (67.2) | | | v3d (2026-10-06) |
 
-v3d serves [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE):
+v3d and v3e serve [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE):
 
 - This is the NVFP4 checkpoint with its 36 GDN layers' projection weights requantized to weight-only NVFP4. Every other
   tensor is unchanged.
@@ -275,6 +306,10 @@ A build ships only if it passes every check.
 | Host memory headroom during the gate | `MemAvailable` | not recorded | min 14.04 GiB (13.30 GiB during the benchmark run) |
 | DevOps task set (14 prompts × 3, graded by terraform / kubeconform / actionlint / shellcheck / helm / hadolint / promtool) | own grader | 95.9% checks, 29/42 clean, 0/42 runaway thinking | 97.8% checks, 35/42 clean, 0/42 runaway (b1.4 weights at TP=1; not rerun on v3d) |
 
+1× v3e (k56, on both Sparks): hardmode 91/100, TC-45 100/100, retrieval 20/20 at every depth (one of the three ~245k
+seeds on dgx-01 scored 19/20, 119/120 overall), stragglers none at c8–c16 with 0 preemptions. Acceptance per draft
+position rose by 0.036–0.058, which is the intended effect of the new drafter.
+
 ¹ The A/B boot had one `no_call` at 32k (19/20). Twenty cold 32k trials per build then gave 20/20 for both b1.3 and
 b1.4, and a fresh re-gate boot passed. Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#quality-b14).
 
@@ -366,10 +401,10 @@ Image and video input are not tested on these builds.
 |---|---|---|
 | [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | 2× Spark default |
 | [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `b1.3-20260929-b7fbaf96-7344a997-warm` | Rollback: full draft vocab, no QSA race fix, thinking effort `xhigh` |
-| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` | 1× Spark, experimental (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) |
-| [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-v3c-20261005-21e0b201-50330171-warm` | Rollback: v3c, base NVFP4 checkpoint |
+| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3e-hf-20261008-21e0b201-5dad364d-warm` | 1× Spark, experimental, v3e (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`, retrained drafter) |
+| [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` | Rollback: v3d, original drafter (same checkpoint @ `244cb6fe`) |
 
-Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair serves different checkpoints and keeps one cache each. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
+Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair serves different checkpoint revisions and keeps one cache each. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
 
 ## Changelog
 
@@ -396,7 +431,8 @@ step time at T=0 with 95% CIs. Every row passed the gate.
 | v3a | 2026-10-04 | 50.0 | 117.6 | NVMe keepalive (`VLLM_PLE_MMAP_KEEPALIVE_MS=50`), compile cache in the image | step −8.4% c4, −5.1% c8, −8.0% 16k c4; c1/c2 −0.5 to −0.9% |
 | v3b | 2026-10-04 | 55.0 | 130.2 | Prefill read-ahead on the PLE table (`VLLM_PLE_MMAP_PREFILL_WILLNEED=1`) | pp2048 +50% c1, +19% c4, +9% c8; 16k prefill c1 +4.6%; decode within noise |
 | v3c | 2026-10-05 | 51.8 | 125.1 | Shared GDN prefill staging, compact GDN records, KV pool 6 → 14 GiB | 16k c8 coding 22.1 → 109.3; 16K c8 probe 347–370 s → 125 s; counting c8 +3.1%, fresh c4 +2.5%; other cells within noise |
-| **v3d** | **2026-10-05** | **59.8** | **139.5** | NVFP4 GDN weights for decode with an MXFP8 copy for prefill (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) | counting c8 +7.8%, 16K c4 +5.9%, fresh c8 +4.4%, tg512 c1 50.0 → 59.7; pp2048 −0.9% (noise 1.0%); other cells within noise |
+| v3d | 2026-10-05 | 59.8 | 139.5 | NVFP4 GDN weights for decode with an MXFP8 copy for prefill (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) | counting c8 +7.8%, 16K c4 +5.9%, fresh c8 +4.4%, tg512 c1 50.0 → 59.7; pp2048 −0.9% (noise 1.0%); other cells within noise |
+| **v3e** | **2026-10-08** | **V3E_C1** | **V3E_C8** | Retrained MTP drafter (checkpoint revision `16c9bd54`) | acceptance +0.036 to +0.058 per position; fresh c4 +4.9 / +7.9%, fresh c8 +6.8 / +8.1%, 16K c4 +5.5 / +5.7% (dgx-01 / dgx-02); pp2048 within noise; no cell worse beyond noise |
 
 The benchy grid varies by up to ~10% between runs, so single cells (e.g. v3a c8 117.6 vs v2 120.0) do not resolve
 differences this small; the paired probe does. Per-build tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
