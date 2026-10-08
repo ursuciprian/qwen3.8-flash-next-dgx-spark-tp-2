@@ -1,0 +1,67 @@
+# Prompt mix for refit run3 (#97): new on-policy data next to p2-20261006 (mix.yaml). Same pipeline (gen.py prompts),
+# new rows only: every prompt sharing a 13-gram of its own content with the p2 prompt set (train and held-out, so the
+# run1/run2/run3 eval set too) or with the benchmark and gate prompts is dropped, and one prompt per first turn.
+# Domains as p2 plus explicit C++/Rust/Go code and long documents. All train (the eval set stays p2's held-out).
+total: 6000             # prompts; gen.py run --budget-tokens stops first (~7M response tokens over both Sparks)
+heldout_fraction: 0.0
+seed: 113
+id_prefix: "r3:"
+max_prompt_tokens: 24000
+categories:
+  agentic:        # multi-turn agent coding, native bash tool calls (qwen3_xml through the server's template)
+    share: 0.25
+    sources:
+      - {dataset: nebius/SWE-agent-trajectories, revision: 68195a1450865274106246d0d0296a1d6807b88e, split: train, adapter: swe_agent}
+  tools:          # single-turn tool calling with native tool definitions
+    share: 0.15
+    sources:
+      - {dataset: Team-ACE/ToolACE, revision: 6bda777c88d21e5a204703c1ee45597a8fa4f734, split: train, adapter: toolace}
+  code:           # competitive problems with the language asked for (Python/C++/Rust/Go), and practical tasks
+    share: 0.30
+    sources:
+      - dataset: nvidia/OpenCodeReasoning
+        revision: 20a1ca19c0d050fe9057fc08339d6b370ec1c67a
+        config: split_0
+        split: split_0
+        adapter: field
+        field: input
+        templates:
+          - "Solve the following problem in Python. Read from standard input and write to standard output.\n\n{text}"
+          - "Solve the following problem in C++. Read from standard input and write to standard output.\n\n{text}"
+          - "Solve the following problem in Rust. Read from standard input and write to standard output.\n\n{text}"
+          - "Solve the following problem in Go. Read from standard input and write to standard output.\n\n{text}"
+      - {dataset: ise-uiuc/Magicoder-OSS-Instruct-75K, revision: 5f839b1f368a76b161028bb9edff055db34022b2, split: train, adapter: field, field: problem, where: {lang: [python, cpp, rust]}}
+  chat:           # prose
+    share: 0.15
+    sources:
+      - {dataset: HuggingFaceH4/ultrachat_200k, revision: 8049631c405ae6576f93f445c6b8166f76f5505a, split: train_sft, adapter: field, field: prompt}
+  long:           # long-context reading: a whole government report (up to max_prompt_tokens) and a task on it
+    share: 0.10
+    sources:
+      - dataset: ccdv/govreport-summarization
+        revision: 4e21184e01ae8017e2c036e180fe5e541fef60a0
+        config: document
+        split: train
+        adapter: field
+        field: report
+        templates:
+          - "Summarize the following report in about 300 words.\n\n{text}"
+          - "Read the report below and list its five most important findings, one or two sentences each.\n\n{text}"
+          - "Write an executive briefing on the report below: key facts, open questions, and the recommendations it makes.\n\n{text}"
+  math:
+    share: 0.05
+    sources:
+      - {dataset: AI-MO/NuminaMath-CoT, revision: 9d8d210c9f6a36c8f3cd84045668c9b7800ef517, split: train, adapter: field, field: problem}
+exclude_prompts:   # the p2 prompt set, train and held-out (prompts gen.py built for mix.yaml)
+  - ~/.cache/huggingface/mtp-refit/p2-20261006/prompts/*.jsonl
+exclude_prompts_max_df: 2
+exclude:           # as mix.yaml: benchmark and gate prompts
+  - ~/.local/share/uv/tools/tool-eval-bench/lib/python3*/site-packages/tool_eval_bench
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/scripts/hardmode_targeted.sh
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/scripts/_gen_corpus.py
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/corpus-code.txt
+  - ~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/corpus-prose.txt
+  - ~/GEN-AI/hotel-ab/*.py
+  - ~/GEN-AI/hotel-ab/*.sh
+  - ~/GEN-AI/k48/hotel.sh
+  - ~/GEN-AI/llama-benchy/src

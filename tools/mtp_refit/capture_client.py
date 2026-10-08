@@ -39,6 +39,8 @@ def main():
     ap.add_argument("--min-context", type=int, default=2048, help="prompt rows kept before the response")
     ap.add_argument("--max-tokens", type=int, default=8,
                     help=">1 so the prefill step schedules drafts; the hook records that greedy chain")
+    ap.add_argument("--min-response", type=int, default=0,
+                    help="skip responses of <= this many tokens (a second pass with a longer tail takes only these)")
     ap.add_argument("--cut-max-len", type=int, help="parity re-capture: cut inside the response, <= this many tokens")
     ap.add_argument("--cut-seed", type=int, default=0)
     ap.add_argument("--limit", type=int, help="at most this many records (after cutting)")
@@ -47,6 +49,7 @@ def main():
     man_path = os.path.join(a.out, "manifest.jsonl")
     done = {json.loads(l)["sha1"] for l in open(man_path)} if os.path.exists(man_path) else set()
     recs = [json.loads(l) for f in sorted(glob.glob(os.path.join(a.gen, "*.jsonl"))) for l in open(f)]
+    recs = [r for r in recs if len(r["output_token_ids"]) > a.min_response]
     if a.cut_max_len:
         recs = cut_records(recs, a.cut_max_len, a.cut_seed)
     if a.limit:

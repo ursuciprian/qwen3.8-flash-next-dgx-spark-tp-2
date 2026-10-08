@@ -27,6 +27,13 @@ from .eval_offline import evaluate
 from .mtp_ref import depth_targets, export, full_to_draft, load_mtp_ref, trainable_names, window_loss
 
 
+def lr_decay(step: int, warmup: int, max_steps: int, min_frac: float) -> float:
+    """Linear decay factor from 1 after the warm-up to min_frac at max_steps (1 = constant, run1/run2)."""
+    if min_frac >= 1 or not max_steps or step <= warmup:
+        return 1.0
+    return 1 - (1 - min_frac) * min(1.0, (step - warmup) / max(1, max_steps - warmup))
+
+
 def depth_weights(spec: str, depth: int) -> list[float]:
     if spec == "equal":
         return [1.0] * depth
@@ -114,7 +121,7 @@ def train(a) -> dict:
                 if seen < a.tokens_per_step:
                     continue
                 step += 1
-                lr = a.lr * min(1.0, step / max(1, a.warmup))
+                lr = a.lr * min(1.0, step / max(1, a.warmup)) * lr_decay(step, a.warmup, a.max_steps, a.min_lr_frac)
                 for g in opt.param_groups:
                     g["lr"] = lr
                 gn = float(torch.nn.utils.clip_grad_norm_(params, a.clip))
@@ -164,6 +171,8 @@ def main(argv=None):
                     help="default window // 2: overlapping windows, each anchor trained once with >= window/2 keys")
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--warmup", type=int, default=20)
+    ap.add_argument("--min-lr-frac", type=float, default=1.0,
+                    help="linear decay of the lr after the warm-up to this fraction at --max-steps (1 = constant)")
     ap.add_argument("--clip", type=float, default=1.0)
     ap.add_argument("--epochs", type=int, default=2)
     ap.add_argument("--max-steps", type=int, default=0)

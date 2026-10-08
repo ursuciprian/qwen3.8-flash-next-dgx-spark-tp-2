@@ -95,8 +95,12 @@ def toolace(row, rng, max_chars):
     return p if len(json.dumps(p)) <= max_chars else None
 
 
-def field(row, rng, max_chars, field):
+def field(row, rng, max_chars, field, templates=None):
+    """One user turn from a text field; `templates` (each with {text}) are picked per row by the rng, e.g. to ask
+    for a solution language or wrap a long document in a task."""
     text = row[field]
+    if text and templates:
+        text = rng.choice(templates).format(text=text)
     return {"messages": [{"role": "user", "content": text}]} if text and len(text) <= max_chars else None
 
 
@@ -150,6 +154,28 @@ def exclusion_set(patterns):
                     for s in _strings(f):
                         grams |= shingles(s)
     return grams
+
+
+def prompt_shingles(patterns, max_df):
+    """13-grams of earlier prompt files (gen prompts output, globs) that occur in at most `max_df` prompts: their own
+    content (issue text, questions, documents), not the boilerplate many prompts share (agent system prompts, tool
+    instructions), which would otherwise exclude every new prompt of the same source."""
+    df = {}
+    for pat in patterns:
+        hits = glob.glob(os.path.expanduser(pat))
+        if not hits:
+            raise SystemExit(f"exclude_prompts pattern matches nothing: {pat}")
+        for f in hits:
+            for line in open(f):
+                for g in shingles(prompt_text(json.loads(line))):
+                    df[g] = df.get(g, 0) + 1
+    return {g for g, n in df.items() if n <= max_df}
+
+
+def first_turn_key(p):
+    """sha1 of the first non-system message: one prompt per task (SWE-agent has several trajectories per issue)."""
+    m = next(m for m in p["messages"] if m["role"] != "system")
+    return hashlib.sha1((m.get("content") or "").encode()).hexdigest()
 
 
 def prompt_text(p):
@@ -221,6 +247,9 @@ def cmd_prompts(a):
     datasets.config.STREAMING_READ_RETRY_INTERVAL = 10
     mix = yaml.safe_load(open(a.mix))
     excl = exclusion_set(mix.get("exclude", []))
+    if mix.get("exclude_prompts"):  # earlier prompt sets (train and held-out): new prompts share no content with them
+        excl |= prompt_shingles(mix["exclude_prompts"], mix.get("exclude_prompts_max_df", 2))
+    seen_keys = set()
     max_chars = int(mix.get("max_prompt_tokens", 24000) * 3.5)
     os.makedirs(a.out, exist_ok=True)
     man_path = os.path.join(a.out, "MANIFEST.json")
@@ -242,18 +271,25 @@ def cmd_prompts(a):
             ds = load_dataset(src["dataset"], src.get("config"), split=src["split"], streaming=True,
                               revision=src.get("revision"))
             ds = ds.shuffle(seed=mix["seed"], buffer_size=10_000)
-            extra = {"field": src["field"]} if "field" in src else {}
+            extra = {k: src[k] for k in ("field", "templates") if k in src}
+            where = src.get("where", {})  # {column: [allowed values]}
             got = 0
             for i, row in enumerate(ds):
                 if got >= per_source:
                     break
+                if any(row.get(k) not in v for k, v in where.items()):
+                    continue
                 p = ADAPTERS[src["adapter"]](row, rng, max_chars, **extra)
                 if p is None:
                     continue
                 if shingles(prompt_text(p)) & excl:
                     dropped += 1
                     continue
-                pid = f"{src['dataset']}:{src.get('config') or ''}:{i}"
+                key = first_turn_key(p)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                pid = f"{mix.get('id_prefix', '')}{src['dataset']}:{src.get('config') or ''}:{i}"
                 p.update(id=pid, category=cat, split="heldout" if is_heldout(pid, mix["heldout_fraction"]) else "train")
                 out.append(p)
                 got += 1

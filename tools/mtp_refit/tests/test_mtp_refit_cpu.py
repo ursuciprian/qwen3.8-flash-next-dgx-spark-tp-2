@@ -640,3 +640,27 @@ def test_gate_coverage_acceptance_waives_only_decisive_fraction(tmp_path):
     assert parity.gate(a) == 1
     a.accepted = "coverage-2026-10-07"
     assert parity.gate(a) == 0
+
+
+def test_run3_prompt_exclusion_templates_and_lr_decay(tmp_path):
+    import random
+
+    from tools.mtp_refit.train import lr_decay
+
+    p = gen.field({"t": "two sum"}, random.Random(0), 1000, "t", templates=["In Go.\n\n{text}"])
+    assert p["messages"][0]["content"] == "In Go.\n\ntwo sum"
+    assert gen.field({"t": "x" * 50}, random.Random(0), 40, "t") is None
+    boiler = "you are an autonomous programmer working in a shell with special commands that help you edit files"
+    old = tmp_path / "old.jsonl"
+    old.write_text("".join(json.dumps({"messages": [{"role": "system", "content": boiler},
+                                                    {"role": "user", "content": f"issue {i}: " + q}]}) + "\n"
+                           for i, q in enumerate(["the parser drops trailing commas in nested lists when the input "
+                                                  "file uses windows line endings", "a different issue"] * 1 + ["x"])))
+    excl = gen.prompt_shingles([str(old)], max_df=2)
+    assert not gen.shingles(boiler) & excl  # boilerplate (3 prompts) is not exclusion content
+    assert gen.shingles("so the parser drops trailing commas in nested lists when the input file uses windows") & excl
+    a = {"messages": [{"role": "system", "content": "S"}, {"role": "user", "content": "q"}]}
+    assert gen.first_turn_key(a) == gen.first_turn_key({"messages": [{"role": "user", "content": "q"}]})
+    assert lr_decay(10, 20, 100, 0.1) == 1.0 and lr_decay(100, 20, 100, 0.1) == pytest.approx(0.1)
+    assert lr_decay(60, 20, 100, 0.1) == pytest.approx(0.55) and lr_decay(60, 20, 100, 1.0) == 1.0
+    assert lr_decay(60, 20, 0, 0.1) == 1.0
