@@ -210,6 +210,10 @@ MemAvailable 13.92 GiB. Jev (TypeSafe System One) on the same numbers: ship, con
 ([`jev-ship.json`](../results/thunderdome-k56-20261007/jev-ship.json)). Raw files:
 [`results/thunderdome-k56-20261007/`](../results/thunderdome-k56-20261007/).
 
+Shipped image check (hfship, one boot on dgx-01 from the HF cache with the seed entries removed): seed HIT, drafter
+REFIT, fresh c4 acceptance 0.846 / 0.691 / 0.566 / 0.462. Its llama-benchy coding grid gives tg512 56.9 t/s at c1 and
+132.9 t/s at c8 (depth 0). Raw files: [`results/tp1-v3e-hf-20261008/`](../results/tp1-v3e-hf-20261008/).
+
 ## Single Spark v3d (2026-10-05)
 
 Recipe `qwen3.8-flash-next-1x-dgx-spark` (one GB10, TP=1), image

@@ -58,6 +58,7 @@ SRC = {
         ("v3b", "10-04", RES / "tp1-v3b-20261004/bench-task.csv"),
         ("v3c", "10-05", RES / "tp1-v3c-20261005/bench/task.csv"),
         ("v3d", "10-05", T1 / "bench/task.csv"),
+        ("v3e", "10-08", RES / "tp1-v3e-hf-20261008/bench/task.csv"),
     ],
     "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
     # High concurrency, max_num_seqs 32 (one boot per setup): counting, copy-heavy, coding at c16/c32.
@@ -288,7 +289,7 @@ def chart_builds(hist, hist1):
     fig.text(0.0, -0.05, "Promoted builds in order (2026). 2× Spark: each value is that build's A/B, mean of two boots; "
              "'shipped' is the baseline boots of the b1 A/B.\n1× Spark: each build's llama-benchy coding grid "
              "(one boot, 3 runs, T=1.0); single cells vary by up to ~10% between runs. "
-             "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c and v3d have 14 GiB. "
+             "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c to v3e have 14 GiB. "
              "Every build passed the quality gate.",
              fontsize=8.5, color=MUTED)
     save(fig, "build-history.svg")

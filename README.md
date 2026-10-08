@@ -411,7 +411,7 @@ Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair s
 Promoted builds only. Deltas are from that build's own A/B against the previous one; paired-probe figures are decode
 step time at T=0 with 95% CIs. Every row passed the gate.
 
-<img src="docs/img/build-history.svg" alt="tok/s per promoted build. 2× Spark from the 2026-09-23 shipped build to b1.4: counting at 1 request 101 to 120, at 8 requests 444 to 525; coding at 1 request 53 to 62, at 8 requests 167 to 196. 1× Spark from v2 to v3d: coding at 1 request 47 to 60, at 8 requests 120 to 139, and at 8 requests on a 16k context 22 to 111." width="900">
+<img src="docs/img/build-history.svg" alt="tok/s per promoted build. 2× Spark from the 2026-09-23 shipped build to b1.4: counting at 1 request 101 to 120, at 8 requests 444 to 525; coding at 1 request 53 to 62, at 8 requests 167 to 196. 1× Spark from v2 to v3e: coding at 1 request 47 to 57 (60 at v3d), at 8 requests 120 to 133 (139 at v3d), and at 8 requests on a 16k context 22 to 120." width="900">
 
 **2× Spark** (same checkpoint throughout)
 
@@ -432,9 +432,9 @@ step time at T=0 with 95% CIs. Every row passed the gate.
 | v3b | 2026-10-04 | 55.0 | 130.2 | Prefill read-ahead on the PLE table (`VLLM_PLE_MMAP_PREFILL_WILLNEED=1`) | pp2048 +50% c1, +19% c4, +9% c8; 16k prefill c1 +4.6%; decode within noise |
 | v3c | 2026-10-05 | 51.8 | 125.1 | Shared GDN prefill staging, compact GDN records, KV pool 6 → 14 GiB | 16k c8 coding 22.1 → 109.3; 16K c8 probe 347–370 s → 125 s; counting c8 +3.1%, fresh c4 +2.5%; other cells within noise |
 | v3d | 2026-10-05 | 59.8 | 139.5 | NVFP4 GDN weights for decode with an MXFP8 copy for prefill (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) | counting c8 +7.8%, 16K c4 +5.9%, fresh c8 +4.4%, tg512 c1 50.0 → 59.7; pp2048 −0.9% (noise 1.0%); other cells within noise |
-| **v3e** | **2026-10-08** | **V3E_C1** | **V3E_C8** | Retrained MTP drafter (checkpoint revision `16c9bd54`) | acceptance +0.036 to +0.058 per position; fresh c4 +4.9 / +7.9%, fresh c8 +6.8 / +8.1%, 16K c4 +5.5 / +5.7% (dgx-01 / dgx-02); pp2048 within noise; no cell worse beyond noise |
+| **v3e** | **2026-10-08** | **56.9** | **132.9** | Retrained MTP drafter (checkpoint revision `16c9bd54`) | acceptance +0.036 to +0.058 per position; fresh c4 +4.9 / +7.9%, fresh c8 +6.8 / +8.1%, 16K c4 +5.5 / +5.7% (dgx-01 / dgx-02); pp2048 within noise; no cell worse beyond noise |
 
-The benchy grid varies by up to ~10% between runs, so single cells (e.g. v3a c8 117.6 vs v2 120.0) do not resolve
+The benchy grid varies by up to ~10% between runs, so single cells (e.g. v3a c8 117.6 vs v2 120.0, or v3e c1 56.9 vs v3d 59.8) do not resolve
 differences this small; the paired probe does. Per-build tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## How we measure
