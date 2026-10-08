@@ -249,7 +249,10 @@ def cmd_prompts(a):
     excl = exclusion_set(mix.get("exclude", []))
     if mix.get("exclude_prompts"):  # earlier prompt sets (train and held-out): new prompts share no content with them
         excl |= prompt_shingles(mix["exclude_prompts"], mix.get("exclude_prompts_max_df", 2))
-    seen_keys = set()
+    # first turns of the earlier sets too: short prompts have no 13-gram, and a task repeated 3+ times there has
+    # its own text counted as boilerplate by prompt_shingles
+    seen_keys = {first_turn_key(json.loads(l)) for pat in mix.get("exclude_prompts", [])
+                 for f in glob.glob(os.path.expanduser(pat)) for l in open(f)}
     max_chars = int(mix.get("max_prompt_tokens", 24000) * 3.5)
     os.makedirs(a.out, exist_ok=True)
     man_path = os.path.join(a.out, "MANIFEST.json")
