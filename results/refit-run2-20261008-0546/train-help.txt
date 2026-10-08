@@ -1,0 +1,61 @@
+usage: train.py [-h] --snapshot SNAPSHOT [--draft-vocab DRAFT_VOCAB] --data
+                DATA [--heldout HELDOUT] [--trainable {dense,dense-norouter}]
+                [--depth DEPTH] [--depth-weights DEPTH_WEIGHTS] [--loss {kl}]
+                [--topk TOPK] [--window WINDOW]
+                [--window-stride WINDOW_STRIDE] [--lr LR] [--warmup WARMUP]
+                [--clip CLIP] [--epochs EPOCHS] [--max-steps MAX_STEPS]
+                [--save-every SAVE_EVERY] [--tokens-per-step TOKENS_PER_STEP]
+                [--eval-windows EVAL_WINDOWS] [--device DEVICE]
+                [--experts-impl EXPERTS_IMPL] [--kv-fp8 {on,off}]
+                [--seed SEED] --out OUT [--metrics-file METRICS_FILE]
+
+Train the dense part of the MTP layer against the served target (#97, design 4.6).
+
+    python -m tools.mtp_refit.train       --snapshot <f4..03> --draft-vocab /opt/mtp-vocab/ids-v2-K131072.txt.gz       --data data/train --heldout data/heldout       --trainable dense --depth 6 --depth-weights equal --loss kl --topk 20       --window 2048 --lr 2e-5 --warmup 20 --epochs 2 --tokens-per-step 8192 --out runs/<name>
+
+Writes runs/<name>/mtp_refit.safetensors (the trainable tensors, BF16, checkpoint names), train.jsonl
+(per optimizer step: soft CE and KL per depth, anchors per depth, lr) and eval.json (offline acceptance
+before and after, eval_offline.py), and with --save-every N a ckpt-stepNNNNNN.safetensors every N steps
+(same layout as the final file, so eval_offline --refit and splice.py take it). --epochs 0 exports the loaded tensors unchanged. --metrics-file
+rewrites a Prometheus textfile (prom.py) after every step and eval, for the #97 dashboard.
+
+options:
+  -h, --help            show this help message and exit
+  --snapshot SNAPSHOT
+  --draft-vocab DRAFT_VOCAB
+                        draft vocab id list (default: full vocab)
+  --data DATA
+  --heldout HELDOUT
+  --trainable {dense,dense-norouter}
+  --depth DEPTH
+  --depth-weights DEPTH_WEIGHTS
+                        equal | decay[:r] (r default 0.6)
+  --loss {kl}           soft CE to the target top-k (= KL + const)
+  --topk TOPK           must match the capture's VLLM_MTP_CAPTURE_TOPK
+  --window WINDOW
+  --window-stride WINDOW_STRIDE
+                        default window // 2: overlapping windows, each anchor
+                        trained once with >= window/2 keys
+  --lr LR
+  --warmup WARMUP
+  --clip CLIP
+  --epochs EPOCHS
+  --max-steps MAX_STEPS
+  --save-every SAVE_EVERY
+                        every N optimizer steps, export the trainable tensors
+                        to <out>/ckpt-stepNNNNNN.safetensors
+  --tokens-per-step TOKENS_PER_STEP
+                        valid depth-0 anchors per optimizer step
+  --eval-windows EVAL_WINDOWS
+                        held-out windows per eval (0 = skip)
+  --device DEVICE
+  --experts-impl EXPERTS_IMPL
+                        transformers experts implementation (default eager
+                        loop)
+  --kv-fp8 {on,off}     fp8 round trip of the drafter K/V: on = served --kv-
+                        cache-dtype fp8, off = drafter KV in BF16
+  --seed SEED
+  --out OUT
+  --metrics-file METRICS_FILE
+                        Prometheus textfile to rewrite per step (off by
+                        default)
