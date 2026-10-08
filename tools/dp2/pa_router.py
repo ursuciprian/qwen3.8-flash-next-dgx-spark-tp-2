@@ -9,8 +9,9 @@ k63 change (2026-10-07): sticky least-sessions instead of hash mod N. k60 agent1
 the static hash. Now the first request of a conversation goes to the replica with the fewest conversations so far and
 every later turn (same key) sticks to it, so prefix-cache affinity is unchanged.
 ponytail: the key->replica map never expires and ignores live load/health; add expiry + least-in-flight if it matters.
+How-to and limits: tools/dp2/README.md.
 
-  pa_router.py --port 8100 --backends http://192.168.100.62:8000,http://192.168.100.53:8000
+  pa_router.py --backends http://<spark-a>:8000,http://<spark-b>:8000 [--host 0.0.0.0] [--port 8100]
   GET /router/stats -> {"requests": [n0, n1], "sessions": [s0, s1]}; GET /health -> 200 when every replica is healthy.
   pa_router.py --selftest
 """
@@ -99,9 +100,9 @@ class Router(BaseHTTPRequestHandler):
             self.forward(0, None)
 
 
-def serve(port, backends):
+def serve(port, backends, host="0.0.0.0"):
     Router.backends, Router.reqs, Router.sess, Router.assign = backends, [0] * len(backends), [set() for _ in backends], {}
-    s = ThreadingHTTPServer(("0.0.0.0", port), Router); s.daemon_threads = True
+    s = ThreadingHTTPServer((host, port), Router); s.daemon_threads = True
     return s
 
 
@@ -127,7 +128,7 @@ def selftest():
     be = [ThreadingHTTPServer(("127.0.0.1", 0), Echo) for _ in range(2)]
     for s in be:
         threading.Thread(target=s.serve_forever, daemon=True).start()
-    rt = serve(0, [f"http://127.0.0.1:{s.server_port}" for s in be])
+    rt = serve(0, [f"http://127.0.0.1:{s.server_port}" for s in be], "127.0.0.1")
     threading.Thread(target=rt.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{rt.server_port}"
     body = json.dumps({"messages": [sysmsg, {"role": "user", "content": "s1"}], "stream": True}).encode()
@@ -150,11 +151,15 @@ def selftest():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8100); ap.add_argument("--backends", default="")
+    ap.add_argument("--host", default="0.0.0.0"); ap.add_argument("--port", type=int, default=8100)
+    ap.add_argument("--backends", default="", help="comma-separated replica base URLs")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
         selftest(); sys.exit(0)
-    srv = serve(a.port, [b.rstrip("/") for b in a.backends.split(",") if b])
+    backends = [b.rstrip("/") for b in a.backends.split(",") if b]
+    if not backends:
+        ap.error("--backends is required")
+    srv = serve(a.port, backends, a.host)
     print(f"routing :{a.port} -> {Router.backends}", flush=True)
     srv.serve_forever()

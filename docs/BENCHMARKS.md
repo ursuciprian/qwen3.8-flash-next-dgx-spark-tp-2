@@ -50,6 +50,60 @@ ship. `scripts/check_seed.py` reads the rank-0 serve log; TP=2 workers print no 
 checked for the seed's record count instead. On k70's bake log it fails (`gemm.blockscaled_precision`, `comm.roce`);
 on the k71 boots, the hfship v3e check and this check it passes.
 
+## DP=2 against 2× TP=2: production gate (2026-10-08)
+
+k72 (#106) repeats the k60 replay (next section, same `drive.py`, same seeds) with the current builds, the k63 router
+and the full quality gate through the router. One boot each:
+
+- 2× TP=2: the shipped `qwen3.8-flash-next-2x-dgx-spark` (b1.6), `max_num_seqs` 16, one KV pool of 3,650,419 tokens.
+- DP=2: the shipped `qwen3.8-flash-next-1x-dgx-spark` (v3e) on each Spark, started with plain `sparkrun run --solo`,
+  `max_num_seqs` 8 and a pool of 993,754 tokens per replica, behind
+  [`tools/dp2/pa_router.py`](../tools/dp2/pa_router.py) on dgx-01 port 8100. Since k63 the router sends a new
+  conversation to the replica with the fewest conversations and keeps its later turns there (k60 used a static hash
+  and put 13 of 16 `agent16` sessions on one Spark).
+
+| workload | setup | wall (s) | output tokens | output tok/s total | TTFT first turn mean / max (s) | TTFT follow-up mean / p90 (s) | decode tok/s per request | prefix hit | preemptions | KV max per replica | sessions per replica | running max per replica | min MemAvailable dgx-01 / dgx-02 (GiB) |
+|---|---|---:|---:|---:|---|---|---:|---:|---:|---|---|---|---|
+| agent8 | 2× TP=2 b1.6 | 157.1 | 1,924 | 12.2 | 64.9 / 113.5 | 5.0 / 7.2 | 8.0 | 78% | 0 | 15% | - | 8 | 10.83 / 14.21 |
+| agent8 | DP=2, 2 × 1× v3e | 111.6 | 2,292 | 20.5 | 49.5 / 65.8 | 4.5 / 6.8 | 16.5 | 77% | 0 | 20% / 24% | 4 / 4 | 4 / 4 | 14.08 / 13.84 |
+| agent16 | 2× TP=2 b1.6 | 255.6 | 2,638 | 10.3 | 123.8 / 237.5 | 9.4 / 21.2 | 7.3 | 70% | 0 | 18% | - | 11 | 10.34 / 14.10 |
+| agent16 | DP=2, 2 × 1× v3e | 173.3 | 2,470 | 14.3 | 88.1 / 148.7 | 8.7 / 11.0 | 8.3 | 70% | 0 | 33% / 38% | 8 / 8 | 8 / 8 | 13.71 / 13.82 |
+| long-4 | 2× TP=2 b1.6 | 225.7 | 302 | 1.3 | 166.3 / 221.1 | 5.6 / 9.3 | 27.6 | 49% | 0 | 13% | - | 4 | 10.09 / 14.05 |
+| long-4 | DP=2, 2 × 1× v3e | 141.9 | 327 | 2.3 | 136.6 / 137.4 | 2.4 / 3.1 | 39.5 | 49% | 0 | 29% / 29% | 2 / 2 | 2 / 2 | 13.71 / 13.76 |
+| long-8 | 2× TP=2 b1.6 | 452.5 | 583 | 1.3 | 285.8 / 449.6 | 8.4 / 9.6 | 14.5 | 49% | 0 | 20% | - | 8 | 10.40 / 14.04 |
+| long-8 | DP=2, 2 × 1× v3e | 284.6 | 689 | 2.4 | 210.8 / 280.1 | 6.0 / 9.0 | 25.8 | 49% | 0 | 43% / 40% | 4 / 4 | 4 / 4 | 13.65 / 13.73 |
+| long-12 | 2× TP=2 b1.6 | 680.2 | 817 | 1.2 | 411.0 / 675.7 | 32.5 / 152.3 | 9.9 | 49% | 0 | 23% | - | 8 | 10.34 / 14.02 |
+| long-12 | DP=2, 2 × 1× v3e | 428.4 | 890 | 2.1 | 284.0 / 423.7 | 7.3 / 9.3 | 15.9 | 49% | 0 | 43% / 46% | 6 / 6 | 6 / 6 | 13.61 / 13.70 |
+| long-16 | 2× TP=2 b1.6 | 901.7 | 1,090 | 1.2 | 519.4 / 897.7 | 63.4 / 154.9 | 7.7 | 49% | 0 | 29% | - | 10 | 10.25 / 13.81 |
+| long-16 | DP=2, 2 × 1× v3e | 567.8 | 1,134 | 2.0 | 360.7 / 564.9 | 8.1 / 9.7 | 11.4 | 49% | 0 | 58% / 55% | 8 / 8 | 8 / 8 | 13.55 / 13.70 |
+
+How to read it:
+
+- DP=2 finished every workload 29–37% sooner (`agent8` 111.6 s against 157.1 s, `long-16` 567.8 s against 901.7 s).
+  Output length differs between the setups at temperature 0.6, from 6% fewer (`agent16`) to 19% more (`agent8`)
+  tokens on DP=2, so wall time is the fairer comparison; output tok/s points the same way on all six.
+- Follow-up TTFT on the ~128K ladder stays at 2.4–8.1 s mean on DP=2, where TP=2 rises to 32.5 s at 12 sessions and
+  63.4 s at 16. These runs are prefill-bound: two replicas prefill two sessions at once.
+- The router split every workload evenly (sessions per replica above; 115 / 115 conversations over the whole run).
+- Max concurrent long contexts: both setups ran 16 sessions of ~129,500 tokens with no preemption or error, the
+  largest step of the ladder.
+- Gate through the router, PASS: hardmode 93/100, TC-45 100/100 (5 trials), fidelity exact 20/20 at 8k, 32k, 64k and
+  128k plus seeds 11 and 13 at 128k (244,166 to 245,267 prompt tokens). Stragglers ran against each replica directly,
+  because the router has no `/metrics`: c5, c6, c7, c8, c12 and c16 on both, 0 preemptions, 4.00 accepted per draft.
+- KV is the trade-off: a 1× replica fits 3.79 requests at 262,144 tokens, the TP=2 pool 13.93. For one request at a
+  time, or more very long contexts than one Spark holds, TP=2 stays the pick.
+
+k63 (2026-10-07, #106) ran the same comparison with the previous builds (2× b1.4, 1× v3d) and the same router: wall
+time 30–37% lower on DP=2 in all six workloads, even split, fidelity 20/20 at 8k to 128k and TC-45 100 through the
+router. Raw files: [`results/dp2-candidate-k63-20261007-0944/`](../results/dp2-candidate-k63-20261007-0944/).
+
+The k72 report script printed the DP=2 rows as "2 x 1x v3d" and the baseline as b1.4 (literals in `drive.py`). The
+replicas were v3e and the baseline b1.6, as the `k72.txt` header and `replica.yaml` show; the published `k72.txt`,
+`k60.txt` and `comment.md` carry the corrected labels.
+
+Raw files: [`results/dp2-gate-k72-20261008-1135/`](../results/dp2-gate-k72-20261008-1135/) (`k72.txt`, `kvpool.txt`,
+`router-stats*.json`, `tp2/` and `dp2/` per-turn JSON, `gate/` fidelity runs, `replica.yaml`).
+
 ## DP=2 against 2× TP=2 on an agent replay (2026-10-07)
 
 The same multi-turn replay against two setups on the same pair, one boot each, one pass per workload:

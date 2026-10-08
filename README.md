@@ -47,6 +47,8 @@ sparkrun run qwen3.8-flash-next-2x-dgx-spark                     # 2× Spark: de
 sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo   # 1× Spark
 ```
 
+Two Sparks can also run one 1× copy each behind a router: [one cluster or one copy per Spark](#two-sparks-one-cluster-or-one-copy-per-spark).
+
 Then [verify](#verify) the server. Base URL `http://<head>:8000/v1`, model `qwen3.8-flash-next`.
 
 The 1× recipe serves a different checkpoint from the 2× recipe, about 98 GB. A fresh download took about 3 h 15 min
@@ -289,34 +291,45 @@ the other three. More than four ~256K contexts at once was not run. Full table:
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md#long-contexts-at-once-on-2-b14-2026-10-07), raw files:
 [`results/longctx-concurrency-k59-20261007-0206/`](results/longctx-concurrency-k59-20261007-0206/).
 
-### DP=2 against 2× TP=2
+### Two Sparks: one cluster or one copy per Spark
 
-DP=2 here is the shipped 1× v3d recipe (experimental) on each Spark behind a minimal prefix-affinity router
-([`pa_router.py`](results/dp2-vs-tp2-k60-20261007-0248/scripts/pa_router.py) on dgx-01: the sha1 of the first two
-non-system messages picks the replica, no load balancing). Both setups ran the same synthetic agent replay
-([`drive.py`](results/dp2-vs-tp2-k60-20261007-0248/drive.py): tools on, thinking off, temperature 0.6, all sessions
-starting together), one boot each, 2026-10-07:
+Two Sparks can run the 2× recipe as one TP=2 server, or the 1× recipe once per Spark (DP=2) behind a small router,
+[`tools/dp2/pa_router.py`](tools/dp2/pa_router.py). The router sends a new conversation to the replica with the fewest
+conversations and keeps every later turn on that replica, so each turn hits its prefix cache.
+How-to, flags and limits: [tools/dp2/README.md](tools/dp2/README.md).
 
-| Workload | Wall time, TP=2 / DP=2 (s) | Follow-up TTFT mean, TP=2 / DP=2 (s) | Decode tok/s per request, TP=2 / DP=2 |
-|---|:---:|:---:|:---:|
-| 8 sessions x 6 turns from ~32K tokens | 156.1 / 149.5 | 5.4 / 4.0 | 8.1 / 11.8 |
-| 16 sessions x 4 turns from ~32K tokens | 253.6 / 303.1 | 10.0 / 14.4 | 6.5 / 10.6 |
-| 4 sessions x 2 turns from ~128K tokens | 224.2 / 141.8 | 5.2 / 2.8 | 35.3 / 50.4 |
-| 8 sessions x 2 turns from ~128K tokens | 449.6 / 353.8 | 7.2 / 7.3 | 15.3 / 19.2 |
-| 12 sessions x 2 turns from ~128K tokens | 672.2 / 496.1 | 43.5 / 7.6 | 10.3 / 16.5 |
-| 16 sessions x 2 turns from ~128K tokens | 891.9 / 638.1 | 90.3 / 8.0 | 7.6 / 13.6 |
+k72, 2026-10-08: the shipped 2× b1.6 against the shipped 1× v3e on each Spark behind the router, the same synthetic
+agent replay on both (tools on, thinking off, temperature 0.6, all sessions starting together), one boot each.
 
-- On ~128K sessions DP=2 finished 21–37% sooner. These runs are prefill-bound, and two replicas prefill two sessions at
-  once.
-- With 16 sessions from ~32K, the router put 13 sessions on one Spark, and DP=2 was slower.
-- DP=2's total output tok/s is higher on all six workloads, but on the ~32K workloads it wrote 48% more output tokens
-  than TP=2 (temperature 0.6, different builds), so compare wall time there.
-- 0 preemptions on both setups; both ran 16 sessions of ~129,540 tokens, the largest step tested.
-- Quality through the router has not been checked yet.
+| Workload | Wall time, TP=2 / DP=2 (s) | Output tok/s total, TP=2 / DP=2 | First-turn TTFT mean, TP=2 / DP=2 (s) | Follow-up TTFT mean, TP=2 / DP=2 (s) |
+|---|:---:|:---:|:---:|:---:|
+| 8 sessions x 6 turns from ~32K tokens | 157.1 / 111.6 | 12.2 / 20.5 | 64.9 / 49.5 | 5.0 / 4.5 |
+| 16 sessions x 4 turns from ~32K tokens | 255.6 / 173.3 | 10.3 / 14.3 | 123.8 / 88.1 | 9.4 / 8.7 |
+| 4 sessions x 2 turns from ~128K tokens | 225.7 / 141.9 | 1.3 / 2.3 | 166.3 / 136.6 | 5.6 / 2.4 |
+| 8 sessions x 2 turns from ~128K tokens | 452.5 / 284.6 | 1.3 / 2.4 | 285.8 / 210.8 | 8.4 / 6.0 |
+| 12 sessions x 2 turns from ~128K tokens | 680.2 / 428.4 | 1.2 / 2.1 | 411.0 / 284.0 | 32.5 / 7.3 |
+| 16 sessions x 2 turns from ~128K tokens | 901.7 / 567.8 | 1.2 / 2.0 | 519.4 / 360.7 | 63.4 / 8.1 |
 
-Full table (output tok/s, TTFT, prefix hits, KV usage and sessions per replica, MemAvailable):
-[docs/BENCHMARKS.md](docs/BENCHMARKS.md#dp2-against-2-tp2-on-an-agent-replay-2026-10-07), raw files:
-[`results/dp2-vs-tp2-k60-20261007-0248/`](results/dp2-vs-tp2-k60-20261007-0248/).
+- DP=2 finished every workload 29–37% sooner. Output length differs between the setups (from 6% fewer to 19% more
+  tokens on DP=2), so wall time is the fairer column; it points the same way on all six.
+- The router split every workload evenly (4/4 sessions at 8, 8/8 at 16). 0 preemptions on both setups, and both ran
+  16 sessions of ~129,500 tokens, the largest step tested.
+- Quality through the router passed the full gate: hardmode 93, TC-45 100, tool-call retrieval 20/20 at 8k, 32k, 64k
+  and three ~245k prompts, and no batch stragglers on either replica (c5 to c16, 0 preemptions).
+- KV: each 1× replica has its own pool of 993,754 tokens; the TP=2 server has one pool of 3,650,419 tokens.
+
+When to pick which:
+
+- DP=2 for many concurrent sessions or agents whose live contexts fit each Spark's 993,754-token pool: more
+  throughput and lower TTFT in every workload above.
+- TP=2 for one request at a time, where it decodes faster (see [2× Spark](#2-spark-tp2-build-b16) against
+  [1× Spark](#1-spark-tp1-experimental-build-v3e)), and for many very long contexts at once: a single 1× replica
+  fits about 3.8 requests at 262,144 tokens, the TP=2 pool about 14.
+- DP=2 has no failover in the router: if one Spark goes down, its conversations fail until it is back.
+
+Full table (decode tok/s per request, prefix hits, KV usage and sessions per replica, MemAvailable), the earlier k60
+and k63 runs, and raw files: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#dp2-against-2-tp2-production-gate-2026-10-08),
+[`results/dp2-gate-k72-20261008-1135/`](results/dp2-gate-k72-20261008-1135/).
 
 ## Quality gate
 
