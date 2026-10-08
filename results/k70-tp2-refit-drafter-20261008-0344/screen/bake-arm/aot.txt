@@ -1,0 +1,33 @@
+b12x planning gemm.blockscaled_precision: 0/436 ready, 0 measured, 1 cached, 0 compilations, 0:00
+b12x planning moe.decode: 0/436 ready, 0 measured, 194 cached, 0 compilations, 0:00
+b12x compiling gemm.blockscaled_precision: 0/436 ready, 0 measured, 370 cached, 0 compilations, 0:01
+b12x selecting gemm.blockscaled_precision: 14/436 ready, 0 measured, 370 cached, 7 compilations, 0:08
+b12x compiling moe.decode: 165/436 ready, 0 measured, 370 cached, 62 compilations, 0:18
+b12x priming moe.decode: 165/436 ready, 0 measured, 370 cached, 70 compilations, 0:22
+b12x compiling moe.decode: 176/436 ready, 0 measured, 370 cached, 82 compilations, 0:32
+b12x selecting norm.hyperconnection: 198/436 ready, 0 measured, 370 cached, 90 compilations, 0:41
+b12x compiling norm.hyperconnection: 200/436 ready, 0 measured, 370 cached, 92 compilations, 0:41
+b12x compiling gemm.blockscaled_precision: 334/436 ready, 0 measured, 370 cached, 147 compilations, 0:51
+b12x priming gemm.blockscaled_precision: 367/436 ready, 0 measured, 370 cached, 171 compilations, 0:57
+b12x compiling sequence.mtp_feedback: 368/436 ready, 0 measured, 370 cached, 171 compilations, 0:57
+b12x priming sequence.mtp_feedback: 368/436 ready, 0 measured, 370 cached, 180 compilations, 0:59
+b12x compiling moe.decode: 401/436 ready, candidates 0/1 prepared, 0 measured, 370 cached, 264 compilations, 1:09
+b12x preparing candidates gemm.blockscaled_precision: 402/436 ready, candidates 1/8 prepared, rank 0 batch 1, 0 measured, 370 cached, 288 compilations, 1:14
+b12x autotuning gemm.blockscaled_precision: 402/436 ready, candidates 8/8 prepared, rank 0 batch 1, round 2/3, 48 measured, 370 cached, 289 compilations, 1:14
+b12x calibrating gemm.blockscaled_precision: 402/436 ready, candidates 8/8 prepared, rank 0 batch 1, 112 measured, 370 cached, 289 compilations, 1:14
+b12x compiling comm.roce: 402/436 ready, candidates 0/1 prepared, 258 measured, 370 cached, 293 compilations, 1:16
+b12x priming comm.roce: 402/436 ready, candidates 0/1 prepared, 516 measured, 370 cached, 309 compilations, 1:23
+b12x warming heuristics gemm.blockscaled_precision: 0/39 ready, 258 measured, 0 cached, 161 compilations, 1:26
+b12x warming heuristics sequence.ple_embedding: 7/39 ready, 258 measured, 0 cached, 162 compilations, 1:29
+b12x ready sequence.ple_embedding: 39/39 ready, 0 measured, 0 cached, 0 compilations, 1:36
+(Worker_TP0 pid=276) INFO 10-08 00:52:29 [backends.py:1155] Dynamo bytecode transform time: 7.43 s
+(Worker_TP0 pid=276) INFO 10-08 00:53:04 [decorators.py:710] saved AOT compiled function to /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/45fd139b24bb7a1418a3770fbbc87652142cf31a168f4147051f48b6b4bd49b3/rank_0_0/model
+(Worker_TP0 pid=276) INFO 10-08 00:53:07 [backends.py:1155] Dynamo bytecode transform time: 0.44 s
+(Worker_TP0 pid=276) INFO 10-08 00:53:13 [decorators.py:710] saved AOT compiled function to /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/78d3828e377cc9d59d15f600c7e7e88aebe2e1bbc9053eb686249b0a269baa98/rank_0_0/model
+b12x planning attention.gdn: 0/381 ready, candidates 0/1 prepared, 0 measured, 0 cached, 0 compilations, 0:00
+b12x compiling sequence.gdn_prefill: 1/381 ready, 0 measured, 10 cached, 0 compilations, 0:00
+b12x compiling sequence.gdn_prefill: 7/381 ready, 0 measured, 10 cached, 26 compilations, 0:10
+b12x priming sequence.gdn_prefill: 10/381 ready, 0 measured, 10 cached, 47 compilations, 0:14
+b12x priming attention.qsa: 11/381 ready, candidates 0/1 prepared, 0 measured, 10 cached, 47 compilations, 0:14
+b12x ready gemm.blockscaled_precision: 381/381 ready, 0 measured, 10 cached, 50 compilations, 0:21
+b12x ready sequence.ple_embedding: 66/66 ready, 0 measured, 0 cached, 0 compilations, 0:21
