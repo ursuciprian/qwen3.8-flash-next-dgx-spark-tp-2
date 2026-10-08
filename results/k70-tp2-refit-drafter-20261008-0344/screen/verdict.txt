@@ -1,0 +1,26 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.819 arm 0.855 shift +0.036  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 1: control 0.665 arm 0.712 shift +0.046  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 2: control 0.545 arm 0.593 shift +0.048  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+  pos 3: control 0.445 arm 0.490 shift +0.045  > 0.03 (rise allowed: TD_ACC_RISE_OK=1)
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +3.31%  noise 12.53%            n=4 CI [-6.0,+19.0] control boot-to-boot -3.24%, step +0.73%
+  probe  fresh-c4      +3.66%  noise  4.34%            n=16 CI [+0.0,+7.3] control boot-to-boot -4.34%, step +0.26%
+  probe  fresh-c8      +5.12%  noise  1.71%  better    n=32 CI [+3.4,+6.8] control boot-to-boot -1.44%, step +0.24%
+  probe  d16k-c4       +6.31%  noise  4.86%  better    n=16 CI [+1.5,+11.3] control boot-to-boot +0.80%, step +0.56%
+  probe  count-c8      -0.85%  noise  2.52%            n=32 CI [-3.5,+1.6] control boot-to-boot +0.62%, step -1.17%
+  wall   d16k-c8       +0.57%  noise  1.14%            wall s control 88/89 arm 88/88 (cut counts as the time)
+  benchy pp2048 (c1)   -1.16%  noise  1.05%  worse     control 2797.3 arm 2764.8 t/s (boots 2/2)
+  benchy tg512 (c1)    -6.22%  noise  2.24%  WORSE>2x  control 80.2 arm 75.2 t/s (boots 2/2)
+  benchy tg512 (c8)    +5.93%  noise  1.19%  better    control 186.3 arm 197.4 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0432 max 0.5671
+  self  ctl-p2 a/b: 14/20 prompts identical, |dlogprob| mean 0.0423 max 0.6979
+  self  arm-p1 a/b: 11/20 prompts identical, |dlogprob| mean 0.0413 max 0.6231
+  self  arm-p2 a/b: 14/20 prompts identical, |dlogprob| mean 0.0413 max 0.7604
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0395 max 0.5324
+  cross ctl-p2/arm-p2: 14/20 prompts identical, |dlogprob| mean 0.0396 max 0.4918
+reason: benchy tg512 (c1) -6.22% (noise 2.24%)
+reason: benchy pp2048 (c1) -1.16% (noise 1.05%)
+better: probe fresh-c8 +5.12% (noise 1.71%); probe d16k-c4 +6.31% (noise 4.86%); benchy tg512 (c8) +5.93% (noise 1.19%)
+VERDICT=KILL
