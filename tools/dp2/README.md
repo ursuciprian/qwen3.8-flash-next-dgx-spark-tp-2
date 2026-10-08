@@ -6,8 +6,10 @@ This is the setup measured in k72 ([results](../../results/dp2-gate-k72-20261008
 
 ## Run it
 
-1. Start the shipped 1× recipe on each Spark with plain sparkrun (checkpoint downloaded first, see the
-   [quick start](../../README.md#quick-start)):
+1. Start the shipped [1× recipe](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) on each Spark with plain sparkrun (checkpoint downloaded first, see its
+   [quick start](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#quick-start)). With both this registry and the 1× one added, scope the name as
+   `@qwen38-flashnext-1x/qwen3.8-flash-next-1x-dgx-spark`; with only this registry, the compatibility copy here boots
+   the same recipe:
 
    ```sh
    sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark-a> --solo

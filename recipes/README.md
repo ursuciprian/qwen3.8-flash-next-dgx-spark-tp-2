@@ -21,3 +21,7 @@ the SGLang-era route) is in [`archive/recipes/`](../archive/recipes/README.md);
 sparkrun does not scan it. Where each file moved: [RENAMES.md](RENAMES.md).
 `scripts/validate_recipes.py` fails any recipe here that lacks `--revision`,
 uses an image without a registry host, or needs mods or volumes.
+
+The single-Spark recipes moved to [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) on 2026-10-08. The
+`qwen3.8-flash-next-1x-dgx-spark` and `-previous` files here are compatibility copies for existing `sparkrun run`
+setups and raw links; they get no new builds.
