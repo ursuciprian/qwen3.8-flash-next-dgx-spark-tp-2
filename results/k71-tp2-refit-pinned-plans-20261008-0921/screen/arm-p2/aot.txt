@@ -1,0 +1,17 @@
+b12x planning gemm.blockscaled_precision: 0/436 ready, 0 measured, 1 cached, 0 compilations, 0:00
+b12x planning moe.decode: 0/436 ready, 0 measured, 194 cached, 0 compilations, 0:00
+b12x selecting gemm.blockscaled_precision: 14/436 ready, 0 measured, 403 cached, 0 compilations, 0:01
+b12x priming moe.decode: 165/436 ready, 0 measured, 403 cached, 0 compilations, 0:02
+b12x priming norm.hyperconnection: 202/436 ready, candidates 0/1 prepared, 0 measured, 403 cached, 0 compilations, 0:09
+b12x priming gemm.blockscaled_precision: 367/436 ready, 0 measured, 403 cached, 0 compilations, 0:10
+b12x selecting moe.decode: 375/436 ready, candidates 0/1 prepared, 0 measured, 403 cached, 0 compilations, 0:10
+b12x priming comm.roce: 435/436 ready, candidates 0/1 prepared, 0 measured, 403 cached, 0 compilations, 0:14
+b12x warming heuristics sequence.ple_embedding: 6/39 ready, 0 measured, 0 cached, 0 compilations, 0:15
+b12x ready sequence.ple_embedding: 39/39 ready, 0 measured, 0 cached, 0 compilations, 0:16
+(Worker_TP0 pid=206) INFO 10-08 06:53:26 [decorators.py:313] Directly load AOT compilation from path /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/45fd139b24bb7a1418a3770fbbc87652142cf31a168f4147051f48b6b4bd49b3/rank_0_0/model
+(Worker_TP0 pid=206) INFO 10-08 06:53:28 [decorators.py:313] Directly load AOT compilation from path /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/36a8a364639ef7089c26ce61d50192bff5ff4db7d79496dff82ff1b2b7a6bd68/rank_0_0/model
+b12x planning attention.gdn: 0/381 ready, candidates 0/1 prepared, 0 measured, 0 cached, 0 compilations, 0:00
+b12x priming sequence.gdn_prefill: 5/381 ready, 0 measured, 10 cached, 0 compilations, 0:00
+b12x priming attention.qsa: 11/381 ready, candidates 0/1 prepared, 0 measured, 10 cached, 0 compilations, 0:01
+b12x ready gemm.blockscaled_precision: 381/381 ready, 0 measured, 10 cached, 0 compilations, 0:05
+b12x ready sequence.ple_embedding: 66/66 ready, 0 measured, 0 cached, 0 compilations, 0:05

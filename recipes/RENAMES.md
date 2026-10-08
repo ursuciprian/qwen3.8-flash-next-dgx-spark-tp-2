@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-08: 2× b1.6 promoted
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | b1.6: b1.4 + the retrained MTP drafter (24 `mtp.*` tensors of `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54` over `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`), image `b1.6-20261008-b7fbaf96-a7e649d8-warm` |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | the b1.4 recipe that was `qwen3.8-flash-next-2x-dgx-spark` from 2026-10-01 to 2026-10-08 |
+| (was `-previous`, b1.3) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.3-20260929.yaml` (not listed; run by path) |
+
 ## 2026-10-08: single-Spark v3e promoted
 
 | name | content now |

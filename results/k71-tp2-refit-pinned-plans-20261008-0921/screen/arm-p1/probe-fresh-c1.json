@@ -1,0 +1,184 @@
+{
+ "label": "fresh-c1",
+ "args": {
+  "base": "http://192.168.100.62:8000",
+  "model": "qwen3.8-flash-next",
+  "corpus": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/corpus-code.txt",
+  "depth": 256,
+  "new": 2048,
+  "max_tokens": 512,
+  "temperature": 0.0,
+  "repeats": 2,
+  "concurrency": 1,
+  "stall_ms": 250.0,
+  "trigger_cmd": "",
+  "trigger_repeat": 2,
+  "trigger_after_chunks": 20,
+  "offset": 104729,
+  "prompt": "",
+  "label": "fresh-c1",
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k71-tp2-refit-pinned-plans-20261008-0921/screen/arm-p1/probe-fresh-c1.json"
+ },
+ "rows": [
+  {
+   "index": 0,
+   "ctx": {
+    "prompt_tokens": 266,
+    "completion_tokens": 512,
+    "ttft_s": 0.25418362801428884,
+    "decode_tps": 89.65735890499012,
+    "decode_tps_no_stalls": 89.65735890499012,
+    "gap_ms_p50": 38.77409757114947,
+    "gap_ms_p95": 41.11000895500183,
+    "gap_ms_max": 65.98160695284605,
+    "stalls": 0,
+    "stall_s": 0,
+    "accept_rate": 0.6301369863013698,
+    "prefix_hit_tokens": 0.0
+   },
+   "inf": {
+    "prompt_tokens": 2315,
+    "completion_tokens": 512,
+    "ttft_s": 0.8138821619795635,
+    "decode_tps": 93.40266509979459,
+    "decode_tps_no_stalls": 93.40266509979459,
+    "gap_ms_p50": 39.521050988696516,
+    "gap_ms_p95": 41.954868007451296,
+    "gap_ms_max": 101.21234599500895,
+    "stalls": 0,
+    "stall_s": 0,
+    "accept_rate": 0.6861313868613139,
+    "prefix_hit_tokens": 0.0
+   }
+  },
+  {
+   "index": 1,
+   "ctx": {
+    "prompt_tokens": 263,
+    "completion_tokens": 512,
+    "ttft_s": 0.2456718070898205,
+    "decode_tps": 89.80636079400917,
+    "decode_tps_no_stalls": 89.80636079400917,
+    "gap_ms_p50": 39.415967476088554,
+    "gap_ms_p95": 41.16619797423482,
+    "gap_ms_max": 43.04575698915869,
+    "stalls": 0,
+    "stall_s": 0,
+    "accept_rate": 0.6371527777777778,
+    "prefix_hit_tokens": 0.0
+   },
+   "inf": {
+    "prompt_tokens": 2310,
+    "completion_tokens": 512,
+    "ttft_s": 0.9384250470902771,
+    "decode_tps": 67.94672379060121,
+    "decode_tps_no_stalls": 67.94672379060121,
+    "gap_ms_p50": 40.02463293727487,
+    "gap_ms_p95": 104.07048009801656,
+    "gap_ms_max": 161.06055700220168,
+    "stalls": 0,
+    "stall_s": 0,
+    "accept_rate": 0.6468531468531469,
+    "prefix_hit_tokens": 0.0
+   }
+  }
+ ],
+ "summary": {
+  "ctx": {
+   "decode_tps": {
+    "mean": 89.73185984949964,
+    "min": 89.65735890499012,
+    "max": 89.80636079400917
+   },
+   "decode_tps_no_stalls": {
+    "mean": 89.73185984949964,
+    "min": 89.65735890499012,
+    "max": 89.80636079400917
+   },
+   "ttft_s": {
+    "mean": 0.24992771755205467,
+    "min": 0.2456718070898205,
+    "max": 0.25418362801428884
+   },
+   "gap_ms_p50": {
+    "mean": 39.09503252361901,
+    "min": 38.77409757114947,
+    "max": 39.415967476088554
+   },
+   "gap_ms_p95": {
+    "mean": 41.138103464618325,
+    "min": 41.11000895500183,
+    "max": 41.16619797423482
+   },
+   "gap_ms_max": {
+    "mean": 54.51368197100237,
+    "min": 43.04575698915869,
+    "max": 65.98160695284605
+   },
+   "accept_rate": {
+    "mean": 0.6336448820395738,
+    "min": 0.6301369863013698,
+    "max": 0.6371527777777778
+   },
+   "prefix_hit_tokens": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "prompt_tokens": {
+    "mean": 264.5,
+    "min": 263,
+    "max": 266
+   },
+   "stalls_total": 0
+  },
+  "inf": {
+   "decode_tps": {
+    "mean": 80.6746944451979,
+    "min": 67.94672379060121,
+    "max": 93.40266509979459
+   },
+   "decode_tps_no_stalls": {
+    "mean": 80.6746944451979,
+    "min": 67.94672379060121,
+    "max": 93.40266509979459
+   },
+   "ttft_s": {
+    "mean": 0.8761536045349203,
+    "min": 0.8138821619795635,
+    "max": 0.9384250470902771
+   },
+   "gap_ms_p50": {
+    "mean": 39.772841962985694,
+    "min": 39.521050988696516,
+    "max": 40.02463293727487
+   },
+   "gap_ms_p95": {
+    "mean": 73.01267405273393,
+    "min": 41.954868007451296,
+    "max": 104.07048009801656
+   },
+   "gap_ms_max": {
+    "mean": 131.1364514986053,
+    "min": 101.21234599500895,
+    "max": 161.06055700220168
+   },
+   "accept_rate": {
+    "mean": 0.6664922668572304,
+    "min": 0.6468531468531469,
+    "max": 0.6861313868613139
+   },
+   "prefix_hit_tokens": {
+    "mean": 0.0,
+    "min": 0.0,
+    "max": 0.0
+   },
+   "prompt_tokens": {
+    "mean": 2312.5,
+    "min": 2310,
+    "max": 2315
+   },
+   "stalls_total": 0
+  }
+ }
+}

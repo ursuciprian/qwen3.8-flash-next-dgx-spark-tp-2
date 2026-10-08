@@ -158,9 +158,12 @@ def check(path: Path) -> None:
     # --- checkpoint revision: sparkrun serves with HF_HUB_OFFLINE=1, so each node resolves
     # refs/main locally, and its head->worker `rsync --size-only` never refreshes that 40-byte
     # file. 2026-09-18..23 the two TP ranks loaded different revisions (7c4f1bc1 vs ada4da32).
-    if "vllm serve" in cmd:
+    # b1.6 serves a local overlay of the pinned snapshot (docker/mtp-refit); its path carries the revision.
+    pinned = str(r.get("model_revision") or "")
+    served = re.search(r"vllm serve\s+(\S+)", cmd)
+    by_path = bool(pinned and served and served.group(1).startswith("/") and pinned[:8] in served.group(1))
+    if "vllm serve" in cmd and not by_path:
         rev = re.search(r"--revision\s+(\S+)", cmd)
-        pinned = str(r.get("model_revision") or "")
         if not rev:
             warn(path, "vllm serve without --revision: each node loads whatever its refs/main says")
         elif pinned and rev.group(1) != pinned:
@@ -185,7 +188,7 @@ def check(path: Path) -> None:
     # --- registry-visible recipes (everything under recipes/) are what `sparkrun run <name>` finds
     # for any user: pinned checkpoint, a pullable image, nothing an untrusted registry drops
     if (REPO / "recipes") in path.resolve().parents:
-        if "vllm serve" in cmd and "--revision" not in cmd:
+        if "vllm serve" in cmd and "--revision" not in cmd and not by_path:
             err(path, "registry-visible recipe must pin the checkpoint with --revision")
         if "." not in container.split("/")[0]:
             err(path, f"registry-visible recipe uses `{container}`, which has no registry host; users cannot pull it")
