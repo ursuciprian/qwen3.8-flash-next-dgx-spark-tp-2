@@ -1,27 +1,27 @@
 <div align="center">
 
-# Qwen3.8-Flash-Next on DGX Spark: one or two GB10s
+# Qwen3.8-Flash-Next on two DGX Sparks
 
-NVFP4 Qwen3.8-Flash-Next on vLLM V2 with b12x kernels and 4-token MTP, launched with sparkrun. 262k context, OpenAI-compatible API.<br>
-Two recipes: **2× Spark** (TP=2 over ConnectX-7) and **1× Spark** (TP=1, experimental, NVFP4 GDN weights, retrained MTP drafter).<br>
+NVFP4 Qwen3.8-Flash-Next on vLLM V2 with b12x kernels and 4-token MTP across two GB10s (TP=2 over ConnectX-7), launched
+with sparkrun. 262k context, OpenAI-compatible API.<br>
+The single-Spark (TP=1) recipe has its own repo: [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark).<br>
 A build is promoted only if it passes the [quality gate](#quality-gate) and no c1–c4 cell is slower beyond noise.
 
-<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests. 2× Spark b1.4: copy-heavy 439 at 8 concurrent tasks (max of 3 rounds), counting 558 at c8 and 795 at c16 (max of 5 rounds), coding 196 at c8 and 243 at c16. 1× Spark v3d: copy-heavy 282 at 8 (max of 3 rounds), counting 378 at c8 (max of 5 rounds), coding 139 at c8 and 111 at c8 on a 16k context." width="900">
+<img src="docs/img/throughput.svg" alt="Aggregate decode tok/s by concurrent requests on 2× Spark b1.4: copy-heavy 439 at 8 concurrent tasks (max of 3 rounds), counting 558 at c8 and 795 at c16 (max of 5 rounds), coding 196 at c8 and 243 at c16." width="760">
 
 </div>
 
-| Workload | Tokens / step | 2× Spark, 1 request | 2× Spark, 8 requests | 1× Spark, 1 request | 1× Spark, 8 requests |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **Copy-heavy** (high acceptance, max of 3 rounds) | 4.90–4.96 | 117 | **439** | 81 | **282** |
-| **Counting** (high acceptance, max of 5 rounds) | 4.82–5.00 | 122 | **558** | 85 | **378** |
-| **Coding**, llama-benchy tg512 | 2.7–2.8 (2×) · 3.3–3.5 (1×) | 62 | 196 | 60 | 139 |
-| **Coding** at 16k cached context | 2.6–2.7 (2×) · 3.1–3.4 (1×) | 64 | 146 | 63 | 111 |
-| **Prefill**, 2,048-token prompt | | 2,784–2,855 | | 1,788 | |
-| **Prefill**, filling a 16k context | | 2,895–2,920 | | 2,088 | |
+| Workload | Tokens / step | 1 request | 8 requests | 16 requests |
+|---|:---:|:---:|:---:|:---:|
+| **Copy-heavy** (high acceptance, max of 3 rounds) | 4.90–4.96 | 117 | **439** | |
+| **Counting** (high acceptance, max of 5 rounds) | 4.82–5.00 | 122 | **558** | **795** |
+| **Coding**, llama-benchy tg512 | 2.7–2.8 | 62 | 196 | 243 |
+| **Coding** at 16k cached context | 2.6–2.7 | 64 | 146 | 177 |
+| **Prefill**, 2,048-token prompt | | 2,784–2,855 | | |
+| **Prefill**, filling a 16k context | | 2,895–2,920 | | |
 
-Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3d (2026-10-05). The current builds,
-2× b1.6 and 1× v3e (both 2026-10-08), add the same retrained MTP drafter to b1.4 and v3d; their paired screens are under
-[2× Spark b1.6](#2-spark-tp2-build-b16) and [1× Spark](#1-spark-tp1-experimental-build-v3e). Workloads, dates and raw files: [Measured](#measured).
+Aggregate decode tok/s unless marked prefill. Build b1.4. The current build, b1.6 (2026-10-08), adds a retrained MTP
+drafter to b1.4; its paired screen is under [b1.6](#2-spark-tp2-build-b16). Workloads, dates and raw files: [Measured](#measured).
 
 <div align="center">
 
@@ -31,7 +31,6 @@ Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark 
 [![stragglers](https://img.shields.io/badge/batch%20stragglers-none-2ea44f)](#quality-gate)
 <br>
 [![2x build](https://img.shields.io/badge/2×%20Spark-b1.6%20·%202026--10--08-blue)](#changelog)
-[![1x build](https://img.shields.io/badge/1×%20Spark-v3e%20·%202026--10--08-blue)](#changelog)
 [![Engine](https://img.shields.io/badge/engine-vLLM%20V2%20+%20b12x-blue)](docs/REFERENCE.md#what-is-in-the-image)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 
@@ -43,23 +42,17 @@ Needs [sparkrun](https://github.com/eugr/sparkrun) ≥ 0.3.6.
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
-sparkrun run qwen3.8-flash-next-2x-dgx-spark                     # 2× Spark: default cluster, or --hosts <head>,<worker>
-sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark> --solo   # 1× Spark
+sparkrun run qwen3.8-flash-next-2x-dgx-spark     # default cluster, or --hosts <head>,<worker>
 ```
 
-Two Sparks can also run one 1× copy each behind a router: [one cluster or one copy per Spark](#two-sparks-one-cluster-or-one-copy-per-spark).
+> The single-Spark recipe moved to [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) on 2026-10-08, with its results,
+> benchmarks and open issues. This repo still carries a copy of `qwen3.8-flash-next-1x-dgx-spark` and `-previous`
+> (unchanged apart from a header comment) so existing `sparkrun run` setups and raw links keep working; new 1× builds
+> ship only in the new repo. With both registries added, use `@qwen38-flashnext-1x/qwen3.8-flash-next-1x-dgx-spark`.
+
+Two Sparks can also run one [1× copy](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) each behind a router: [one cluster or one copy per Spark](#two-sparks-one-cluster-or-one-copy-per-spark).
 
 Then [verify](#verify) the server. Base URL `http://<head>:8000/v1`, model `qwen3.8-flash-next`.
-
-The 1× recipe serves a different checkpoint from the 2× recipe, about 98 GB. A fresh download took about 3 h 15 min
-on our link (~8.6 MB/s). Download it on the Spark before the first boot, together with the two files of the base
-checkpoint that the recipe uses for prefill (2.6 GiB):
-
-```sh
-hf download ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE --revision 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
-hf download local-inference-lab/Qwen3.8-Flash-Next-NVFP4 --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
-  model-00035-of-00036.safetensors model.safetensors.index.json
-```
 
 [Measured](#measured) · [Quality gate](#quality-gate) · [Verify](#verify) · [Requirements](#requirements) · [Known limits](#known-limits) · [Recipes](#recipes) · [Changelog](#changelog) · [How we measure](#how-we-measure) · [Troubleshooting](#troubleshooting)
 
@@ -69,7 +62,7 @@ Workloads are labelled per row, because they differ by about 2× in tokens per d
 
 - High-acceptance workloads (copying, counting) accept nearly every MTP draft (~4.9–5.0 tokens per step). They show
   the decode rate when drafts land, which bounds what MTP can give.
-- Coding (llama-benchy) is an agent coding turn at temperature 1.0 with thinking on (2.6–3.4 tokens per step), the
+- Coding (llama-benchy) is an agent coding turn at temperature 1.0 with thinking on (2.6–2.8 tokens per step), the
   rate an agent sees.
 - Coding (36 prompts) sends 36 short coding requests (12 Python, 8 each C++, Rust and Go) one at a time, up to 768
   tokens out, once at temperature 0 with thinking off and once with the server defaults (thinking on). The cell is
@@ -78,7 +71,7 @@ Workloads are labelled per row, because they differ by about 2× in tokens per d
 
 ### 2× Spark (TP=2), build b1.6
 
-b1.6 is b1.4 with the retrained MTP drafter of the 1× v3e
+b1.6 is b1.4 with the retrained MTP drafter of the [1× v3e](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#build-v3e)
 ([#115](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/115)). The main model is unchanged
 (`local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`); only the drafter's 24 dense BF16 tensors take their
 values from `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`. The image carries them (178 MB), and on the
@@ -126,146 +119,58 @@ little: other 2× boots of the b1.x builds logged 3.57M to 3.69M tokens, and the
 3,615,479 (13.79x). This is vLLM's capacity figure; 14 concurrent 262K requests have not been run. Serve-log lines:
 [`kv-pool-2x.txt`](results/b1.4-20261001/kv-pool-2x.txt).
 
-### 1× Spark (TP=1, experimental), build v3e
-
-v3e is v3d with a retrained MTP drafter, published as revision
-[`16c9bd54`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE/tree/16c9bd54788d12390838a65ce4a4ecda97fa5f1d)
-of the same checkpoint. Only the drafter's 24 dense BF16 tensors changed. I trained them for 72 steps (0.66 epoch) on
-about 3.5M tokens of v3d's own outputs, with a KL loss to the served target's top-20 distribution at 6 draft depths,
-in the served fp8 drafter KV format ([#97](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/97)).
-
-Screen against v3d (k56, Thunderdome, one arm per Spark, control and arm booted alternately, 2 passes, T=0). Change
-in tok/s, noise band in brackets; no cell was worse beyond its noise band:
-
-| Cell | dgx-01 | dgx-02 |
-|---|:---:|:---:|
-| Acceptance per draft position 1 / 2 / 3 / 4, v3d → v3e | 0.819 / 0.661 / 0.535 / 0.431 → 0.856 / 0.713 / 0.593 / 0.489 | 0.818 / 0.666 / 0.539 / 0.438 → 0.854 / 0.708 / 0.589 / 0.488 |
-| Fresh, 1 request | +5.7% (4.7%) | +2.8% (8.5%) |
-| Fresh, 4 requests | +4.9% (3.1%) | +7.9% (2.8%) |
-| Fresh, 8 requests | +6.8% (3.6%) | +8.1% (2.6%) |
-| 16K context, 4 requests | +5.5% (3.7%) | +5.7% (3.2%) |
-| Counting, 8 requests | +1.2% (1.0%) | −0.1% (2.8%) |
-| 16K context, 8 requests, wall time | +2.9% (1.0%) | +2.0% (1.0%) |
-| llama-benchy pp2048, 1 request | +0.0% (1.0%) | −0.9% (2.0%) |
-| llama-benchy tg512, 1 request | +4.3% (7.6%) | +1.6% (10.3%) |
-| llama-benchy tg512, 8 requests | +3.7% (4.9%) | +1.2% (3.6%) |
-
-Offline, on the held-out 5% of the data, acceptance per position at T=0 went from 0.878 / 0.750 / 0.635 / 0.534 /
-0.449 / 0.377 to 0.905 / 0.797 / 0.699 / 0.614 / 0.542 / 0.480 (positions 1 to 6), and every prompt category improved.
-The gate passed on both Sparks (see [Quality gate](#quality-gate)). Raw files:
-[`results/thunderdome-k56-20261007/`](results/thunderdome-k56-20261007/), Jev ship verdict 0.97 in
-[`jev-ship.json`](results/thunderdome-k56-20261007/jev-ship.json).
-
-The table below is v3d's full benchmark run (2026-10-05); v3e has not been re-run on that set.
-
-| Workload | Tokens/step | c1 | c4 | c8 | Build |
-|---|:---:|:---:|:---:|:---:|---|
-| **High-acceptance:** copy-heavy, max of 3 rounds | 4.90–4.96 | 80.8 | 188.5 | 281.5 | v3d (2026-10-05) |
-| **High-acceptance:** counting, T=0, max of 5 rounds | 4.82–5.00 | 84.8 | 239.8 | 377.8 | v3d (2026-10-05) |
-| **Coding:** llama-benchy tg512, depth 0 | 3.3–3.5 | 59.8 | 111.4 | 139.5 | v3d (2026-10-05) |
-| **Coding:** llama-benchy tg512, 16k cached depth | 3.1–3.4 | 62.6 | 101.4 | 111.0 | v3d (2026-10-05) |
-| **Coding:** 36 prompts, T=0, thinking off, median (max) | 3.96 | 72.9 (81.8) | | | v3d (2026-10-06) |
-| **Coding:** 36 prompts, server defaults (thinking on), median (max) | 3.38 | 59.7 (67.2) | | | v3d (2026-10-06) |
-
-v3d and v3e serve [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE):
-
-- This is the NVFP4 checkpoint with its 36 GDN layers' projection weights requantized to weight-only NVFP4. Every other
-  tensor is unchanged.
-- Decode steps (at most 40 rows) read the NVFP4 weights, about half the bytes of MXFP8.
-- Calls of 41 or more rows (prefill) use an MXFP8 copy of the same weights, taken from the base checkpoint.
-
-In the paired screen against v3c (same Spark, T=0), counting c8 was +7.8%, 16K c4 +5.9%, fresh c8 +4.4% and tg512 c1
-50.0 → 59.7 tok/s. pp2048 c1 was −0.9% (noise 1.0%), and every other cell was within noise
-([report](results/tp1-v3d-20261005/screen-v3d-c41-vs-v3c.txt)). Single cells of the coding grid vary by up to ~10%
-between runs.
-
-Prefill (c1): 1,788 tok/s for a 2,048-token prompt; 2,088 tok/s filling a 16k context. TTFT at c1: 1.18 s (2k new
-tokens) / 1.94 s (2k new tokens on a 16k cached context).
-
-KV pool: 14 GiB, 993,754 tokens, which vLLM reports as 3.79x concurrency at 262,144 tokens per request (2× b1.4:
-3,673,158 tokens, 14.01x).
-
-| Context length | Requests that fit in the KV pool at once, v3b (6 GiB) | v3c / v3d (14 GiB) |
-|---|:---:|:---:|
-| 16K + 512 out | 7.4 | 39.7 |
-| 64K + 512 out | 4.2 | 14.1 |
-| 128K + 512 out | 2.6 | 7.5 |
-
-Per 3,024 tokens of context a request takes one KV page in each of 13 attention groups, plus 37 GDN state pages
-(185 before compact records); method and serve-log token counts: [`kv-capacity.txt`](results/tp1-v3c-20261005/kv-capacity.txt). `max_num_seqs` is 8, so v3c and v3d run 8 requests at 16K and 64K without
-waiting.
-
-<img src="docs/img/prefill.svg" alt="Prefill tok/s at one request: 2× Spark 2,784–2,855 for a 2,048-token prompt and 2,895–2,920 filling a 16k context; 1× Spark v3d 1,788 and 2,088." width="620">
+<img src="docs/img/prefill.svg" alt="Prefill tok/s at one request on 2× Spark b1.4: 2,784–2,855 for a 2,048-token prompt and 2,895–2,920 filling a 16k context (two boots)." width="520">
 
 ### Decode at 0 / 16K / 64K context (llm-inference-bench)
 
 30 s of sustained decode per cell at c1/c4/c8, with 0, 16K or 64K tokens already in each prompt, server default
-sampling, thinking on; one boot per setup (2026-10-05). Aggregate tok/s:
+sampling, thinking on; one boot (2026-10-05). Aggregate tok/s:
 
 | Setup | c1 (0 / 16K / 64K) | c4 (0 / 16K / 64K) | c8 (0 / 16K / 64K) | Tokens/step |
 |---|:---:|:---:|:---:|:---:|
 | 2× Spark, b1.4 | 64.8 / 73.3 / 77.8 | 171.2 / 175.0 / 165.4 | 248.6 / 254.9 / 257.4 | 2.7–3.1 |
-| 1× Spark, v3d | 47.4 / 51.2 / 56.9 | 116.6 / 112.6 / 111.8 | 173.4 / 191.5 / 179.5 | 2.6–3.5 |
-| 1× Spark, v3c | 43.7 / 43.0 / 43.3 | 106.2 / 116.9 / 113.9 | 165.7 / 165.6 / 160.4 | 2.7–3.3 |
-| 1× Spark, v3b (6 GiB pool) | 46.9 / 45.3 / 44.3 | 116.5 / 112.0 / 106.3 | 168.4 / 174.8 / did not fit | 2.8–3.3 |
 
-<img src="docs/img/depth.svg" alt="Decode tok/s against context depth. 2× Spark b1.4: c1 65/73/78, c4 171/175/165, c8 249/255/257 at 0/16K/64K. 1× Spark v3d: c1 47/51/57, c4 117/113/112, c8 173/192/180." width="900">
+<img src="docs/img/depth.svg" alt="Decode tok/s against context depth on 2× Spark b1.4: c1 65/73/78, c4 171/175/165, c8 249/255/257 at 0/16K/64K." width="620">
 
 Same runs, other checks:
 
-- Standalone prefill of an 8K prompt: 2,857 tok/s on 2×, 2,137 tok/s on 1× v3d. v3d gave 2,182 / 2,147 / 2,066 /
-  1,880 at 16K / 32K / 64K / 128K, 0.9–1.2% below v3c.
-- Hotel-lights reasoning check (8 concurrent runs per batch, 1× v3c). At the recipe default `reasoning_effort: medium`
-  it answered 21/32 correctly. With `xhigh` sent per request it answered 31/31 completed runs, at a median of 39.6K
-  reasoning tokens ([#88](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/88)). The default
-  stays `medium` because `xhigh` led to runaway thinking on validator-gated tasks (see [Thinking effort](#thinking-effort)).
-  - For hard reasoning problems, send `"reasoning_effort": "xhigh"` per request with a long client timeout: most `xhigh`
-    answers took over 30 minutes at 8 concurrent requests.
-  - At `medium`, v3b gave 23/32 in the same comparison (Fisher exact p = 0.79 vs v3c,
-    [#87](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/87)). The misses are mostly 49 or 47
-    instead of 48. Every run ended on its own stop token. Raw runs:
-    [`results/hotel-ab-20261005/runs.jsonl`](results/hotel-ab-20261005/runs.jsonl).
-  - The 8-run checks in these benchmark runs (default effort) gave 8/8 on 2× b1.4 and 6/8 on 1× v3d.
-- The v3b 64K c8 cell was skipped because 8 × 64K did not fit its 379,362-token pool.
+- Standalone prefill of an 8K prompt: 2,857 tok/s.
+- The 8-run hotel-lights check in this benchmark run (default effort) gave 8/8. The single-Spark comparison of
+  `medium` against `xhigh` on that check is in the [1× repo](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#decode-at-0--16k--64k-context-llm-inference-bench).
 
-Raw files: [`results/lib-bench-20261005/`](results/lib-bench-20261005/) (2× b1.4, v3b),
-[`results/tp1-v3c-20261005/bench/`](results/tp1-v3c-20261005/bench/) (v3c) and
-[`results/tp1-v3d-20261005/bench/`](results/tp1-v3d-20261005/bench/) (v3d).
+Raw files: [`results/lib-bench-20261005/`](results/lib-bench-20261005/).
 
 Conditions. Coding rows: [llama-benchy](https://github.com/ursuciprian/llama-benchy) `--prompt-mode task`, 2,048 new
-prompt tokens, up to 512 out, thinking on, T=1.0 / top-p 0.95 / top-k 20, prefix caching on; 2× Spark is the mean of
-two boots × 3 runs, 1× Spark one boot × 3 runs. Counting: "list the numbers from 1 to 300", T=0, thinking off, 5 rounds
-per concurrency level with every round saved; the tables show the max round (median of 5 rounds: 2× 119.5 / 350.0 /
-544.1 / 787.3 at c1/c4/c8/c16, 1× v3d 83.0 / 235.3 / 368.3 at c1/c4/c8). Copy-heavy benchmark: 1–8 concurrent copy
+prompt tokens, up to 512 out, thinking on, T=1.0 / top-p 0.95 / top-k 20, prefix caching on; mean of two boots × 3 runs. Counting: "list the numbers from 1 to 300", T=0, thinking off, 5 rounds
+per concurrency level with every round saved; the tables show the max round (median of 5 rounds: 119.5 / 350.0 /
+544.1 / 787.3 at c1/c4/c8/c16). Copy-heavy benchmark: 1–8 concurrent copy
 tasks from a shared cached prefix at low reasoning effort, 1,500 tokens out, 3 rounds per task count; tok/s is counted
-over the window where all tasks decode, and the tables show the max of the 3 rounds (2× b1.4 on 2026-10-04, 1× v3d on
-2026-10-05; v3c rerun in the same window on the other Spark: 74.8 / 189.6 / 268.4 at 1/4/8 tasks). Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode counters (benchy `accept/draft`
+over the window where all tasks decode, and the tables show the max of the 3 rounds (2026-10-04). Tokens/step is 1 + 4 × accepted/draft tokens from vLLM's spec-decode counters (benchy `accept/draft`
 column, `tokens_per_step` in the copy-heavy and counting files). Raw files:
 [`results/b1.4-20261001/`](results/b1.4-20261001/) ([`b14.json`](results/b1.4-20261001/b14.json), [`benchy/`](results/b1.4-20261001/benchy/)),
 2× counting [`results/lib-bench-20261005/tp2-b1.4/`](results/lib-bench-20261005/tp2-b1.4/), 2× copy-heavy
-[`results/showcase-20261004/A/`](results/showcase-20261004/A/), and every 1× row
-[`results/tp1-v3d-20261005/bench/`](results/tp1-v3d-20261005/bench/).
+[`results/showcase-20261004/A/`](results/showcase-20261004/A/).
 Charts: `uv run scripts/make_charts.py` renders every chart on this page from those files.
 
 ### High concurrency: measured with max_num_seqs 32, quality gate not run at this cap
 
-The shipped recipes cap concurrency at 16 requests (2×) and 8 (1×). These runs raised `max_num_seqs` to 32 to show
+The shipped recipe caps concurrency at 16 requests. These runs raised `max_num_seqs` to 32 to show
 how far aggregate throughput goes. The quality gate has not been run at this cap, so these are throughput
-measurements only, not a supported configuration. One fresh boot per setup (2026-10-05).
+measurements only, not a supported configuration. One fresh boot (2026-10-05); the 1× v3d run of the same day is in
+the [1× repo](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#high-concurrency-measured-with-max_num_seqs-32-quality-gate-not-run-at-this-cap).
 
-<img src="docs/img/concurrency.svg" alt="Aggregate decode tok/s at 1 to 32 concurrent requests with max_num_seqs 32. 2× Spark b1.4: counting 994 and copy-heavy 911 at 32, coding 291 at c32. 1× Spark v3d: counting 676, copy-heavy 565, coding 199 at c32." width="900">
+<img src="docs/img/concurrency.svg" alt="Aggregate decode tok/s at 1 to 32 concurrent requests with max_num_seqs 32 on 2× Spark b1.4: counting 994 and copy-heavy 911 at 32, coding 291 at c32." width="620">
 
-| Workload | 2× Spark b1.4, c16 | 2× Spark b1.4, c32 | 1× Spark v3d, c16 | 1× Spark v3d, c32 |
-|---|:---:|:---:|:---:|:---:|
-| Counting, max of 5 rounds | 781.9 | **994.4** | 522.2 | **675.9** |
-| Copy-heavy, max of 3 rounds (streams) | 644.9 | **910.7** | 405.2 | **565.2** |
-| Coding, llama-benchy tg512, max of 3 runs | 232.0 | **290.7** | 152.1 | **198.7** |
+| Workload | c16 | c32 |
+|---|:---:|:---:|
+| Counting, max of 5 rounds | 781.9 | **994.4** |
+| Copy-heavy, max of 3 rounds (streams) | 644.9 | **910.7** |
+| Coding, llama-benchy tg512, max of 3 runs | 232.0 | **290.7** |
 
-- Straggler probe at c8/c16/c32: 0 preemptions on both setups, 3.98–3.99 accepted per 4 drafts.
-- Per-request speed drops as requests are added. At c32 counting runs at 32.0 tok/s per request on 2× and 21.6 on 1×,
-  and the TTFT probe (~1.5K-token prompts) reached 14.5 s (2×) and 22.2 s (1×) at p50.
-- Lowest MemAvailable: 2× 5.2 / 6.6 GiB, 1× 4.5 GiB. The 1× run is under the 6 GiB headroom the shipped recipes
-  keep. A 1× boot at `max_num_seqs` 16 was stopped by the 4 GiB memory guard during startup.
+- Straggler probe at c8/c16/c32: 0 preemptions, 3.98–3.99 accepted per 4 drafts.
+- Per-request speed drops as requests are added. At c32 counting runs at 32.0 tok/s per request, and the TTFT probe
+  (~1.5K-token prompts) reached 14.5 s at p50.
+- Lowest MemAvailable 5.2 / 6.6 GiB (dgx-01 / dgx-02).
 
 Full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05), raw files:
 [`results/high-conc-k46b-20261005/`](results/high-conc-k46b-20261005/).
@@ -293,7 +198,7 @@ the other three. More than four ~256K contexts at once was not run. Full table:
 
 ### Two Sparks: one cluster or one copy per Spark
 
-Two Sparks can run the 2× recipe as one TP=2 server, or the 1× recipe once per Spark (DP=2) behind a small router,
+Two Sparks can run the 2× recipe as one TP=2 server, or the [1× recipe](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) once per Spark (DP=2) behind a small router,
 [`tools/dp2/pa_router.py`](tools/dp2/pa_router.py). The router sends a new conversation to the replica with the fewest
 conversations and keeps every later turn on that replica, so each turn hits its prefix cache.
 How-to, flags and limits: [tools/dp2/README.md](tools/dp2/README.md).
@@ -323,7 +228,7 @@ When to pick which:
 - DP=2 for many concurrent sessions or agents whose live contexts fit each Spark's 993,754-token pool: more
   throughput and lower TTFT in every workload above.
 - TP=2 for one request at a time, where it decodes faster (see [2× Spark](#2-spark-tp2-build-b16) against
-  [1× Spark](#1-spark-tp1-experimental-build-v3e)), and for many very long contexts at once: a single 1× replica
+  [1× Spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#measured)), and for many very long contexts at once: a single 1× replica
   fits about 3.8 requests at 262,144 tokens, the TP=2 pool about 14.
 - DP=2 has no failover in the router: if one Spark goes down, its conversations fail until it is back.
 
@@ -335,27 +240,23 @@ and k63 runs, and raw files: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#dp2-against
 
 A build ships only if it passes every check.
 
-<img src="docs/img/quality-gate.svg" alt="Quality gate: hardmode 92/100 (2× b1.4) and 91/100 (1× v3d), TC-45 100/100, tool-call retrieval 20/20 at 16k, 62k, 123k and 245k tokens, no batch stragglers." width="820">
+<img src="docs/img/quality-gate.svg" alt="Quality gate on 2× Spark b1.4: hardmode 92/100, TC-45 100/100, tool-call retrieval 20/20 at 16k, 62k, 123k and 245k tokens, no batch stragglers." width="660">
 
-| Check | Tool | 2× Spark b1.4 | 1× Spark v3d |
-|---|---|:---:|:---:|
-| Hard multi-step tool use (88 scenarios, thinking on, T=0); gate ≥ 88 | [tool-eval-bench](https://github.com/SeraphimSerapis) `--hardmode` | 92/100 on both A/B boots (run-to-run band 86–93) | 91/100 (v3c 93) |
-| `tool_choice=required` compliance, 5 trials | TC-45 | 100/100 | 100/100 |
-| Long-context tool-call retrieval, 20 needles per depth; actual prompt sizes ~15.7k / 61.7k / 122.6k / 245k tokens | [`scripts/fidelity_probe.py`](scripts/fidelity_probe.py) | 20/20 at every depth (re-gate boot¹); 32k seeds 21, 22 and ~245k seeds 11, 13: 20/20 | 20/20 at every depth; ~245k seeds 11, 13: 20/20 |
-| Batch stragglers | [`scripts/straggler_probe.py`](scripts/straggler_probe.py) | none, c5–c16 | none, c8–c16, 0 preemptions (3.98–3.99 accepted per 4 drafts) |
-| Numerics vs previous build (20 prompts × 16 tokens, top-5 logprobs) | [`scripts/logits_equiv.py`](scripts/logits_equiv.py) | mean \|Δlogprob\| 0.033–0.041 vs self-noise 0.038–0.046 | vs v3c: 0.034–0.048 vs self-noise 0.033–0.042 (weights differ, so no output identity check) |
-| MTP acceptance per draft position (numerics canary) | paired decode probe | within ±0.03 of b1.3 | within 0.005 of v3c at every position (0.816 / 0.667 / 0.540 / 0.440) |
-| Host memory headroom during the gate | `MemAvailable` | not recorded | min 14.04 GiB (13.30 GiB during the benchmark run) |
-| DevOps task set (14 prompts × 3, graded by terraform / kubeconform / actionlint / shellcheck / helm / hadolint / promtool) | own grader | 95.9% checks, 29/42 clean, 0/42 runaway thinking | 97.8% checks, 35/42 clean, 0/42 runaway (b1.4 weights at TP=1; not rerun on v3d) |
+| Check | Tool | 2× Spark b1.4 |
+|---|---|:---:|
+| Hard multi-step tool use (88 scenarios, thinking on, T=0); gate ≥ 88 | [tool-eval-bench](https://github.com/SeraphimSerapis) `--hardmode` | 92/100 on both A/B boots (run-to-run band 86–93) |
+| `tool_choice=required` compliance, 5 trials | TC-45 | 100/100 |
+| Long-context tool-call retrieval, 20 needles per depth; actual prompt sizes ~15.7k / 61.7k / 122.6k / 245k tokens | [`scripts/fidelity_probe.py`](scripts/fidelity_probe.py) | 20/20 at every depth (re-gate boot¹); 32k seeds 21, 22 and ~245k seeds 11, 13: 20/20 |
+| Batch stragglers | [`scripts/straggler_probe.py`](scripts/straggler_probe.py) | none, c5–c16 |
+| Numerics vs previous build (20 prompts × 16 tokens, top-5 logprobs) | [`scripts/logits_equiv.py`](scripts/logits_equiv.py) | mean \|Δlogprob\| 0.033–0.041 vs self-noise 0.038–0.046 |
+| MTP acceptance per draft position (numerics canary) | paired decode probe | within ±0.03 of b1.3 |
+| Host memory headroom during the gate | `MemAvailable` | not recorded |
+| DevOps task set (14 prompts × 3, graded by terraform / kubeconform / actionlint / shellcheck / helm / hadolint / promtool) | own grader | 95.9% checks, 29/42 clean, 0/42 runaway thinking |
 
 2× b1.6 (k71, one TP=2 boot): hardmode 92/100, TC-45 100/100, retrieval 20/20 at every depth and at two more ~245k
 seeds, stragglers none at c8–c16 with 0 preemptions. Images also pass a seed check before they ship: a first boot
 must log 0 measured b12x plans ([`scripts/check_seed.py`](scripts/check_seed.py)), because a seed that lacks plans
 makes a fresh install tune them on its own and serve other kernels than the ones measured (k70).
-
-1× v3e (k56, on both Sparks): hardmode 91/100, TC-45 100/100, retrieval 20/20 at every depth (one of the three ~245k
-seeds on dgx-01 scored 19/20, 119/120 overall), stragglers none at c8–c16 with 0 preemptions. Acceptance per draft
-position rose by 0.036–0.058, which is the intended effect of the new drafter.
 
 ¹ The A/B boot had one `no_call` at 32k (19/20). Twenty cold 32k trials per build then gave 20/20 for both b1.3 and
 b1.4, and a fresh re-gate boot passed. Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#quality-b14).
@@ -400,48 +301,32 @@ Stop with `sparkrun stop --all`.
 
 ## Requirements
 
-| | 2× Spark | 1× Spark |
-|---|---|---|
-| **Hardware** | 2× DGX Spark (GB10, 128 GB unified), CX-7 ports cabled back-to-back | 1× DGX Spark; checkpoint on local NVMe (the PLE table is read through the page cache) |
-| **Launcher** | sparkrun ≥ 0.3.6 with a two-node cluster defined | sparkrun ≥ 0.3.6 |
-| **Disk** | ~130 GB per node (98.5 GiB checkpoint + ~25 GB image + 4.5 GB drafter copy in the runtime cache) | ~128 GB (97.7 GiB checkpoint + 2.6 GiB MXFP8 shard + image) |
-| **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
-| **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
-| **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (171 s) with the compile cache from the image and a warm page cache, once the checkpoint is downloaded |
-| **Concurrency** | `max_num_seqs` 16, KV pool 30.53 GiB (3,673,158 tokens, 14.01x at 262,144; varies by boot, see [Measured](#2-spark-tp2-build-b14)) | `max_num_seqs` 8, KV pool 14 GiB (993,754 tokens, 3.79x at 262,144) |
+| | |
+|---|---|
+| **Hardware** | 2× DGX Spark (GB10, 128 GB unified), CX-7 ports cabled back-to-back |
+| **Launcher** | sparkrun ≥ 0.3.6 with a two-node cluster defined |
+| **Disk** | ~130 GB per node (98.5 GiB checkpoint + ~25 GB image + 4.5 GB drafter copy in the runtime cache) |
+| **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) |
+| **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) |
+| **Boot** | ~4 min warm, ~9.5 min cold |
+| **Concurrency** | `max_num_seqs` 16, KV pool 30.53 GiB (3,673,158 tokens, 14.01x at 262,144; varies by boot, see [Measured](#2-spark-tp2-build-b14)) |
 
-<!-- TODO: 1x kernel/linger requirements and the cold first-boot time with the shipped seed. -->
-
-Checkpoints:
-
-- 2× Spark: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
-  @ `7c4f1bc1`. NVFP4 experts; MXFP8 dense, GDN and attention; 98.5 GiB.
-- 1× Spark: [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
-  @ `244cb6fe`. The same checkpoint with the GDN projections in weight-only NVFP4.
-  - Its model card covers what changed, how it was built and the license, Qwen Community License 1.0.
-  - The recipe also fetches shard 35 and the index of `7c4f1bc1` (2.6 GiB) for the MXFP8 prefill copy.
-  - Checkpoint size: 97.7 GiB.
+Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
+@ `7c4f1bc1`. NVFP4 experts; MXFP8 dense, GDN and attention; 98.5 GiB. b1.6 also carries the 24 retrained drafter
+tensors of [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
+@ `16c9bd54` in its image (no extra download).
 
 Image and video input are not tested on these builds.
 
 ## Known limits
 
-- 2× Spark: by vLLM's count the KV pool fits about 14 requests at 262,144 tokens (3,673,158 tokens on the
+- By vLLM's count the KV pool fits about 14 requests at 262,144 tokens (3,673,158 tokens on the
   2026-10-02 boot), under the 16-request cap. Four different ~256K contexts at once used 28% of the pool
   ([measured](#several-long-contexts-at-once-2-b14)); more than four at once have not been run.
-- 1× Spark: the 14 GiB KV pool holds ~7.5 requests at 128K, so 8 concurrent 128K requests can wait for KV space.
-  8 × 64K fits.
-- 1× Spark, on a first boot without a usable plan seed, autotunes and compiles every kernel: ~30 min, with host
-  MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The images ship the TP=1 plan seed
-  and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
-- 1× Spark in steady state has ~14 GiB MemAvailable (lowest 13.3 GiB in the benchmark run), most of it PLE page cache.
-- 2× Spark b1.6 serves a copy of the 7c4f1bc1 snapshot at a fixed path in sparkrun's runtime cache, and its plan
+- b1.6 serves a copy of the 7c4f1bc1 snapshot at a fixed path in sparkrun's runtime cache, and its plan
   seed is keyed to that path. Deleting `~/.cache/sparkrun/runtime-cache` only costs a rebuild of the copy on the next
   boot; deleting the HF cache needs the 7c4f1bc1 download again, as before.
-- 1× Spark: the b12x plan seed and the compile cache are keyed by the model's snapshot path, so they match only the
-  pinned checkpoint revision. Serving another revision or a local copy of the files autotunes and compiles on its
-  first boot.
-- 2× Spark c1 varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting); the counting tables show the max of 5 rounds from one boot.
+- c1 varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting); the counting tables show the max of 5 rounds from one boot.
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every build.
 - Prose throughput was not re-measured on b1.4.
 
@@ -451,19 +336,18 @@ Image and video input are not tested on these builds.
 |---|---|---|
 | [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | 2× Spark default, b1.6 (retrained drafter) |
 | [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | Rollback: b1.4, original drafter |
-| [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3e-hf-20261008-21e0b201-5dad364d-warm` | 1× Spark, experimental, v3e (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`, retrained drafter) |
-| [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` | Rollback: v3d, original drafter (same checkpoint @ `244cb6fe`) |
+| `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | v3e / v3d | Compatibility copies of the single-Spark recipes, which now live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
 
-Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair serves different checkpoint revisions and keeps one cache each. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
+The pair shares the runtime cache, so a rollback boots warm. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
 
 ## Changelog
 
 Promoted builds only. Deltas are from that build's own A/B against the previous one; paired-probe figures are decode
 step time at T=0 with 95% CIs. Every row passed the gate.
 
-<img src="docs/img/build-history.svg" alt="tok/s per promoted build. 2× Spark from the 2026-09-23 shipped build to b1.6: counting at 1 request 101 to 120, at 8 requests 444 to 525 (b1.4; not run on b1.6); coding at 1 request 53 to 62 at b1.4 and 74 at b1.6, at 8 requests 167 to 196 at b1.4 and 194 at b1.6 (b1.6 from its own A/B, where b1.4 measured 73 and 181). 1× Spark from v2 to v3e: coding at 1 request 47 to 57 (60 at v3d), at 8 requests 120 to 133 (139 at v3d), and at 8 requests on a 16k context 22 to 120." width="900">
+<img src="docs/img/build-history.svg" alt="tok/s per promoted 2× Spark build from the 2026-09-23 shipped build to b1.6: counting at 1 request 101 to 120, at 8 requests 444 to 525 (b1.4; not run on b1.6); coding at 1 request 53 to 62 at b1.4 and 74 at b1.6, at 8 requests 167 to 196 at b1.4 and 194 at b1.6 (b1.6 from its own A/B, where b1.4 measured 73 and 181)." width="900">
 
-**2× Spark** (same checkpoint throughout)
+Same checkpoint throughout.
 
 | Build | Date | Coding c1 d0 | Coding c16 16k | TTFT c1 16k | What changed | Measured delta |
 |---|---|:---:|:---:|:---:|---|---|
@@ -477,27 +361,12 @@ step time at T=0 with 95% CIs. Every row passed the gate.
 ² From b1.6's own A/B (k71), where b1.4 measured 72.9 the same day; earlier rows come from their builds' A/Bs. b1.5
 (GDN-MSE main weights at TP=2) failed the 128k fidelity gate and was not shipped.
 
-**1× Spark**
-
-| Build | Date | Coding c1 d0 | Coding c8 d0 | What changed | Measured delta |
-|---|---|:---:|:---:|---|---|
-| v2 | 2026-10-02 | 47.4 | 120.0 | PLE WILLNEED before each decode gather; 131k-id draft vocab | WILLNEED: step −16.9% fresh c1, −8 to −9% c2–c8; draft vocab: step −2.7 to −4.3% c1–c4 |
-| v3a | 2026-10-04 | 50.0 | 117.6 | NVMe keepalive (`VLLM_PLE_MMAP_KEEPALIVE_MS=50`), compile cache in the image | step −8.4% c4, −5.1% c8, −8.0% 16k c4; c1/c2 −0.5 to −0.9% |
-| v3b | 2026-10-04 | 55.0 | 130.2 | Prefill read-ahead on the PLE table (`VLLM_PLE_MMAP_PREFILL_WILLNEED=1`) | pp2048 +50% c1, +19% c4, +9% c8; 16k prefill c1 +4.6%; decode within noise |
-| v3c | 2026-10-05 | 51.8 | 125.1 | Shared GDN prefill staging, compact GDN records, KV pool 6 → 14 GiB | 16k c8 coding 22.1 → 109.3; 16K c8 probe 347–370 s → 125 s; counting c8 +3.1%, fresh c4 +2.5%; other cells within noise |
-| v3d | 2026-10-05 | 59.8 | 139.5 | NVFP4 GDN weights for decode with an MXFP8 copy for prefill (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`) | counting c8 +7.8%, 16K c4 +5.9%, fresh c8 +4.4%, tg512 c1 50.0 → 59.7; pp2048 −0.9% (noise 1.0%); other cells within noise |
-| **v3e** | **2026-10-08** | **56.9** | **132.9** | Retrained MTP drafter (checkpoint revision `16c9bd54`) | acceptance +0.036 to +0.058 per position; fresh c4 +4.9 / +7.9%, fresh c8 +6.8 / +8.1%, 16K c4 +5.5 / +5.7% (dgx-01 / dgx-02); pp2048 within noise; no cell worse beyond noise |
-
-The benchy grid varies by up to ~10% between runs, so single cells (e.g. v3a c8 117.6 vs v2 120.0, or v3e c1 56.9 vs v3d 59.8) do not resolve
-differences this small; the paired probe does. Per-build tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+The single-Spark builds (v2 to v3e) have their own changelog in the [1× repo](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark#changelog).
 
 ## How we measure
 
-- The coding grid runs llama-benchy task mode (above) at c1–c16 and depths 0 / 16k, 3 runs per boot, two boots per build on the
-  2× Spark. A cell counts as changed only if the difference is larger than its own boot-to-boot noise.
-- The paired A/B runs the candidate and the previous build on the same prompts at temperature 0, booted in ABBA order (2× Spark:
-  two boots per build; 1× Spark: 4 passes over 2 Sparks). We report decode step time, tokens per step and tok/s per cell with 95% CIs.
-  Example: [`results/tp1-v3a-20261004/ab-report-v3a-vs-v2.txt`](results/tp1-v3a-20261004/ab-report-v3a-vs-v2.txt).
+- The coding grid runs llama-benchy task mode (above) at c1–c16 and depths 0 / 16k, 3 runs per boot, two boots per build. A cell counts as changed only if the difference is larger than its own boot-to-boot noise.
+- The paired A/B runs the candidate and the previous build on the same prompts at temperature 0, booted in ABBA order, two boots per build. We report decode step time, tokens per step and tok/s per cell with 95% CIs.
   <!-- TODO: commit the script that produces these reports. -->
 - To be promoted, a build must pass the gate; at least one coding or counting cell must be faster beyond noise; no c1–c4
   cell may be slower beyond noise, and a loss at c5–c16 is published as a caveat ([`scripts/arm_verdict.py`](scripts/arm_verdict.py)).
@@ -509,17 +378,12 @@ Index of every run and verdict: [results/README.md](results/README.md).
 
 ## How it works
 
-- 2× Spark runs TP=2 over RoCE, one rank per GB10; all-reduces over the CX-7 link take ~4% of a c1 decode step.
-- 1× Spark reads the 26.8 GiB PLE n-gram table through the page cache from the checkpoint files
-  (`VLLM_PLE_MMAP=1`) with a WILLNEED pass before each decode gather and a 50 ms NVMe keepalive, so ~72 GiB of other
-  weights fit on one GB10. One GDN prefill staging buffer shared by all 36 GDN layers frees ~8.8 GiB, which goes to a
-  14 GiB KV pool, and compact MTP draft records cut each request's GDN state blocks from 185 to 37. The GDN projections
-  decode from weight-only NVFP4 and switch to an MXFP8 copy for calls of 41+ rows.
+- TP=2 over RoCE, one rank per GB10; all-reduces over the CX-7 link take ~4% of a c1 decode step.
 - b12x kernels cover NVFP4 MoE, MXFP8 linears, GDN (36 layers) and QSA sparse attention (12 layers), with an
   autotuned plan cache baked into each image.
 - MTP ×4 uses probabilistic drafts over a 131k-id draft vocabulary; rejection sampling keeps the output distribution
   unchanged.
-- The 2× Spark c1 step (~43 ms) splits into MoE 30%, dense MXFP8 31%, MTP draft + head 19%, idle 6%,
+- The c1 step (~43 ms) splits into MoE 30%, dense MXFP8 31%, MTP draft + head 19%, idle 6%,
   all-reduce 4%, GDN 3%. MoE reads ~175 GB/s of the ~250 GB/s the GB10 reaches.
 
 Flags, environment variables and the reason for each: [docs/REFERENCE.md](docs/REFERENCE.md). Kernel and engine notes,
@@ -527,12 +391,12 @@ rejected experiments: [docs/ENGINEERING.md](docs/ENGINEERING.md).
 
 ## Thinking effort
 
-Both recipes set the server default to `reasoning_effort: medium`. On our DevOps task set (2× Spark), b1.2 at the
+The recipes set the server default to `reasoning_effort: medium`. On my DevOps task set, b1.2 at the
 template default `xhigh` passed 42.5% of checks with 23/42 runaway-thinking runs and a 246 s median per task; b1.4 at
 `medium` passed 95.9% with 0/42 runaway and 33 s. A request can still ask for `xhigh` or `low`; `"reasoning_effort": "none"`
 turns thinking off. Override table and measurements: [docs/REFERENCE.md](docs/REFERENCE.md#thinking-effort).
-For hard reasoning problems `xhigh` per request helps: on the hotel-lights check, 1× v3c went from 21/32 at `medium` to 31/31
-completed runs ([#88](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/88)). Allow a long client timeout, since most
+For hard reasoning problems `xhigh` per request helps: on the hotel-lights check, the single-Spark v3c went from 21/32 at
+`medium` to 31/31 completed runs ([#88](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/88)). Allow a long client timeout, since most
 of those answers took over 30 minutes at 8 concurrent requests.
 
 ## Troubleshooting
@@ -540,11 +404,10 @@ of those answers took over 30 minutes at 8 concurrent requests.
 | Symptom | Fix |
 |---|---|
 | `/health` silent for minutes | Expected on a cold boot. `sparkrun logs <recipe> -f` |
-| OOM / earlyoom at start (2× Spark) | Unified memory: `gpu_memory_utilization` ≥ 0.84 starves host RAM. Keep 0.80 and clear other containers |
-| OOM / earlyoom at first boot (1× Spark) | Plan seed not used, so it autotunes; see [Known limits](#known-limits) |
+| OOM / earlyoom at start | Unified memory: `gpu_memory_utilization` ≥ 0.84 starves host RAM. Keep 0.80 and clear other containers |
 | NCCL `ibv_reg_mr_iova2 ... Cannot allocate memory` | Kernel `7.0.0-1019-nvidia`; hold `6.17.0-1032-nvidia` |
 | `ShmRingBuffer ... shared_memory` crash | `loginctl enable-linger nvidia` on both nodes |
-| Garbled output | Rank checkpoint mismatch: both 2× serve logs must show `snapshots/7c4f1bc1` ([why](docs/REFERENCE.md#tuning-and-troubleshooting)) |
+| Garbled output | Rank checkpoint mismatch: both serve logs must show `snapshots/7c4f1bc1` ([why](docs/REFERENCE.md#tuning-and-troubleshooting)) |
 | Empty `content`, long reasoning | `max_tokens` ran out during thinking; raise it or send `"reasoning_effort": "low"` |
 | Old build boots after an upgrade | `sparkrun registry update qwen38-flashnext` |
 | Anything else | Try the `-previous` recipe, then open an issue with `sparkrun logs <recipe> -a` |
@@ -558,6 +421,7 @@ of those answers took over 30 minutes at 8 concurrent requests.
 | [docs/ENGINEERING.md](docs/ENGINEERING.md) | Known issues and fixes, profiling, rejected experiments |
 | [results/](results/README.md) | Every raw measurement and verdict |
 | [archive/](archive/recipes/README.md) | Experimental and superseded recipes (not listed by sparkrun) |
+| [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) | The single-Spark (TP=1) recipe, its builds, results and issues |
 
 ## Credits
 
