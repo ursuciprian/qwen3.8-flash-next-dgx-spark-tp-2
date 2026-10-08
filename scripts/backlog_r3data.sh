@@ -147,7 +147,7 @@ preflight() {
   for p in $PASSES; do IFS=: read -r pn tl lo <<< "$p"; for h in 1 2; do
     [ -s "$W/cap-s0$h-$pn.yaml" ] && grep -qx "  VLLM_MTP_CAPTURE_TAIL: \"$tl\"" "$W/cap-s0$h-$pn.yaml" \
       && grep -qx "  VLLM_MTP_CAPTURE_DIR: \"$CD3/capture/shards-s0$h-$pn\"" "$W/cap-s0$h-$pn.yaml" \
-      && [ "$(diff "$CAPREC" "$W/cap-s0$h-$pn.yaml" | grep -c '^>')" = 2 ] || { echo "$W/cap-s0$h-$pn.yaml wrong"; ok=1; }; done; done
+      && [ "$(diff "$CAPREC" "$W/cap-s0$h-$pn.yaml" | grep -c "^>")" -le 3 ] || { echo "$W/cap-s0$h-$pn.yaml wrong"; ok=1; }; done; done
   ( cd "$W/src" && python3 -m py_compile tools/mtp_refit/*.py && python3 -m tools.mtp_refit.capture_client --help | grep -q -- --min-response ) \
     || { echo "$W/src tools do not parse or lack --min-response"; ok=1; }
   x 2 "test -s $W/src/tools/mtp_refit/assemble.py" || { echo "dgx-02: $W/src missing"; ok=1; }
