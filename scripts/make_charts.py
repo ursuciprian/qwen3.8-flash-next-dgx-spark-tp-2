@@ -10,7 +10,7 @@
 Every number drawn comes from a file listed in SRC. Transparent background and mid-tone colours, so the
 same SVG reads on GitHub's light and dark themes.
 """
-import json
+import json, math
 import re
 import statistics
 from pathlib import Path
@@ -50,6 +50,8 @@ SRC = {
         ("b1.2", "09-27", RES / "b1.2-20260927/b12-hcq.json"),
         ("b1.3", "09-29", RES / "b1.3-20260929/b13.json"),
         ("b1.4", "10-01", RES / "b1.4-20261001/b14.json"),
+        # b1.6 (#115): its A/B is k71 (Thunderdome, llama-benchy 4 runs): arm boots' coding grid; no counting sweep
+        ("b1.6", "10-08", [RES / f"k71-tp2-refit-pinned-plans-20261008-0921/screen/arm-p{i}/task.csv" for i in (1, 2)]),
     ],
     # Promoted 1x Spark builds, in order: each build's own llama-benchy coding grid (one boot, 3 runs).
     "tp1_builds": [
@@ -165,6 +167,11 @@ def load():
     builds = [("shipped", "09-23", None)] + SRC["builds"]
     hist = []
     for name, date, path in builds:
+        if isinstance(path, list):  # llama-benchy grids of the arm boots, mean; counting not measured
+            g = [benchy(x) for x in path]
+            m = lambda k: sum(r[k][0] for r in g) / len(g)
+            hist.append((name, date, m("tg512 (c1)"), m("tg512 (c8)"), math.nan, math.nan))
+            continue
         p = path or SRC["builds"][0][2]
         col = "base_mean" if path is None else "cand_mean"
         d = json.loads(p.read_text())
@@ -274,7 +281,8 @@ def chart_builds(hist, hist1):
                 ys = [h[idx] for h in data]
                 ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=name,
                         ls="--" if color == C_CODE16 else "-")
-                for x, y in ((0, ys[0]), (len(ys) - 1, ys[-1])):
+                last = max(i for i, y in enumerate(ys) if not math.isnan(y))
+                for x, y in ((0, ys[0]), (last, ys[last])):
                     # the lower of the two series at this point is labelled below its marker, so labels never cross
                     below = any(h2[x] > y or (h2[x] == y and color == C_CODE16)
                                 for h2 in ([h[i] for h in data] for i, _, _ in series if i != idx))
@@ -287,7 +295,8 @@ def chart_builds(hist, hist1):
         axes[r][1].legend(loc="center right" if r == 0 else "center left", fontsize=9.5)
     fig.tight_layout(h_pad=2.2)
     fig.text(0.0, -0.05, "Promoted builds in order (2026). 2× Spark: each value is that build's A/B, mean of two boots; "
-             "'shipped' is the baseline boots of the b1 A/B.\n1× Spark: each build's llama-benchy coding grid "
+             "'shipped' is the baseline boots of the b1 A/B.\nb1.6: the arm boots of its k71 A/B "
+             "(llama-benchy 4 runs, b1.4 control 72.9 / 181.1 on the same day); counting was not run.\n1× Spark: each build's llama-benchy coding grid "
              "(one boot, 3 runs, T=1.0); single cells vary by up to ~10% between runs. "
              "At 16k with 8 requests, v2-v3b\nran out of KV pool (6 GiB); v3c to v3e have 14 GiB. "
              "Every build passed the quality gate.",

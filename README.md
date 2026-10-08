@@ -19,9 +19,9 @@ A build is promoted only if it passes the [quality gate](#quality-gate) and no c
 | **Prefill**, 2,048-token prompt | | 2,784–2,855 | | 1,788 | |
 | **Prefill**, filling a 16k context | | 2,895–2,920 | | 2,088 | |
 
-Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3d (2026-10-05). The current 1× build,
-v3e (2026-10-08), is v3d with a retrained MTP drafter; its paired screen against v3d is under
-[1× Spark](#1-spark-tp1-experimental-build-v3e). Workloads, dates and raw files: [Measured](#measured).
+Aggregate decode tok/s unless marked prefill. Builds: 2× Spark b1.4; 1× Spark v3d (2026-10-05). The current builds,
+2× b1.6 and 1× v3e (both 2026-10-08), add the same retrained MTP drafter to b1.4 and v3d; their paired screens are under
+[2× Spark b1.6](#2-spark-tp2-build-b16) and [1× Spark](#1-spark-tp1-experimental-build-v3e). Workloads, dates and raw files: [Measured](#measured).
 
 <div align="center">
 
@@ -30,7 +30,7 @@ v3e (2026-10-08), is v3d with a retrained MTP drafter; its paired screen against
 [![retrieval](https://img.shields.io/badge/tool--call%20retrieval-20%2F20%20up%20to%20245k%20tokens-2ea44f)](#quality-gate)
 [![stragglers](https://img.shields.io/badge/batch%20stragglers-none-2ea44f)](#quality-gate)
 <br>
-[![2x build](https://img.shields.io/badge/2×%20Spark-b1.4%20·%202026--10--01-blue)](#changelog)
+[![2x build](https://img.shields.io/badge/2×%20Spark-b1.6%20·%202026--10--08-blue)](#changelog)
 [![1x build](https://img.shields.io/badge/1×%20Spark-v3e%20·%202026--10--08-blue)](#changelog)
 [![Engine](https://img.shields.io/badge/engine-vLLM%20V2%20+%20b12x-blue)](docs/REFERENCE.md#what-is-in-the-image)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
@@ -73,6 +73,35 @@ Workloads are labelled per row, because they differ by about 2× in tokens per d
   tokens out, once at temperature 0 with thinking off and once with the server defaults (thinking on). The cell is
   the median decode tok/s of the 36 requests, with the max in brackets
   ([details](docs/BENCHMARKS.md#coding-probe-36-prompts-in-four-languages-2026-10-06)).
+
+### 2× Spark (TP=2), build b1.6
+
+b1.6 is b1.4 with the retrained MTP drafter of the 1× v3e
+([#115](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/115)). The main model is unchanged
+(`local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`); only the drafter's 24 dense BF16 tensors take their
+values from `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`. The image carries them (178 MB), and on the
+first boot each node builds a copy of the 7c4f1bc1 snapshot with the new drafter in the runtime cache (4.5 GB, a few
+seconds; sha256 checked). No extra download.
+
+Screen against b1.4 (k71, Thunderdome rules on the pair, b1.4 and b1.6 booted alternately, 2 boots each, T=0 probe
+cells plus llama-benchy). Change in tok/s, noise band in brackets; no cell was worse beyond its noise band:
+
+| Cell | b1.6 vs b1.4 |
+|---|:---:|
+| Acceptance per draft position 1 / 2 / 3 / 4 | 0.819 / 0.670 / 0.546 / 0.445 → 0.855 / 0.712 / 0.592 / 0.492 |
+| Fresh, 4 requests | +10.9% (6.5%) |
+| Fresh, 8 requests | +6.2% (3.5%) |
+| 16K context, 8 requests, wall time | +1.7% (1.1%) |
+| llama-benchy tg512, 8 requests | +7.2% (4.8%), 181.1 → 194.0 t/s |
+| llama-benchy tg512, 1 request | +1.1% (15.0%), 72.9 → 73.7 t/s |
+| llama-benchy pp2048, 1 request | +3.5% (4.1%) |
+| Fresh 1 request, 16K 4 requests, counting 8 requests | +3.4%, +3.5%, +0.7%, all inside noise |
+
+The gate passed (see [Quality gate](#quality-gate)); Jev ship verdict 0.88. A check boot of the published image with
+plain `sparkrun run` came up in 221 s, measured 0 b12x plans and gave tg512 79.1 t/s at c1 and 186.7 at c8. Details and
+raw files: [docs/BENCHMARKS.md](docs/BENCHMARKS.md#b16-image-retrained-mtp-drafter-on-2-spark-2026-10-08).
+
+The tables below are b1.4's full benchmark runs; b1.6 has not been re-run on that set.
 
 ### 2× Spark (TP=2), build b1.4
 
@@ -306,6 +335,11 @@ A build ships only if it passes every check.
 | Host memory headroom during the gate | `MemAvailable` | not recorded | min 14.04 GiB (13.30 GiB during the benchmark run) |
 | DevOps task set (14 prompts × 3, graded by terraform / kubeconform / actionlint / shellcheck / helm / hadolint / promtool) | own grader | 95.9% checks, 29/42 clean, 0/42 runaway thinking | 97.8% checks, 35/42 clean, 0/42 runaway (b1.4 weights at TP=1; not rerun on v3d) |
 
+2× b1.6 (k71, one TP=2 boot): hardmode 92/100, TC-45 100/100, retrieval 20/20 at every depth and at two more ~245k
+seeds, stragglers none at c8–c16 with 0 preemptions. Images also pass a seed check before they ship: a first boot
+must log 0 measured b12x plans ([`scripts/check_seed.py`](scripts/check_seed.py)), because a seed that lacks plans
+makes a fresh install tune them on its own and serve other kernels than the ones measured (k70).
+
 1× v3e (k56, on both Sparks): hardmode 91/100, TC-45 100/100, retrieval 20/20 at every depth (one of the three ~245k
 seeds on dgx-01 scored 19/20, 119/120 overall), stragglers none at c8–c16 with 0 preemptions. Acceptance per draft
 position rose by 0.036–0.058, which is the intended effect of the new drafter.
@@ -357,7 +391,7 @@ Stop with `sparkrun stop --all`.
 |---|---|---|
 | **Hardware** | 2× DGX Spark (GB10, 128 GB unified), CX-7 ports cabled back-to-back | 1× DGX Spark; checkpoint on local NVMe (the PLE table is read through the page cache) |
 | **Launcher** | sparkrun ≥ 0.3.6 with a two-node cluster defined | sparkrun ≥ 0.3.6 |
-| **Disk** | ~125 GB per node (98.5 GiB checkpoint + ~25 GB image) | ~128 GB (97.7 GiB checkpoint + 2.6 GiB MXFP8 shard + image) |
+| **Disk** | ~130 GB per node (98.5 GiB checkpoint + ~25 GB image + 4.5 GB drafter copy in the runtime cache) | ~128 GB (97.7 GiB checkpoint + 2.6 GiB MXFP8 shard + image) |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) | No NCCL at TP=1 |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) | - |
 | **Boot** | ~4 min warm, ~9.5 min cold | ~3 min (171 s) with the compile cache from the image and a warm page cache, once the checkpoint is downloaded |
@@ -388,6 +422,9 @@ Image and video input are not tested on these builds.
   MemAvailable down to 3.8 GiB for about a minute (earlyoom triggers at ~2.4 GiB). The images ship the TP=1 plan seed
   and compile cache, so a normal first boot skips this. Close other memory-heavy work during the first boot.
 - 1× Spark in steady state has ~14 GiB MemAvailable (lowest 13.3 GiB in the benchmark run), most of it PLE page cache.
+- 2× Spark b1.6 serves a copy of the 7c4f1bc1 snapshot at a fixed path in sparkrun's runtime cache, and its plan
+  seed is keyed to that path. Deleting `~/.cache/sparkrun/runtime-cache` only costs a rebuild of the copy on the next
+  boot; deleting the HF cache needs the 7c4f1bc1 download again, as before.
 - 1× Spark: the b12x plan seed and the compile cache are keyed by the model's snapshot path, so they match only the
   pinned checkpoint revision. Serving another revision or a local copy of the files autotunes and compiles on its
   first boot.
@@ -399,8 +436,8 @@ Image and video input are not tested on these builds.
 
 | Recipe | Image | Use |
 |---|---|---|
-| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | 2× Spark default |
-| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `b1.3-20260929-b7fbaf96-7344a997-warm` | Rollback: full draft vocab, no QSA race fix, thinking effort `xhigh` |
+| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | 2× Spark default, b1.6 (retrained drafter) |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | Rollback: b1.4, original drafter |
 | [`qwen3.8-flash-next-1x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml) | `tp1-v3e-hf-20261008-21e0b201-5dad364d-warm` | 1× Spark, experimental, v3e (checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`, retrained drafter) |
 | [`qwen3.8-flash-next-1x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark-previous.yaml) | `tp1-v3d-hf-20261005-21e0b201-5dad364d-warm` | Rollback: v3d, original drafter (same checkpoint @ `244cb6fe`) |
 
@@ -411,7 +448,7 @@ Each 2× pair shares the runtime cache, so a rollback boots warm; the 1× pair s
 Promoted builds only. Deltas are from that build's own A/B against the previous one; paired-probe figures are decode
 step time at T=0 with 95% CIs. Every row passed the gate.
 
-<img src="docs/img/build-history.svg" alt="tok/s per promoted build. 2× Spark from the 2026-09-23 shipped build to b1.4: counting at 1 request 101 to 120, at 8 requests 444 to 525; coding at 1 request 53 to 62, at 8 requests 167 to 196. 1× Spark from v2 to v3e: coding at 1 request 47 to 57 (60 at v3d), at 8 requests 120 to 133 (139 at v3d), and at 8 requests on a 16k context 22 to 120." width="900">
+<img src="docs/img/build-history.svg" alt="tok/s per promoted build. 2× Spark from the 2026-09-23 shipped build to b1.6: counting at 1 request 101 to 120, at 8 requests 444 to 525 (b1.4; not run on b1.6); coding at 1 request 53 to 62 at b1.4 and 74 at b1.6, at 8 requests 167 to 196 at b1.4 and 194 at b1.6 (b1.6 from its own A/B, where b1.4 measured 73 and 181). 1× Spark from v2 to v3e: coding at 1 request 47 to 57 (60 at v3d), at 8 requests 120 to 133 (139 at v3d), and at 8 requests on a 16k context 22 to 120." width="900">
 
 **2× Spark** (same checkpoint throughout)
 
@@ -421,7 +458,11 @@ step time at T=0 with 95% CIs. Every row passed the gate.
 | b1.1 | 2026-09-26 | 53.4 | 175.9 | - | Exact prefix hits under MTP, `NULL_BLOCK_ID` padding fix, compile-worker cap | 16k c16 176.5 vs 139.4; cached-prefix TTFT 16k −37% |
 | b1.2 | 2026-09-27 | 58.2–61.8 | 173.3–176.1 | - | HC mixers in online MXFP8 | step −9.9% c1 fresh, −4.4 to −7.6% c2–c4 |
 | b1.3 | 2026-09-29 | 62.2 | 178.5 | 1.71 s | GDN uniform-decode metadata skip (~350 launches/step) | step −1.9 to −3.1% c1, −2.5 to −3.0% c2 |
-| **b1.4** | **2026-10-01** | **62.2** | **176.4** | **1.70 s** | 131k-id MTP draft vocab, QSA race + recompile fixes, thinking effort `medium` | step −2 to −5% c1–c8; d0 c5 +4.2%; counting c1 +4.9% |
+| b1.4 | 2026-10-01 | 62.2 | 176.4 | 1.70 s | 131k-id MTP draft vocab, QSA race + recompile fixes, thinking effort `medium` | step −2 to −5% c1–c8; d0 c5 +4.2%; counting c1 +4.9% |
+| **b1.6** | **2026-10-08** | **73.7²** | **-** | **-** | Retrained MTP drafter (v3e's), plan seed with all 616 plans | acceptance +0.036 to +0.047 per position; tg512 c8 +7.2%, fresh c4 +10.9%, fresh c8 +6.2%; c1 within noise |
+
+² From b1.6's own A/B (k71), where b1.4 measured 72.9 the same day; earlier rows come from their builds' A/Bs. b1.5
+(GDN-MSE main weights at TP=2) failed the 128k fidelity gate and was not shipped.
 
 **1× Spark**
 

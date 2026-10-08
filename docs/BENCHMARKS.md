@@ -1,5 +1,55 @@
 # Benchmarks: full tables
 
+## b1.6 image: retrained MTP drafter on 2× Spark (2026-10-08)
+
+b1.6 = b1.4 with the retrained drafter of the 1× v3e (#97 refit run 1). The main model stays
+`local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`: b1.5's GDN-MSE requant of the main weights failed the TP=2
+128k fidelity gate, so the 2× takes only the 24 dense BF16 `mtp.*` tensors that differ in `model-00034` of
+`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`. The image carries those tensors (178 MB,
+`docker/mtp-refit`), and the recipe's command builds `/cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54`
+on each node before `vllm serve`: symlinks into the 7c4f1bc1 snapshot plus a spliced `model-00034` whose sha256
+(`f628108e`) equals the 16c9bd54 shard. vLLM, b12x and every other weight are b1.4's.
+
+The first try (k70) lost at c1. Its image seed was b1.4's (`8ccf4799`, 583 records), which lacks 33 a16 GEMM plans; the
+arm measured them at boot and 8 of them picked a different tile or split than the long-lived b1.4 cache of the control.
+k71 pinned the control's selections into the arm cache, so arm and control differed only in the drafter. The b1.6 seed
+(`15b63901`, 616 records) is that pinned set: b1.4's 583 records plus the 33.
+
+Screen (k71): Thunderdome rules on the pair, boots b1.4, b1.6, b1.6, b1.4, T=0 probe cells plus llama-benchy (T=1, 4
+runs). Noise band = the cell's control boot-to-boot spread, at least 1%.
+
+| Cell | b1.6 vs b1.4 (noise) |
+|---|:---:|
+| Acceptance per draft position 1 / 2 / 3 / 4 (T=0, pooled) | 0.819 / 0.670 / 0.546 / 0.445 → 0.855 / 0.712 / 0.592 / 0.492 |
+| probe fresh c1 | +3.41% (16.45%) |
+| probe fresh c4 | +10.89% (6.48%) |
+| probe fresh c8 | +6.21% (3.52%) |
+| probe 16K c4 | +3.46% (3.75%) |
+| probe counting c8 | +0.65% (7.92%) |
+| 16K c8 wall time | +1.72% (1.14%) |
+| llama-benchy pp2048 c1 | +3.53% (4.09%), 2736.9 → 2833.4 t/s |
+| llama-benchy tg512 c1 | +1.12% (15.03%), 72.9 → 73.7 t/s |
+| llama-benchy tg512 c8 | +7.15% (4.79%), 181.1 → 194.0 t/s |
+
+Verdict PROMOTE, no cell worse beyond noise (tg512 c4 −1.1%, control boot-to-boot 9.9%). Gate (one TP=2 boot): hardmode
+92, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k and at two more ~245k seeds, stragglers c8/c12/c16 with 0
+preemptions (4.00 accepted per draft on the counting prompt), min MemAvailable 10.54 GiB (dgx-01) / 14.05 GiB
+(dgx-02). Jev (TypeSafe System One) on the same numbers: ship, confidence 0.88
+([`jev-ship.json`](../results/k71-tp2-refit-pinned-plans-20261008-0921/jev-ship.json)). Raw files:
+[`results/k71-tp2-refit-pinned-plans-20261008-0921/`](../results/k71-tp2-refit-pinned-plans-20261008-0921/).
+
+Shipped image check (b16, plain `sparkrun run` of the recipe with the overlay directory and the 15b63901 plan file
+removed from both runtime caches first): boot 221 s, overlay built on both nodes (sha256 ok), b12x 0 measured on the
+rank-0 log and both plan files still at 616 records ([`scripts/check_seed.py`](../scripts/check_seed.py), PASS),
+fresh c4 T=0 acceptance 0.856 / 0.699 / 0.567 / 0.459 (k71 arm 0.855 / 0.701 / 0.576 / 0.463, b1.4 0.793 / 0.636 /
+0.501 / 0.402), KV pool 3,650,419 tokens. llama-benchy (4 runs, depth 0): tg512 79.1 ± 12.1 t/s at c1 and 186.7 ± 8.8
+at c8, pp2048 2,829 t/s. Raw files: [`results/b1.6-20261008/`](../results/b1.6-20261008/).
+
+Image gate added with this build: a check boot must log 0 measured for every b12x plan group, or the image does not
+ship. `scripts/check_seed.py` reads the rank-0 serve log; TP=2 workers print no b12x progress, so their plan file is
+checked for the seed's record count instead. On k70's bake log it fails (`gemm.blockscaled_precision`, `comm.roce`);
+on the k71 boots, the hfship v3e check and this check it passes.
+
 ## DP=2 against 2× TP=2 on an agent replay (2026-10-07)
 
 The same multi-turn replay against two setups on the same pair, one boot each, one pass per workload:

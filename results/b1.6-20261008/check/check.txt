@@ -1,0 +1,23 @@
+image ghcr.io/ursuciprian/spark-vllm-b12x:b1.6-20261008-b7fbaf96-a7e649d8-warm on node 0; node 1: ghcr.io/ursuciprian/spark-vllm-b12x:b1.6-20261008-b7fbaf96-a7e649d8-warm
+digest ghcr.io/ursuciprian/spark-vllm-b12x@sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4
+boot 221s up=1, pong=pong
+== node0
+overlay: built /cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54 (24 tensors replaced, sha256 ok)
+model='/cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54'
+model='/cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54'
+b12x lines with measured > 0: 0
+max measured: 0 measured
+b12x planning gemm.blockscaled_precision: 0/436 ready, 0 measured, 1 cached, 0 compilations, 0:00
+b12x planning moe.decode: 0/436 ready, 0 measured, 193 cached, 0 compilations, 0:00
+b12x priming attention.qsa: 11/381 ready, candidates 0/1 prepared, 0 measured, 10 cached, 0 compilations, 0:01
+b12x priming comm.roce: 435/436 ready, candidates 0/1 prepared, 0 measured, 403 cached, 0 compilations, 0:16
+b12x priming gemm.blockscaled_precision: 367/436 ready, 0 measured, 403 cached, 0 compilations, 0:10
+b12x priming moe.decode: 165/436 ready, 0 measured, 403 cached, 0 compilations, 0:02
+b12x priming norm.hyperconnection: 201/436 ready, candidates 0/1 prepared, 0 measured, 403 cached, 0 compilations, 0:09
+b12x priming sequence.gdn_prefill: 4/381 ready, 0 measured, 10 cached, 0 compilations, 0:00
+== node1
+overlay: built /cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54 (24 tensors replaced, sha256 ok)
+b12x lines with measured > 0: 0
+max measured: 
+localhost plan file: /home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-2d9615ab/b12x/compile/preparation/15b639016c932b03d623d76be56a320a94946895d5522c30e3e1d8829572c729.json records 616
+192.168.100.53 plan file: /home/nvidia/.cache/sparkrun/runtime-cache/vllm/local-inference-lab__Qwen3.8-Flash-Next-NVFP4-2d9615ab/b12x/compile/preparation/15b639016c932b03d623d76be56a320a94946895d5522c30e3e1d8829572c729.json records 616
