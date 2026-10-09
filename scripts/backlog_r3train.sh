@@ -114,9 +114,17 @@ stop_all
 
 st "running: train-all links + copy to dgx-02"
 rm -rf "$D3/train-all" "$D3/heldout-long"; mkdir -p "$D3/train-all" "$D3/heldout-long"; i=0
-for d in $(datadirs); do for p in "$d"/part-*.safetensors; do ln "$p" "$D3/train-all/$(printf 'part-%05d' $i).safetensors"; i=$((i + 1)); done; done
-for p in "$D3"/data-s01-t18/heldout/part-*.safetensors; do [ -e "$p" ] && ln "$p" "$D3/heldout-long/"; done
+# hard links made as root in the image: the parts are root-owned and fs.protected_hardlinks refuses the host user.
+# One bind mount of the mtp-refit dir (links cannot cross mounts); paths relative to it.
+M=$HOME/.cache/huggingface/mtp-refit
+{ for d in $(datadirs); do for p in "$d"/part-*.safetensors; do echo "${p#$M/} ${D3#$M/}/train-all/$(printf 'part-%05d' $i).safetensors"; i=$((i + 1)); done; done
+  for p in "$D3"/data-s01-t18/heldout/part-*.safetensors; do [ -e "$p" ] && echo "${p#$M/} ${D3#$M/}/heldout-long/$(basename "$p")"; done; } > "$RES/links.txt"
+docker run --rm -i --network none -v "$M:/m" -w /m --entrypoint sh "$IMG" -c 'set -e; while read -r a b; do ln "$a" "$b"; done' < "$RES/links.txt" \
+  || { FINAL="FAILED: train-all links ($RES/links.txt)"; exit 1; }
 read -r NA ND <<< "$(anchors "$D3/train-all")"; read -r HA HD <<< "$(anchors "$D2/data/heldout")"; read -r LA LD <<< "$(anchors "$D3/heldout-long")"
+WANT=$(for d in $(datadirs); do anchors "$d"; done | awk '{s+=$1} END {print s+0}')
+[ "$NA" = "$WANT" ] && [ "$(ls "$D3/train-all" | wc -l)" = "$(wc -l < "$RES/links.txt" | awk -v h=$(ls "$D3"/data-s01-t18/heldout/part-*.safetensors 2>/dev/null | wc -l) '{print $1 - h}')" ] \
+  || { FINAL="FAILED: train-all has $NA anchors, the data dirs $WANT"; exit 1; }
 EPOCH=$(( NA / TPS ))
 { echo "data: train $ND docs / $NA anchors (~$EPOCH steps of $TPS per epoch; p2 alone: $(anchors "$D2/data/train" | cut -d' ' -f1)), eval p2 held-out $HD docs / $HA anchors, report-only held-out-long $LD docs / $LA anchors"; } >> "$REP"
 s=$(date +%s)
