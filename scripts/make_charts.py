@@ -88,7 +88,7 @@ def old(r):
 
 def label(r, prefix=True):
     """Release with its old build name, e.g. 'one-Spark v2.1.0 (old name v3e)'; the old name alone if not yet named."""
-    name = f"{r['release']} (old name {r['alias']})" if r["release"] else r["alias"]
+    name = (f"{r['release']} (old name {r['alias']})" if r["alias"] else r["release"]) if r["release"] else r["alias"]
     return (PREFIX[r["setup"]] if prefix else "") + name
 
 

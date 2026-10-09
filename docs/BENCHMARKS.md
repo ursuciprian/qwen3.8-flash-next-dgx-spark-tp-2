@@ -1,11 +1,57 @@
 # Benchmarks: full tables
 
-Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v1.5.0 (old name b1.6); every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.0.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+
+
+## v2.0.0: GDN-MSE checkpoint with the M-dispatch on 2× Spark (2026-10-09)
+
+Release 2× v2.0.0 (experiment k73-2x-gdnmse-dispatch, #123), the current default. No old build name.
+
+The checkpoint changes to `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`: 7c4f1bc1 with the GDN
+in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16 base to weight-only NVFP4
+(per-block MSE scale search), plus drafter D1. With `VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41`, GDN projection calls below
+41 rows (decode with up to 8 requests) run those NVFP4 weights, and calls of 41+ rows (prefill, decode with 9-16
+requests) run the MXFP8 weights of 7c4f1bc1 shard 35. vLLM d21d7ade (`feat/k73-mxfp8-large-m-tp`) lets each TP rank cut
+its own slice of the MXFP8 tensors the way the NVFP4 weights of the same layer are cut. b12x 21e0b201. b1.5 (the same
+checkpoint at TP=2 without the dispatch, 2026-10-03) failed the 128K fidelity gate with every prefill on NVFP4.
+
+Screen (k73): Thunderdome rules on the pair, boots v1.5.0, cutoff 26, cutoff 41, cutoff 41, cutoff 26, v1.5.0; T=0
+probe cells plus llama-benchy (T=1, 4 runs per boot). Plans pinned to v1.5.0's selections for every shared key; every
+counted boot measured 0 plans. Noise = max(1%, control boot-to-boot, CI half-width).
+
+| Cell | cutoff 41 vs v1.5.0 (noise) | cutoff 26 vs v1.5.0 (noise) |
+|---|:---:|:---:|
+| Acceptance per draft position 1 / 2 / 3 / 4 (T=0, pooled) | 0.853 / 0.709 / 0.589 / 0.492 → 0.852 / 0.710 / 0.587 / 0.485 | → 0.858 / 0.709 / 0.590 / 0.489 |
+| probe fresh c1 | +18.95% (11.58%), step −6.7% | +11.67% (5.44%) |
+| probe fresh c4 | +3.22% (4.69%), step −4.0% | +3.31% (4.69%) |
+| probe fresh c8 | +8.60% (10.35%), step −3.1% | +6.92% (10.35%) |
+| probe 16K c4 | +4.83% (5.47%) | +7.85% (5.47%) |
+| probe counting c8 | +11.98% (17.74%) | +8.35% (17.74%) |
+| 16K c8 wall time | +4.60% (7.45%) | +3.45% (7.45%) |
+| llama-benchy pp2048 c1 | +0.82% (1.55%), 2807.8 → 2830.9 t/s | +0.97% (1.55%) |
+| llama-benchy tg512 c1 | +8.38% (12.34%), 82.4 → 89.3 t/s | +0.87% (12.34%) |
+| llama-benchy tg512 c8 | +8.41% (11.26%), 173.3 → 187.9 t/s | +9.10% (11.26%) |
+
+Both cutoffs PROMOTE; 41 scored higher and shipped. Compact GDN records plus shared prefill staging on top of cutoff 41
+(as in the 1× recipe) was INCONCLUSIVE (no cell beyond noise) and is not part of v2.0.0. KV pool: 3.52M tokens against
+3.66M-3.76M on the v1.5.0 boots (−4%, the per-rank MXFP8 copies). Gate (one TP=2 boot of cutoff 41): hardmode 90,
+TC-45 100, fidelity 20/20 at 8k/32k/64k/128k and at two more ~245k seeds, stragglers c8/c12/c16 with 0 preemptions,
+min MemAvailable 9.71 GiB (dgx-01) / 9.48 GiB (dgx-02). Raw files:
+[`results/k73-tp2-gdnmse-dispatch-20261009-1621/`](../results/k73-tp2-gdnmse-dispatch-20261009-1621/).
+
+Shipped image check (k77-2x-ship-check, plain `sparkrun run` of the recipe with the 6fdfaa4c plan file and the 9 AOT
+keys of the image moved out of both runtime caches first): boot 170 s, AOT loaded with no Dynamo compile, b12x 0
+measured and both plan files at 682 records (`scripts/check_seed.py` PASS), MXFP8 copies on both ranks, fresh c4 T=0
+acceptance 0.842 / 0.692 / 0.562 / 0.449 (k73 cutoff 41: 0.836 / 0.693 / 0.560 / 0.442), KV pool 3,527,297 tokens
+(13.46 requests at 262,144). llama-benchy (one boot, 4 runs, depth 0, T=1): pp2048 c1 2,845 t/s, tg512 81.2 ± 5.4 t/s
+at c1, 199.7 ± 10.1 at c8, 236.6 ± 7.8 at c16. k73 had no 16-request cell, so the check compared c16 with the last c16
+of the shipped line (v1.4.0, 242.8 t/s, same tool and settings): −2.6%, inside that run's 3% noise. Raw files:
+[`results/k77-2x-ship-check-20261009-2149/`](../results/k77-2x-ship-check-20261009-2149/).
 
 
 ## b1.6 image: retrained MTP drafter on 2× Spark (2026-10-08)
 
-Release 2× v1.5.0 (old name b1.6), the current default.
+Release 2× v1.5.0 (old name b1.6), the default from 2026-10-08 to 2026-10-09.
 
 b1.6 = b1.4 with the retrained drafter of the 1× v3e (#97 refit run 1). The main model stays
 `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`: b1.5's GDN-MSE requant of the main weights failed the TP=2
