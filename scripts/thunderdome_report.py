@@ -5,7 +5,11 @@ Usage: thunderdome_report.py <node dir> [--acc-only]
        thunderdome_report.py --selftest
 
 <node dir> holds ctl-p1, arm-p1, arm-p2, ctl-p2 from scripts/thunderdome.sh. Pass K pairs arm-pK with
-ctl-pK (same prompts, same Spark). Fixed rules:
+ctl-pK (same prompts, same Spark). Pooled layouts with more passes (ctl-p3, arm-p3, ...) and symlinked
+pass dirs work the same way. Completeness: the required passes are 1 and 2 plus every K that has a ctl-pK or
+arm-pK dir, on both sides. A missing pass dir is INCONCLUSIVE, and every cell is judged only when each
+required pass has its result on both sides (probe cells also need the same request ids); otherwise that
+cell is missing. Fixed rules:
 
   probe cells   fresh-c1 fresh-c4 fresh-c8 d16k-c4 count-c8 (depth_decode_probe.py, T=0)
                 delta = mean paired decode tok/s change (paired_decode_ab.compare, stalls excluded)
@@ -16,7 +20,7 @@ ctl-pK (same prompts, same Spark). Fixed rules:
                 delta = mean over passes of (control wall / arm wall - 1)
                 noise = max(1 %, |control boot 2 vs boot 1 wall change|)
   benchy cells  pp2048 (c1), tg512 (c1), tg512 (c8) (llama-benchy t/s total)
-                delta = arm mean vs control mean
+                delta = arm mean vs control mean over the matched passes
                 noise = max(1 %, control spread between boots, mean reported sd), in % of the control mean
   acceptance    accepted/drafted per draft position, pooled over the probe cells both sides finished
 
@@ -24,8 +28,8 @@ ctl-pK (same prompts, same Spark). Fixed rules:
                 an arm boot failed, the arm server died during a boot (DIED), or an arm cell did not finish
                 (timeout or error) in a pass where the control's did
   PROMOTE       every cell measured, none worse than 1x noise, at least one better than 1x noise
-  INCONCLUSIVE  anything else: control boot failed, a cold boot, missing cells, a cell worse than
-                1x but not 2x noise, or nothing better than noise
+  INCONCLUSIVE  anything else: control boot failed, a cold boot, a missing pass dir, missing cells, a cell
+                worse than 1x but not 2x noise, or nothing better than noise
 
 Logits (logits_equiv.py captured twice per boot) are reported, not judged.
 TD_ACC_RISE_OK=1 (opt-in, for an arm whose intended effect is higher acceptance): an acceptance RISE past 0.03 is
@@ -62,18 +66,30 @@ def probe(p, cell):
     return load(f, "inf") if os.path.exists(f) else None
 
 
+def matched(C, A, get):
+    """{K: (control, arm)} for every pass either side has, or a str naming the gaps when a pass lacks the
+    result on either side (a pass dir missing on both sides is reported by main)."""
+    out, gaps = {}, []
+    for k in sorted(set(C) | set(A)):
+        r = [get(B[k]) if k in B else None for B in (C, A)]
+        gaps += [f"{who}-p{k}" for who, x in zip(("ctl", "arm"), r) if x is None]
+        out[k] = r
+    if gaps:
+        return f"no result in {', '.join(gaps)}"
+    return out if len(out) >= 2 else "fewer than 2 passes"
+
+
 def probe_cell(C, A, cell):
-    ctl = {k: probe(p, cell) for k, p in C.items()}
-    arm = {k: probe(p, cell) for k, p in A.items()}
-    a, b = {}, {}
-    for k in sorted(set(ctl) & set(arm)):
-        if ctl[k] and arm[k]:
-            a.update({(k, i): v for i, v in ctl[k].items()})
-            b.update({(k, i): v for i, v in arm[k].items()})
-    ok = [k for k in sorted(ctl) if ctl[k]]
-    if not a or len(ok) < 2:
-        return None
-    res, own = compare(a, b), compare(ctl[ok[0]], ctl[ok[1]]).get("tok_s")
+    m = matched(C, A, lambda p: probe(p, cell) or None)
+    if isinstance(m, str):
+        return m
+    bad = [f"p{k}" for k, (c, a) in m.items() if set(c) != set(a)]
+    if bad:
+        return f"request ids differ between control and arm in {', '.join(bad)}"
+    a = {(k, i): v for k, (c, _) in m.items() for i, v in c.items()}
+    b = {(k, i): v for k, (_, x) in m.items() for i, v in x.items()}
+    ok = sorted(m)
+    res, own = compare(a, b), compare(m[ok[0]][0], m[ok[1]][0]).get("tok_s")
     r = res.get("tok_s")
     if not r or not own:
         return None
@@ -114,16 +130,14 @@ def arm_unfinished(C, A, cell):
 
 
 def wall_cell(C, A, cell):
-    ctl = {k: wall(p, cell) for k, p in C.items()}
-    arm = {k: wall(p, cell) for k, p in A.items()}
-    pairs = [(ctl[k], arm[k]) for k in sorted(set(ctl) & set(arm)) if ctl[k] and arm[k]]
-    own = [ctl[k] for k in sorted(ctl) if ctl[k]]
-    if not pairs or len(own) < 2:
-        return None
+    m = matched(C, A, lambda p: wall(p, cell) or None)
+    if isinstance(m, str):
+        return m
+    pairs = [m[k] for k in sorted(m)]
     delta = statistics.mean((x / y - 1) * 100 for x, y in pairs)
-    noise = max(NOISE_FLOOR, abs(own[1] / own[0] - 1) * 100)
-    show = lambda d: "/".join(f"{d[k]:.0f}" if d[k] else "-" for k in sorted(d))
-    return delta, noise, f"wall s control {show(ctl)} arm {show(arm)} (cut counts as the time)"
+    noise = max(NOISE_FLOOR, abs(pairs[1][0] / pairs[0][0] - 1) * 100)
+    show = lambda i: "/".join(f"{p[i]:.0f}" for p in pairs)
+    return delta, noise, f"wall s control {show(0)} arm {show(1)} (cut counts as the time)"
 
 
 def benchy(p):
@@ -134,10 +148,10 @@ def benchy(p):
 
 
 def benchy_cell(C, A, cell):
-    c = [r[cell] for r in map(benchy, C.values()) if cell in r]
-    a = [r[cell][0] for r in map(benchy, A.values()) if cell in r]
-    if len(c) < 2 or not a:
-        return None
+    m = matched(C, A, lambda p: benchy(p).get(cell))
+    if isinstance(m, str):
+        return m
+    c, a = [m[k][0] for k in sorted(m)], [m[k][1][0] for k in sorted(m)]
     cm, am = statistics.mean(x for x, _ in c), statistics.mean(a)
     noise = max(NOISE_FLOOR, (max(x for x, _ in c) - min(x for x, _ in c)) / cm * 100, statistics.mean(s for _, s in c) / cm * 100)
     return (am / cm - 1) * 100, noise, f"control {cm:.1f} arm {am:.1f} t/s (boots {len(c)}/{len(a)})"
@@ -206,6 +220,10 @@ def main(d, acc_only=False):
         missing.append(f"{p}: backbone compiled at boot (cold): bake the image first")
     for p in marked(d, "DIED"):
         (kill if p.startswith("arm") else missing).append(f"{p}: server died during the boot's measurements")
+    seen = {int(p[-1]) for who in ("ctl", "arm") for p in glob.glob(os.path.join(d, f"{who}-p[0-9]"))}
+    for k in sorted(seen | {1, 2}):   # an interrupted or partly copied run must not look complete
+        missing += [f"{who}-p{k}: pass dir missing" for who in ("ctl", "arm")
+                    if not os.path.isdir(os.path.join(d, f"{who}-p{k}"))]
     print("== acceptance per draft position (T=0 probe cells, pooled)")
     ca, aa = acceptance(C, A)
     if not ca or not aa:
@@ -230,9 +248,10 @@ def main(d, acc_only=False):
             if bad:
                 kill.append(f"{kind} {cell}: arm did not finish in pass {','.join(map(str, bad))}, control did")
             r = fn(C, A, cell)
-            if r is None:
-                print(f"  {kind:6s} {cell:12s} missing")
-                missing.append(f"{kind} {cell}: missing")
+            if not isinstance(r, tuple):
+                why = f"missing ({r})" if r else "missing"
+                print(f"  {kind:6s} {cell:12s} {why}")
+                missing.append(f"{kind} {cell}: {why}")
                 continue
             delta, noise, info = r
             line = f"{kind} {cell} {delta:+.2f}% (noise {noise:.2f}%)"
@@ -263,17 +282,17 @@ def main(d, acc_only=False):
 
 
 def selftest():
-    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205), ctl_wall=(300, 310)):
-        """4 boots; arm tok/s x arm (or x cell_arm[cell]); control boot 2 is 0.3 % faster than boot 1;
-        d16k-c8 wall: control 300/310 s, arm arm_wall (480 = cut)."""
-        for who, k in (("ctl", 1), ("arm", 1), ("arm", 2), ("ctl", 2)):
-            p = os.path.join(d, f"{who}-p{k}")
+    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205), ctl_wall=(300, 310), passes=2):
+        """2 boots per side (passes); arm tok/s x arm (or x cell_arm[cell]); control boot 2 is 0.3 % faster than
+        boot 1; d16k-c8 wall: control 300/310 s, arm arm_wall (480 = cut), cycled over extra passes."""
+        for who, k in ((w, k) for k in range(1, passes + 1) for w in ("ctl", "arm")):
+            p =os.path.join(d, f"{who}-p{k}")
             os.makedirs(p)
             if fail == f"{who}-p{k}":
                 open(os.path.join(p, "FAILED"), "w").write("failed")
                 continue
             f = 1.003 if (who, k) == ("ctl", 2) else 1.0
-            w = arm_wall[k - 1] if who == "arm" else ctl_wall[k - 1]   # 480 = cut by timeout, < 0 = errored
+            w = (arm_wall if who == "arm" else ctl_wall)[(k - 1) % 2]   # 480 = cut by timeout, < 0 = errored
             rc = 124 if w >= 480 else 1 if w < 0 else 0
             open(os.path.join(p, "time-d16k-c8.txt"), "w").write(f"{rc} {abs(w)} 480\n")
             for cell in PROBES + WALL:
@@ -291,15 +310,24 @@ def selftest():
                 f"| qwen3.8-flash-next | {c} | {v * g:.2f} ± {v * 0.004:.2f} | x |\n"
                 for c, v in (("pp2048 (c1)", 1700.0), ("tg512 (c1)", 55.0), ("tg512 (c8)", 130.0))))
 
-    def run(**kw):
+    def run(drop=(), link=False, **kw):
+        """drop: paths (relative to the boot dirs) to delete after make; link: judge a node dir of symlinked pass dirs."""
         d = tempfile.mkdtemp()
         try:
             make(d, **kw)
+            n = d
+            if link:   # multi-arm layout: one node dir per arm, pass dirs symlinked to the shared boots
+                n = os.path.join(d, "node")
+                os.makedirs(n)
+                for p in glob.glob(os.path.join(d, "*-p[0-9]")):
+                    os.symlink(p, os.path.join(n, os.path.basename(p)))
+            for x in drop:   # after linking, so a dropped pass dir leaves a dangling link
+                (shutil.rmtree if os.path.isdir(os.path.join(d, x)) else os.remove)(os.path.join(d, x))
             out = os.path.join(d, "out.txt")
             so, sys.stdout = sys.stdout, open(out, "w")
             try:
-                main(d)
-                rc = main(d, acc_only=True)
+                main(n)
+                rc = main(n, acc_only=True)
             finally:
                 sys.stdout.close()
                 sys.stdout = so
@@ -332,6 +360,20 @@ def selftest():
     assert run(arm=1.05, arm_wall=(-5, 205))[0] == "KILL"                      # arm errored where the control finished
     assert run(arm=1.05, ctl_wall=(300, 470), arm_wall=(480, 300))[0] != "KILL"  # arm cut once: scored, not killed
     assert run(arm=1.0, ctl_wall=(-5, 310), arm_wall=(300, 310))[0] == "INCONCLUSIVE"  # control crash is not the cut
+    # incomplete runs: nothing measured worse, so INCONCLUSIVE, never PROMOTE
+    assert run(arm=1.05, drop=["arm-p1"]) == ("INCONCLUSIVE", 0)               # whole arm pass dir missing
+    assert run(arm=1.05, drop=["arm-p2"]) == ("INCONCLUSIVE", 0)
+    assert run(arm=1.05, drop=["ctl-p2"])[0] == "INCONCLUSIVE"
+    assert run(arm=1.05, drop=["arm-p2/probe-fresh-c1.json"])[0] == "INCONCLUSIVE"  # one probe result missing
+    assert run(arm=1.05, drop=["arm-p2/task.csv"])[0] == "INCONCLUSIVE"        # benchy missing in one arm pass
+    assert run(arm=1.05, drop=["arm-p1/time-d16k-c8.txt"])[0] == "INCONCLUSIVE"  # wall record missing
+    assert run(arm=1.05, drop=["arm-p2", "ctl-p2"])[0] == "INCONCLUSIVE"       # pass 2 gone on both sides
+    # pooled (3 passes per side) and symlinked multi-arm layouts
+    assert run(arm=1.05, passes=3) == ("PROMOTE", 0)
+    assert run(arm=1.05, passes=3, drop=["arm-p3"])[0] == "INCONCLUSIVE"
+    assert run(arm=1.05, passes=3, drop=["arm-p3/task.csv"])[0] == "INCONCLUSIVE"
+    assert run(arm=1.05, link=True) == ("PROMOTE", 0)
+    assert run(arm=1.05, link=True, drop=["arm-p2"])[0] == "INCONCLUSIVE"     # dangling link = missing pass
     print("selftest ok")
 
 
