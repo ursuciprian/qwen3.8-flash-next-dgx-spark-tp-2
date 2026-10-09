@@ -4,7 +4,9 @@
 #    (54b3e768, the 1x v3c recipe; added 2026-10-02), and TP=1 for ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 244cb6fe
 #    (f7894ea6, the 1x v3d recipe; added 2026-10-05), and TP=2 for the b1.6 overlay path
 #    /cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54 (15b63901, 616 records = 8ccf4799 + the 33
-#    a16 GEMM plans 8ccf4799 lacks; docker/mtp-refit; added 2026-10-08) on
+#    a16 GEMM plans 8ccf4799 lacks; docker/mtp-refit; added 2026-10-08), and TP=2 for
+#    ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 with the M-dispatch (6fdfaa4c, 682 records = the 616
+#    of 15b63901 at the same selections + 66 GDN plans; the 2x v2.0.0 recipe, k73; added 2026-10-09) on
 #    GB10. Its identity is device name + namespace (model snapshot path, TP, dtype,
 #    spec method), not host or GPU UUID, so it hits on any GB10 pair. The recipe's
 #    command copies it into sparkrun's runtime cache ($XDG_CACHE_HOME) when that

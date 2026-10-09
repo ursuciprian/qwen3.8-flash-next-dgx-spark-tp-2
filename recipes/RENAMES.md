@@ -1,5 +1,13 @@
 # Renames
 
+## 2026-10-09: 2× v2.0.0 promoted (k73-2x-gdnmse-dispatch)
+
+| name | content now |
+|---|---|
+| `qwen3.8-flash-next-2x-dgx-spark` | v2.0.0: `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54` (drafter D1 included) with the M-dispatch (NVFP4 GDN weights below 41 rows, MXFP8 of `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1` at 41+), image `k73-20261009-21e0b201-d21d7ade-warm` (also `2x-v2.0.0`) |
+| `qwen3.8-flash-next-2x-dgx-spark-previous` | v1.5.0 (old name b1.6), the recipe that was `qwen3.8-flash-next-2x-dgx-spark` from 2026-10-08 to 2026-10-09 |
+| (was `-previous`, b1.4) | `archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.4-20261001.yaml` (not listed; run by path) |
+
 ## 2026-10-08: 2× b1.6 promoted
 
 | name | content now |
