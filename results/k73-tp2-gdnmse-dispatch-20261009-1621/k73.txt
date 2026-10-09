@@ -1,0 +1,116 @@
+k73 2026-10-09 16:25:18 EEST: GDN-MSE @ 16c9bd54 + M-dispatch at TP=2 vs b1.6 (#123)
+vLLM d21d7ade (ursuciprian/vllm feat/k73-mxfp8-large-m-tp), b12x 21e0b201, base ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm
+dgx-01: GDN-MSE @ 16c9bd54 complete, 7c4f1bc1 shard 35 present
+dgx-02: GDN-MSE @ 16c9bd54 complete, 7c4f1bc1 shard 35 present
+cputest: 15 passed, 1 skipped, 14 warnings in 12.55s
+recipes: /home/nvidia/GEN-AI/backlog/k73/arm/k73-{c26,c41,c26x,c41x}.yaml
+bake c26: 6fdfaa4cdd6c827f17390e8fa20bc97a36d7be3200a2d97ceb73f7b0577c050e.json: 682 records, 616 shared with the control (0 configs replaced by the control's), 66 arm-only
+bake c26 cold: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k73-tp2-gdnmse-dispatch-20261009-1621/bake/c26-cold/serve.log: attention.gdn 0 measured / 0 cached, attention.qsa 0 measured / 10 cached, comm.roce 1052 measured / 393 cached, gemm.blockscaled_precision 1052 measured / 393 cached, moe.decode 1052 measured / 393 cached, norm.hyperconnection 1052 measured / 393 cached, sequence.gdn_prefill 0 measured / 10 cached, sequence.mtp_feedback 1052 measured / 393 cached, sequence.ple_embedding 0 measured / 0 cached
+bake c26: cold 344s, warm 171s, copies node0 72 node1 72, 8 new AOT dirs, plans seed check PASS
+bake c41: 6fdfaa4cdd6c827f17390e8fa20bc97a36d7be3200a2d97ceb73f7b0577c050e.json: 682 records, 616 shared with the control (0 configs replaced by the control's), 66 arm-only
+bake c41 cold: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k73-tp2-gdnmse-dispatch-20261009-1621/bake/c41-cold/serve.log: attention.gdn 0 measured / 0 cached, attention.qsa 0 measured / 10 cached, comm.roce 0 measured / 456 cached, gemm.blockscaled_precision 0 measured / 456 cached, moe.decode 0 measured / 456 cached, norm.hyperconnection 0 measured / 456 cached, sequence.gdn_prefill 0 measured / 10 cached, sequence.ple_embedding 0 measured / 0 cached
+bake c41: cold 212s, warm 182s, copies node0 72 node1 72, 8 new AOT dirs, plans seed check PASS
+warm image spark-vllm-b12x:k73-gdnmse-tp2-21e0b201-d21d7ade-warm: 6 AOT keys, plan 6fdfaa4cdd6c827f17390e8fa20bc97a36d7be3200a2d97ceb73f7b0577c050e.json 682 records
+
+== screen c26 vs b1.6 (Thunderdome rules on the pair): VERDICT=PROMOTE (score 2 5.832)
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.853 arm 0.858 shift +0.004
+  pos 1: control 0.709 arm 0.709 shift +0.000
+  pos 2: control 0.589 arm 0.590 shift +0.000
+  pos 3: control 0.492 arm 0.489 shift -0.003
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1     +11.67%  noise  5.44%  better    n=4 CI [+6.7,+17.6] control boot-to-boot +4.64%, step -6.65%
+  probe  fresh-c4      +3.31%  noise  4.69%            n=16 CI [+1.0,+5.8] control boot-to-boot +4.69%, step -3.48%
+  probe  fresh-c8      +6.92%  noise 10.35%            n=32 CI [+4.1,+9.8] control boot-to-boot +10.35%, step -2.32%
+  probe  d16k-c4       +7.85%  noise  5.47%  better    n=16 CI [+4.5,+11.4] control boot-to-boot +5.47%, step -4.48%
+  probe  count-c8      +8.35%  noise 17.74%            n=32 CI [+3.7,+13.7] control boot-to-boot +17.74%, step -7.11%
+  wall   d16k-c8       +3.45%  noise  7.45%            wall s control 94/87 arm 87/88 (cut counts as the time)
+  benchy pp2048 (c1)   +0.97%  noise  1.55%            control 2807.8 arm 2834.9 t/s (boots 2/2)
+  benchy tg512 (c1)    +0.87%  noise 12.34%            control 82.4 arm 83.2 t/s (boots 2/2)
+  benchy tg512 (c8)    +9.10%  noise 11.26%            control 173.3 arm 189.1 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 15/20 prompts identical, |dlogprob| mean 0.0354 max 0.3546
+  self  ctl-p2 a/b: 15/20 prompts identical, |dlogprob| mean 0.0438 max 0.9824
+  self  arm-p1 a/b: 9/20 prompts identical, |dlogprob| mean 0.0324 max 0.3683
+  self  arm-p2 a/b: 11/20 prompts identical, |dlogprob| mean 0.0438 max 0.7215
+  cross ctl-p1/arm-p1: 12/20 prompts identical, |dlogprob| mean 0.0494 max 0.6097
+  cross ctl-p2/arm-p2: 14/20 prompts identical, |dlogprob| mean 0.0484 max 1.0140
+better: probe fresh-c1 +11.67% (noise 5.44%); probe d16k-c4 +7.85% (noise 5.47%)
+VERDICT=PROMOTE
+
+== screen c41 vs b1.6 (Thunderdome rules on the pair): VERDICT=PROMOTE (score 2 7.754)
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.853 arm 0.852 shift -0.001
+  pos 1: control 0.709 arm 0.710 shift +0.001
+  pos 2: control 0.589 arm 0.587 shift -0.002
+  pos 3: control 0.492 arm 0.485 shift -0.007
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1     +18.95%  noise 11.58%  better    n=4 CI [+9.5,+32.6] control boot-to-boot +4.64%, step -6.72%
+  probe  fresh-c4      +3.22%  noise  4.69%            n=16 CI [+0.6,+5.8] control boot-to-boot +4.69%, step -3.96%
+  probe  fresh-c8      +8.60%  noise 10.35%            n=32 CI [+6.3,+10.9] control boot-to-boot +10.35%, step -3.14%
+  probe  d16k-c4       +4.83%  noise  5.47%            n=16 CI [+2.1,+7.6] control boot-to-boot +5.47%, step -5.34%
+  probe  count-c8     +11.98%  noise 17.74%            n=32 CI [+7.1,+17.6] control boot-to-boot +17.74%, step -10.15%
+  wall   d16k-c8       +4.60%  noise  7.45%            wall s control 94/87 arm 87/86 (cut counts as the time)
+  benchy pp2048 (c1)   +0.82%  noise  1.55%            control 2807.8 arm 2830.9 t/s (boots 2/2)
+  benchy tg512 (c1)    +8.38%  noise 12.34%            control 82.4 arm 89.3 t/s (boots 2/2)
+  benchy tg512 (c8)    +8.41%  noise 11.26%            control 173.3 arm 187.9 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 15/20 prompts identical, |dlogprob| mean 0.0354 max 0.3546
+  self  ctl-p2 a/b: 15/20 prompts identical, |dlogprob| mean 0.0438 max 0.9824
+  self  arm-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0345 max 0.3486
+  self  arm-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0381 max 0.3675
+  cross ctl-p1/arm-p1: 13/20 prompts identical, |dlogprob| mean 0.0449 max 0.5017
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0387 max 0.3440
+better: probe fresh-c1 +18.95% (noise 11.58%)
+VERDICT=PROMOTE
+winner of the cutoff screen: c41 (PROMOTE)
+bake c41x: 6fdfaa4cdd6c827f17390e8fa20bc97a36d7be3200a2d97ceb73f7b0577c050e.json: 682 records, 616 shared with the control (0 configs replaced by the control's), 66 arm-only
+bake c41x cold: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k73-tp2-gdnmse-dispatch-20261009-1621/bake/c41x-cold/serve.log: attention.gdn 0 measured / 0 cached, attention.qsa 0 measured / 10 cached, comm.roce 0 measured / 456 cached, gemm.blockscaled_precision 0 measured / 456 cached, moe.decode 0 measured / 456 cached, norm.hyperconnection 0 measured / 456 cached, sequence.gdn_prefill 0 measured / 10 cached, sequence.ple_embedding 0 measured / 0 cached
+bake c41x: cold 222s, warm 171s, copies node0 72 node1 72, 8 new AOT dirs, plans seed check PASS
+
+== phase 2: c41x vs c41 (control = c41): VERDICT=INCONCLUSIVE
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.851 arm 0.854 shift +0.003
+  pos 1: control 0.709 arm 0.710 shift +0.001
+  pos 2: control 0.590 arm 0.589 shift -0.001
+  pos 3: control 0.487 arm 0.488 shift +0.001
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      +5.04%  noise  9.23%            n=4 CI [-4.4,+14.1] control boot-to-boot +7.07%, step -0.45%
+  probe  fresh-c4      -0.46%  noise  3.00%            n=16 CI [-3.5,+2.5] control boot-to-boot -0.50%, step -0.15%
+  probe  fresh-c8      +2.94%  noise  3.80%            n=32 CI [+1.1,+5.0] control boot-to-boot +3.80%, step +0.15%
+  probe  d16k-c4       +2.01%  noise  3.97%            n=16 CI [-1.1,+5.6] control boot-to-boot +3.97%, step +0.02%
+  probe  count-c8      +6.08%  noise  9.79%            n=32 CI [+3.7,+8.8] control boot-to-boot +9.79%, step -2.59%
+  wall   d16k-c8       +0.59%  noise  2.27%            wall s control 88/86 arm 86/87 (cut counts as the time)
+  benchy pp2048 (c1)   -0.02%  noise  1.05%            control 2831.5 arm 2831.1 t/s (boots 2/2)
+  benchy tg512 (c1)    +3.65%  noise 10.55%            control 83.1 arm 86.1 t/s (boots 2/2)
+  benchy tg512 (c8)    -2.03%  noise  5.31%            control 188.4 arm 184.6 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 10/20 prompts identical, |dlogprob| mean 0.0411 max 0.7367
+  self  ctl-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0415 max 0.6032
+  self  arm-p1 a/b: 14/20 prompts identical, |dlogprob| mean 0.0362 max 0.3918
+  self  arm-p2 a/b: 12/20 prompts identical, |dlogprob| mean 0.0381 max 0.4906
+  cross ctl-p1/arm-p1: 11/20 prompts identical, |dlogprob| mean 0.0412 max 0.7445
+  cross ctl-p2/arm-p2: 11/20 prompts identical, |dlogprob| mean 0.0430 max 0.5096
+reason: no cell better than its noise
+better: none
+VERDICT=INCONCLUSIVE
+final arm: c41
+
+== gate (c41, one TP2 boot): PASS
+│    Quality:        90/100                                                    │
+│    Score:  100 / 100                                                         │
+│    Score:   100.0 ± 0.0 / 100                                                │
+depth    8000 | actual_tokens   15709 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   0.87s | lat    2.0s
+depth   32000 | actual_tokens   61730 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   2.01s | lat    3.4s
+depth   64000 | actual_tokens  122614 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   4.00s | lat    5.3s
+depth  128000 | actual_tokens  245267 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   8.02s | lat    9.5s
+depth  128000 | actual_tokens  244166 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   7.33s | lat    8.6s
+depth  128000 | actual_tokens  244893 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   7.76s | lat    9.3s
+c=8 round wall 4.1s | per request (submit order): #0:4.07s/320t #1:4.13s/320t #2:4.07s/320t #3:4.13s/320t #4:4.07s/320t #5:4.07s/320t #6:4.13s/320t #7:4.13s/320t
+      preemptions +0 | queue time total 0.01s over 8 req | prefill total 1.47s | decode total 31.3s | accept 4.00/draft
+c=12 round wall 5.4s | per request (submit order): #0:5.23s/320t #1:5.23s/320t #2:5.23s/320t #3:5.23s/320t #4:5.31s/320t #5:5.31s/320t #6:5.31s/320t #7:5.31s/320t #8:5.38s/320t #9:5.38s/320t #10:5.38s/320t #11:5.38s/320t
+      preemptions +0 | queue time total 0.38s over 12 req | prefill total 3.43s | decode total 60.3s | accept 4.00/draft
+c=16 round wall 6.1s | per request (submit order): #0:5.82s/320t #1:5.82s/320t #2:5.82s/320t #3:5.82s/320t #4:5.90s/320t #5:5.90s/320t #6:5.90s/320t #7:5.90s/320t #8:5.98s/320t #9:5.98s/320t #10:5.98s/320t #11:5.98s/320t #12:6.05s/320t #13:6.05s/320t #14:6.05s/320t #15:6.05s/320t
+      preemptions +0 | queue time total 1.18s over 16 req | prefill total 5.25s | decode total 89.7s | accept 4.00/draft
+guard dgx01: min MemAvailable 9.71 GiB
+guard dgx02: min MemAvailable 9.48 GiB
