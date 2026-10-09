@@ -1,7 +1,7 @@
 # DP=2: one 1× copy per Spark behind a router
 
 Two Sparks can serve this model as one TP=2 cluster (the 2× recipe) or as two independent 1× replicas behind
-[`pa_router.py`](pa_router.py). Which one to pick: [README](../../README.md#two-sparks-one-cluster-or-one-copy-per-spark).
+[`pa_router.py`](pa_router.py). Which one to pick: [README](../../README.md#which-setup-should-i-use).
 This is the setup measured in k72 ([results](../../results/dp2-gate-k72-20261008-1135/)).
 
 ## Run it
@@ -16,7 +16,7 @@ This is the setup measured in k72 ([results](../../results/dp2-gate-k72-20261008
    sparkrun run qwen3.8-flash-next-1x-dgx-spark --hosts <spark-b> --solo
    ```
 
-2. Wait until both answer `GET /health` with 200 (see [Verify](../../README.md#verify)).
+2. Wait until both answer `GET /health` with 200 (see [Verify](../../README.md#quick-start)).
 
 3. Start the router on either Spark or any host that reaches both. Python 3 stdlib only, nothing to install:
 

@@ -3,380 +3,508 @@
 # requires-python = ">=3.10"
 # dependencies = ["matplotlib>=3.8"]
 # ///
-"""Render the README charts from committed files under results/ into docs/img/*.svg.
+"""Render the README charts and the capability table from docs/data/capability.csv.
 
     uv run scripts/make_charts.py            # or: pip install matplotlib && python3 scripts/make_charts.py
 
-Every number drawn comes from a file listed in SRC. Transparent background and mid-tone colours, so the
-same SVG reads on GitHub's light and dark themes.
+The same script and the same CSV are in both recipe repos (1x and 2x), byte for byte, so the charts compare the
+setups the same way in both. Every drawn number is a CSV row, and every row names the raw file it came from
+(`source`, prefixed with the repo: `1x:` or `2x:`). Nothing is interpolated: a line is broken where a point was not
+measured.
+
+Rules: the shipped release of a setup is its highest version in the CSV. Its points are filled; points from any
+older release are hollow, on a dotted line, and named in the footnote. For each x value the newest row wins, and an
+older release is drawn only where the newest one has no point.
+
+New measurements (k76-capability-matrix and later) append rows with the same columns; rerun this script to refresh
+docs/img/ and the table between the `capability-table` markers in README.md.
 """
-import json, math
+import csv
 import re
-import statistics
+from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-RES = ROOT / "results"
+CSV = ROOT / "docs" / "data" / "capability.csv"
 OUT = ROOT / "docs" / "img"
+GH = {"1x": "https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/",
+      "2x": "https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/tree/main/"}
+QUEUED = "full grid queued (tp-2 #128)"
 
-LIB = RES / "lib-bench-20261005"
-HC = RES / "high-conc-k46b-20261005"   # max_num_seqs 32 runs (k46b): not the shipped cap, no quality gate at this cap
-
-SRC = {
-    # 2x Spark (TP=2), b1.4: coding grid (mean of two candidate boots).
-    "tp2_verdict": RES / "b1.4-20261001/b14.json",
-    # Counting on b1.4, 2026-10-05: one file per level, 5 rounds each, every round saved (max round is drawn).
-    "tp2_count": sorted((LIB / "tp2-b1.4").glob("count-c*.json")),
-    "tp2_benchy": [RES / "b1.4-20261001/benchy/cand1-task.csv", RES / "b1.4-20261001/benchy/cand2-task.csv"],
-    # Copy-heavy on b1.4, 2026-10-04 showcase run.
-    "tp2_copy": [RES / "showcase-20261004/A/copy-streams.json"],
-    # llm-inference-bench decode, 30 s per cell, c1/c4/c8 at 0/16K/64K context.
-    "tp2_lib": LIB / "tp2-b1.4/lib-decode.json",
-    # Promoted 2x Spark builds, in order. The first verdict's baseline is the 2026-09-23 shipped build.
-    "builds": [
-        ("b1", "09-25", RES / "b1-20260925/verdict-oldb12x-on.json"),
-        ("b1.1", "09-26", RES / "b1.1-20260926/verdict-b11-prefixdrop.json"),
-        ("b1.2", "09-27", RES / "b1.2-20260927/b12-hcq.json"),
-        ("b1.3", "09-29", RES / "b1.3-20260929/b13.json"),
-        ("b1.4", "10-01", RES / "b1.4-20261001/b14.json"),
-        # b1.6 (#115): its A/B is k71 (Thunderdome, llama-benchy 4 runs): arm boots' coding grid; no counting sweep
-        ("b1.6", "10-08", [RES / f"k71-tp2-refit-pinned-plans-20261008-0921/screen/arm-p{i}/task.csv" for i in (1, 2)]),
-    ],
-    "tp2_fidelity": RES / "b1.4-20261001/regate-b14-20261001/gate-seed7.txt",
-    # High concurrency, max_num_seqs 32 (one boot per setup): counting, copy-heavy, coding at c16/c32.
-    "hc": {"2× Spark (TP=2), b1.4, max_num_seqs 32": HC / "tp2-s32"},
-    "tp2_tc45": RES / "b1.4-20261001/gate/tc45-cand1.txt",
+# White card on both GitHub themes: dark-theme readers see a light card with its own ink, so one file serves both.
+CARD, INK, MUTED, GRID = "#ffffff", "#1f2328", "#424a53", "#d1d9e0"
+# Colourblind-checked categorical slots (blue, orange, aqua: worst all-pairs CVD dE 9.2). Each setup also has its
+# own marker, and bars carry direct labels, so identity never rests on colour alone.
+SETUPS = {
+    "1x": dict(name="1× Spark", color="#2a78d6", marker="o"),
+    "2x": dict(name="2× Spark, TP=2", color="#eb6834", marker="s"),
+    "dp2": dict(name="2× Spark, DP=2", color="#1baf7a", marker="D"),
 }
-
-# Neutral ink that keeps >= 3:1 contrast on both #ffffff and #0d1117; series hues are mid-tone.
-INK, MUTED, GRID = "#768390", "#8b949e", "#8b949e40"
-C_COPY, C_COUNT, C_CODE, C_CODE16 = "#3987e5", "#1baf7a", "#e0662f", "#d4a017"
-C_TP2, C_TP1 = "#3987e5", "#e0662f"
-C_C1, C_C4, C_C8 = "#3987e5", "#1baf7a", "#e0662f"
+PREFIX = {"1x": "1× ", "2x": "2× ", "dp2": "DP=2 on 1× "}   # versions are per repo: 1× v2.1.0 is not 2× v2.1.0
 
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 11, "text.color": INK, "axes.labelcolor": INK,
     "xtick.color": INK, "ytick.color": INK, "axes.edgecolor": GRID, "svg.fonttype": "path",
-    "figure.facecolor": "none", "axes.facecolor": "none", "savefig.transparent": True,
-    "legend.frameon": False, "svg.hashsalt": "make_charts", "axes.spines.top": False, "axes.spines.right": False,
+    "figure.facecolor": CARD, "axes.facecolor": CARD, "savefig.facecolor": CARD, "legend.frameon": False,
+    "svg.hashsalt": "make_charts", "axes.spines.top": False, "axes.spines.right": False,
+    "axes.spines.left": False, "axes.titlesize": 12.5, "axes.titleweight": "bold", "axes.titlelocation": "left",
 })
 
 
-# ---------- loaders ----------
+# ---------- data ----------
 
-def benchy(path):
-    """llama-benchy markdown table -> {test: (total t/s, accept/draft)}."""
-    rows = {}
-    for line in Path(path).read_text().splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 10 or not re.search(r"\(c\d+\)", cells[1]):
-            continue
-        rows[cells[1]] = (float(cells[2].split("±")[0]), float(cells[9]))
-    return rows
-
-
-def grid(prefix, rows):
-    """'tg512' or 'tg512 @ d16384' -> {c: t/s}."""
-    pat = re.compile(re.escape(prefix) + r" \(c(\d+)\)$")
-    return {int(m.group(1)): v[0] for k, v in rows.items() if (m := pat.match(k))}
-
-
-def verdict_means(path, key, prefix=""):
-    d = json.loads(Path(path).read_text())[key]
-    return {int(k[len(prefix) + 1:]): v["cand_mean"] for k, v in d.items() if k.startswith(prefix + "c")}
-
-
-def copy_best(paths):
-    """Copy-heavy files -> {streams: max round window tok/s over all files}."""
-    out = {}
-    for p in paths:
-        for r in json.loads(Path(p).read_text())["rounds"]:
-            out[r["n"]] = max(out.get(r["n"], 0), r["window"]["tok_s"])
-    return out
-
-
-def count_best(paths):
-    """Counting sweep files -> {c: max round agg tok/s}. Files that saved every round carry agg_tok_s_max."""
-    out = {}
-    for p in paths:
-        for r in json.loads(Path(p).read_text())["rows"]:
-            out[r["c"]] = max(out.get(r["c"], 0), r.get("agg_tok_s_max", r["agg_tok_s"]))
-    return out
-
-
-def lib_decode(path):
-    """llm-inference-bench JSON -> {c: {context tokens: aggregate tok/s}} over the cells that ran."""
-    out = {}
-    for r in json.loads(Path(path).read_text())["results"]:
-        if r.get("aggregate_tps") and not r.get("failure_reason"):
-            out.setdefault(r["concurrency"], {})[r["context_tokens"]] = r["aggregate_tps"]
-    return out
-
-
-def fidelity(path):
-    out = []
-    for line in Path(path).read_text().splitlines():
-        m = re.search(r"actual_tokens\s+(\d+)\s+\|\s+exact\s+(\d+)", line)
-        if m:
-            out.append((int(m.group(1)), int(m.group(2))))
-    return out
+def vkey(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v)) if v else ()
 
 
 def load():
-    v = SRC["tp2_verdict"]
-    tp2 = {
-        "copy": copy_best(SRC["tp2_copy"]),
-        "count": count_best(SRC["tp2_count"]),
-        "code": verdict_means(v, "coding_grid_pct_diff", "d0_"),
-        "code16": verdict_means(v, "coding_grid_pct_diff", "d16384_"),
-    }
-    t2 = [benchy(p) for p in SRC["tp2_benchy"]]
-    prefill = {
-        "2× Spark": ([r["pp2048 (c1)"][0] for r in t2], [r["ctx_pp @ d16384 (c1)"][0] for r in t2]),
-    }
-    builds = [("shipped", "09-23", None)] + SRC["builds"]
-    hist = []
-    for name, date, path in builds:
-        if isinstance(path, list):  # llama-benchy grids of the arm boots, mean; counting not measured
-            g = [benchy(x) for x in path]
-            m = lambda k: sum(r[k][0] for r in g) / len(g)
-            hist.append((name, date, m("tg512 (c1)"), m("tg512 (c8)"), math.nan, math.nan))
-            continue
-        p = path or SRC["builds"][0][2]
-        col = "base_mean" if path is None else "cand_mean"
-        d = json.loads(p.read_text())
-        hist.append((name, date,
-                     d["coding_grid_pct_diff"]["d0_c1"][col], d["coding_grid_pct_diff"]["d0_c8"][col],
-                     d["counting_pct_diff"]["c1"][col], d["counting_pct_diff"]["c8"][col]))
-    lib = {"2× Spark (TP=2), b1.4": lib_decode(SRC["tp2_lib"])}
-    for name, data in (("tp2", tp2), ("lib", lib)):
-        for k, s in data.items():
-            assert s, f"{name}.{k}: no data parsed"
-    return tp2, prefill, hist, lib
+    rows = list(csv.DictReader(CSV.open()))
+    for r in rows:
+        for k in ("conc", "prompt_tokens", "depth_tokens"):
+            r[k] = int(r[k]) if r[k] else None
+        try:
+            r["value"] = float(r["value"])
+        except ValueError:
+            pass
+    global SHIPPED
+    SHIPPED = {s: max((r["release"] for r in rows if r["setup"] == s), key=vkey, default="") for s in SETUPS}
+    return rows
+
+
+def old(r):
+    return r["release"] != SHIPPED[r["setup"]]
+
+
+def label(r, prefix=True):
+    """Release with its old build name, e.g. '1× v2.1.0 (old name v3e)'; the old name alone if not yet named."""
+    name = f"{r['release']} (old name {r['alias']})" if r["release"] else r["alias"]
+    return (PREFIX[r["setup"]] if prefix else "") + name
+
+
+def has(rows, metric):
+    return [s for s in SETUPS if any(r["setup"] == s and r["metric"] == metric for r in rows)]
+
+
+def by_release(rows, setup, metric, x, keep=None, **eq):
+    """[{x: row}] per (release, campaign), newest first; older ones keep only the x values nothing newer has."""
+    rel = defaultdict(list)
+    for r in rows:
+        if r["setup"] == setup and r["metric"] == metric and all(r[k] == v for k, v in eq.items()) \
+                and (keep is None or r[x] in keep):
+            rel[(r["release"], r["alias"], r["campaign"])].append(r)
+    out, seen = [], set()
+    for key in sorted(rel, key=lambda k: (vkey(k[0]), max(r["date"] for r in rel[k])), reverse=True):
+        pts = {r[x]: r for r in sorted(rel[key], key=lambda r: r["date"]) if r[x] not in seen}
+        if pts:
+            out.append(dict(sorted(pts.items())))
+            seen |= set(pts)
+    return out
+
+
+def segments(pts, keep):
+    """Split {x: row} into runs with no missing x of `keep` in between, so no line crosses an unmeasured point."""
+    order = sorted(keep) if keep else sorted(pts)
+    runs, cur = [], []
+    for x in order:
+        if x in pts:
+            cur.append(x)
+        elif cur:
+            runs.append(cur)
+            cur = []
+    return runs + ([cur] if cur else [])
+
+
+def line(ax, rows, setup, metric, x, notes, keep=None, fmt="{:.0f}", dy=0, label_end=True, **eq):
+    s = SETUPS[setup]
+    groups = by_release(rows, setup, metric, x, keep, **eq)
+    for pts in groups:
+        r0 = next(iter(pts.values()))
+        o = old(r0)
+        for run in segments(pts, keep or set(pts)):
+            ax.plot(run, [pts[k]["value"] for k in run], ":" if o else "-", color=s["color"], lw=1.5 if o else 2.4,
+                    marker=s["marker"], ms=6.5 if o else 7.5, mfc=CARD if o else s["color"], mew=1.8, zorder=2)
+        notes.setdefault(setup, {}).setdefault((label(r0), r0["date"], r0["harness"], o), None)
+    if label_end:
+        for pts in groups:
+            k = max(pts)
+            v = pts[k]["value"]
+            ax.annotate(fmt(v) if callable(fmt) else fmt.format(v), (k, v), xytext=(7, dy),
+                        textcoords="offset points", va="center", fontsize=10, color=INK, fontweight="bold")
+
+
+def legend(fig, setups, y=-0.02, hollow=False, patches=False):
+    if patches:
+        h = [plt.Rectangle((0, 0), 1, 1, color=SETUPS[s]["color"], label=SETUPS[s]["name"]) for s in setups]
+    else:
+        h = [Line2D([], [], color=SETUPS[s]["color"], marker=SETUPS[s]["marker"], lw=2.4, ms=7.5,
+                    label=SETUPS[s]["name"]) for s in setups]
+    if hollow:
+        h.append(Line2D([], [], color=MUTED, marker="o", mfc=CARD, mew=1.8, ls=":", lw=1.5, ms=6.5,
+                        label="hollow, dotted: older release (shipped one not measured here)"))
+    fig.legend(handles=h, loc="upper center", ncol=len(h), bbox_to_anchor=(0.5, y), fontsize=10)
+
+
+def footnote(fig, notes, extra="", y=-0.1):
+    parts = [f"{rel}, {date}, {harness}" + (" (older release)" if o else "")
+             for items in notes.values() for (rel, date, harness, o) in items]
+    text = "\n".join(parts + ([extra] if extra else []) + ["Data: docs/data/capability.csv (source file per point)."])
+    fig.text(0.01, y, text, fontsize=9.5, color=MUTED, va="top", ha="left", linespacing=1.45)
+
+
+def style(ax, ylabel=None, axis="y"):
+    ax.grid(axis=axis, color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.tick_params(length=0)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+
+
+def title(fig, text, y=1.03):
+    fig.suptitle(text, x=0.01, ha="left", fontsize=14, fontweight="bold", y=y)
+
+
+def save(fig, name):
+    OUT.mkdir(parents=True, exist_ok=True)
+    for ext in ("svg", "png"):
+        kw = dict(metadata={"Date": None}) if ext == "svg" else dict(dpi=160, metadata={"Software": None})
+        fig.savefig(OUT / f"{name}.{ext}", format=ext, bbox_inches="tight", pad_inches=0.25, **kw)
+    plt.close(fig)
+    print("wrote", (OUT / name).relative_to(ROOT), "svg+png")
+
+
+def ktok(n):
+    return f"{n // 1024}K" if n >= 1024 else str(n)
 
 
 # ---------- charts ----------
 
-def save(fig, name):
-    OUT.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT / name, format="svg", bbox_inches="tight", metadata={"Date": None})
-    plt.close(fig)
-    print("wrote", (OUT / name).relative_to(ROOT))
-
-
-def style_ax(ax):
-    ax.grid(axis="y", color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    ax.tick_params(length=0)
-
-
-SERIES = [
-    ("copy", "Copy-heavy (high acceptance, ~4.9 tok/step)", C_COPY, "-"),
-    ("count", "Counting (high acceptance, ~5.0 tok/step)", C_COUNT, "-"),
-    ("code", "Coding, benchy tg512 (~2.7–3.5 tok/step)", C_CODE, "-"),
-    ("code16", "Coding at 16k cached context", C_CODE16, "--"),
-]
-
-
-def chart_throughput(tp2):
-    fig, axes = plt.subplots(1, 1, figsize=(8, 4.6), squeeze=False)
-    axes = axes[0]
-    for ax, data, title, cmax in ((axes[0], tp2, "2× Spark (TP=2), b1.4", 16),):
-        style_ax(ax)
-        for key, label, color, ls in SERIES:
-            pts = sorted((c, y) for c, y in data[key].items() if c <= cmax)
-            xs, ys = zip(*pts)
-            ax.plot(xs, ys, ls, color=color, lw=2.2, marker="o", ms=5, label=label)
-            note = " (KV pool full)" if key == "code16" and ys[-1] < ys[-2] / 2 else ""
-            dy = {"code": 5, "code16": -6}.get(key, 0)   # the two coding end points can sit close together
-            ax.annotate(f"{ys[-1]:.0f}{note}", (xs[-1], ys[-1]), xytext=(6, dy), textcoords="offset points",
-                        va="center", fontsize=10, color=INK, fontweight="bold")
+def chart_concurrency(rows):
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.4), sharex=True)
+    notes, keep = {}, {1, 2, 4, 8, 16}
+    for ax, metric, ttl in ((axes[0], "tg_req", "Per request"), (axes[1], "tg_total", "All requests together")):
+        style(ax, "Decode tok/s")
+        for setup in has(rows, metric):
+            line(ax, rows, setup, metric, "conc", notes, keep=keep, depth_tokens=None)
         ax.set_xscale("log", base=2)
-        ticks = [1, 2, 4, 8, 16][: 5 if cmax == 16 else 4]
-        ax.set_xticks(ticks, [str(t) for t in ticks])
-        ax.set_xlim(0.85, cmax * 1.45)
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
+        ax.set_xticks(sorted(keep), [str(k) for k in sorted(keep)])
+        ax.set_xlim(0.8, 24)
+        ax.set_ylim(0, None)
         ax.set_xlabel("Concurrent requests")
-    axes[0].set_ylabel("Aggregate decode tok/s")
-    axes[0].set_ylim(0, None)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.14), fontsize=10)
-    fig.text(0.0, -0.24, "Copy-heavy: max of 3 rounds per task count, low thinking effort. "
-             "Counting: T=0, thinking off, max of 5 rounds per level.\n"
-             "Coding: llama-benchy task mode, T=1.0, thinking on, mean of two boots, 3 runs. Raw files under results/.",
-             fontsize=8.5, color=MUTED)
-    save(fig, "throughput.svg")
+        ax.set_title(ttl)
+    if "1x" in has(rows, "tg_total"):
+        r8 = max((r for r in rows if r["setup"] == "1x" and r["metric"] == "tg_total" and r["conc"] == 8),
+                 key=lambda r: r["date"])
+        axes[1].annotate("1× stops at 8\n(max_num_seqs 8)", (8, r8["value"]), xytext=(10, -44),
+                         textcoords="offset points", fontsize=9, color=MUTED)
+    title(fig, "Decode speed by concurrent requests")
+    legend(fig, has(rows, "tg_total"), hollow=True)
+    footnote(fig, notes, "512 tokens out after a 2,048-token prompt, no context, server sampling (T=1.0), thinking on. "
+             "Lines break where a point was not measured." + ("" if "dp2" in has(rows, "tg_total")
+                                                              else f"\nDP=2: not on this grid yet, {QUEUED}."))
+    save(fig, "decode-concurrency")
 
 
-def chart_prefill(prefill):
-    fig, ax = plt.subplots(figsize=(7.5, 3.6))
-    style_ax(ax)
-    groups = ["2,048-token prompt", "16k context fill"]
-    w = 0.36
-    for i, (name, color) in enumerate((("2× Spark", C_TP2),)):
-        for g, vals in enumerate(prefill[name]):
-            x = g
-            m = statistics.mean(vals)
-            ax.bar(x, m, w * 0.92, color=color, label=name if g == 0 else None)
-            txt = f"{m:,.0f}" if len(vals) == 1 else f"{min(vals):,.0f}–{max(vals):,.0f}"
-            ax.text(x, m + 40, txt, ha="center", va="bottom", fontsize=10, color=INK, fontweight="bold")
-    ax.set_xticks(range(len(groups)), groups)
-    ax.set_ylabel("Prefill tok/s, 1 request")
-    ax.set_ylim(0, 3500)
-    ax.legend(loc="upper left", ncol=2, fontsize=10)
-    fig.text(0.0, -0.06, "llama-benchy pp2048 and ctx_pp at depth 16,384. 2× Spark b1.4, two boots, range shown.", fontsize=8.5, color=MUTED)
-    save(fig, "prefill.svg")
-
-
-def chart_builds(hist):
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), squeeze=False)
-    rows = (
-        (hist, "2× Spark", ((4, "Counting", C_COUNT), (2, "Coding, benchy tg512", C_CODE)),
-                           ((5, "Counting", C_COUNT), (3, "Coding, benchy tg512", C_CODE))),
-    )
-    for r, (data, setup, s1, s8) in enumerate(rows):
-        labels = [f"{n}\n{d}" for n, d, *_ in data]
-        xs = range(len(data))
-        for ax, title, series in ((axes[r][0], "1 request", s1), (axes[r][1], "8 concurrent requests", s8)):
-            style_ax(ax)
-            for idx, name, color in series:
-                ys = [h[idx] for h in data]
-                ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=name,
-                        ls="--" if color == C_CODE16 else "-")
-                last = max(i for i, y in enumerate(ys) if not math.isnan(y))
-                for x, y in ((0, ys[0]), (last, ys[last])):
-                    # the lower of the two series at this point is labelled below its marker, so labels never cross
-                    below = any(h2[x] > y or (h2[x] == y and color == C_CODE16)
-                                for h2 in ([h[i] for h in data] for i, _, _ in series if i != idx))
-                    ax.annotate(f"{y:.0f}", (x, y), xytext=(0, -16 if below else 8), textcoords="offset points",
-                                ha="center", fontsize=10, color=INK, fontweight="bold")
-            ax.set_xticks(list(xs), labels, fontsize=9)
+def chart_prefill(rows):
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    notes = {}
+    for ax, metric, ttl, ylab in ((axes[0], "pp", "Prefill speed", "Prefill tok/s, 1 request"),
+                                  (axes[1], "ttft_s", "Time to first token", "Seconds, 1 request, uncached")):
+        style(ax, ylab)
+        for setup in has(rows, metric):
+            line(ax, rows, setup, metric, "prompt_tokens", notes, conc=1,
+                 fmt="{:,.0f}" if metric == "pp" else "{:.0f} s",
+                 dy={"1x": -8, "2x": 8}.get(setup, 0) if metric == "pp" else {"1x": 7, "2x": -7}.get(setup, 0))
+        ax.set_xscale("log", base=2)
+        ticks = sorted({r["prompt_tokens"] for r in rows if r["metric"] == metric})
+        ax.set_xticks(ticks, [ktok(t) if t % 1024 == 0 else f"{t / 1000:.0f}K" for t in ticks])
+        ax.set_xlim(ticks[0] / 1.35, ticks[-1] * 1.5)
+        ax.set_xlabel("Prompt length (tokens)")
+        ax.set_title(ttl)
+        if metric == "pp":
             ax.set_ylim(0, None)
-            ax.set_title(f"{setup}, {title}", loc="left", fontsize=13, fontweight="bold", color=INK)
-        axes[r][0].set_ylabel("Aggregate decode tok/s")
-        axes[r][1].legend(loc="center right" if r == 0 else "center left", fontsize=9.5)
-    fig.tight_layout(h_pad=2.2)
-    fig.text(0.0, -0.12, "Promoted builds in order (2026). 2× Spark: each value is that build's A/B, mean of two boots; "
-             "'shipped' is the baseline boots of the b1 A/B.\nb1.6: the arm boots of its k71 A/B "
-             "(llama-benchy 4 runs, b1.4 control 72.9 / 181.1 on the same day); counting was not run.\n"
-             "Every build passed the quality gate.",
-             fontsize=8.5, color=MUTED)
-    save(fig, "build-history.svg")
+        else:
+            ax.set_yscale("log")
+            yt = [1, 2, 5, 10, 30, 60, 120]
+            ax.set_yticks(yt, [f"{t:g}" for t in yt])
+            ax.minorticks_off()
+    title(fig, "Prompt processing by prompt length")
+    legend(fig, has(rows, "pp"), hollow=True)
+    st = sorted({r["stat"].split(",")[0] for r in rows if r["metric"] == "pp"})
+    footnote(fig, notes, "One request, prompt not in the prefix cache. Samples per point: " + "; ".join(st) + ".\n"
+             "The 2,048-token llama-benchy prefill is in the capability table (another harness, not drawn here)."
+             + ("" if "dp2" in has(rows, "pp") else "\nDP=2: each request is prefilled by one 1× replica; not "
+                f"measured separately, {QUEUED}."))
+    save(fig, "prefill-ttft")
 
 
-def chart_depth(lib):
-    fig, axes = plt.subplots(1, len(lib), figsize=(6.5 * len(lib), 4.4), sharey=True, squeeze=False)
-    axes = axes[0]
-    ctx = [0, 16384, 65536]
-    for ax, (title, data) in zip(axes, lib.items()):
-        style_ax(ax)
-        for c, color in ((8, C_C8), (4, C_C4), (1, C_C1)):
-            pts = [(i, data.get(c, {}).get(x)) for i, x in enumerate(ctx)]
-            pts = [(i, y) for i, y in pts if y]
-            if not pts:
+def chart_depth(rows):
+    fig, axes = plt.subplots(1, 3, figsize=(11, 4.2), sharey=True)
+    notes = {}
+    depths = sorted({r["depth_tokens"] for r in rows if r["metric"] == "decode_depth_total"})
+    for ax, c in zip(axes, (1, 4, 8)):
+        style(ax, "Decode tok/s, all requests" if c == 1 else None)
+        for setup in has(rows, "decode_depth_total"):
+            line(ax, rows, setup, "decode_depth_total", "depth_tokens", notes, keep=set(depths), conc=c)
+        ax.set_xticks(depths, [ktok(d) if d else "0" for d in depths])
+        ax.set_xlim(-0.08 * depths[-1], depths[-1] * 1.25)
+        ax.set_xlabel("Context in the prompt (tokens)")
+        ax.set_title(f"{c} request{'s' if c > 1 else ''}")
+    axes[0].set_ylim(0, None)
+    title(fig, "Decode speed with context already in the prompt")
+    legend(fig, has(rows, "decode_depth_total"), hollow=any(old(r) for r in rows if r["metric"] == "decode_depth_total"))
+    gap = [d for d in (131072, 262144) if d not in depths]
+    harness = {r["harness"] for r in rows if r["metric"] == "decode_depth_total"}
+    footnote(fig, notes, "Sustained decode with the context cached, server default sampling. "
+             + ("Compare points within this chart: its 30 s steady-state window reads 10-30% above the 512-token "
+                "runs of the concurrency chart.\n" if "llm-inference-bench 0.7.6" in harness else "")
+             + (f"Not measured yet at {' and '.join(ktok(d) for d in gap)} context: {QUEUED}." if gap else ""))
+    save(fig, "decode-depth")
+
+
+def chart_coding(rows):
+    fig, ax = plt.subplots(figsize=(8, 4.4))
+    notes = {}
+    style(ax, "Decode tok/s, 1 request")
+    modes = ["T=0, thinking off", "server defaults, thinking on"]
+    sets = has(rows, "coding_probe_median")
+    w = 0.8 / len(sets)
+    for i, setup in enumerate(sets):
+        s = SETUPS[setup]
+        for j, mode in enumerate(modes):
+            def get(m):
+                c = [r for r in rows if r["setup"] == setup and r["metric"] == m and r["sampling"] == mode]
+                return max(c, key=lambda r: r["date"]) if c else None
+            r, lo, hi = get("coding_probe_median"), get("coding_probe_min"), get("coding_probe_max")
+            if not r:
                 continue
-            xs, ys = zip(*pts)
-            ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=f"{c} request{'s' if c > 1 else ''}")
-            for x, y in pts:
-                ax.annotate(f"{y:.0f}", (x, y), xytext=(0, 8), textcoords="offset points", ha="center",
-                            fontsize=9.5, color=INK, fontweight="bold")
-        ax.set_xticks(range(len(ctx)), ["0", "16K", "64K"])
-        ax.set_xlim(-0.3, len(ctx) - 0.7)
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
-        ax.set_xlabel("Context already in the prompt (tokens)")
-    axes[0].set_ylabel("Aggregate decode tok/s")
-    axes[0].set_ylim(0, None)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.12), fontsize=10)
-    fig.text(0.0, -0.24, "llm-inference-bench, 30 s of sustained decode per cell, server default sampling, "
-             "one boot.\nRaw files: results/lib-bench-20261005/.",
-             fontsize=8.5, color=MUTED)
-    save(fig, "depth.svg")
+            x = j + (i - (len(sets) - 1) / 2) * w
+            o = old(r)
+            ax.bar(x, r["value"], w * 0.86, color=CARD if o else s["color"], edgecolor=s["color"], linewidth=2,
+                   hatch="//" if o else None, zorder=2)
+            if lo and hi:
+                ax.plot([x, x], [lo["value"], hi["value"]], color=INK, lw=1.3, zorder=3)
+                for v in (lo["value"], hi["value"]):
+                    ax.plot([x - w * 0.12, x + w * 0.12], [v, v], color=INK, lw=1.3, zorder=3)
+            top = hi["value"] if hi else r["value"]
+            ax.text(x, top + 2, f"{PREFIX[setup].strip()} {r['value']:.0f}", ha="center", va="bottom",
+                    fontsize=10.5, fontweight="bold", color=INK, zorder=4)
+            notes.setdefault(setup, {}).setdefault((label(r), r["date"], r["harness"], o), None)
+    ax.set_xticks([0, 1], ["T=0, thinking off", "server defaults, thinking on"])
+    ax.set_ylim(0, 135)
+    title(fig, "Coding, one request at a time: 36 prompts in Python, C++, Rust and Go", y=1.0)
+    legend(fig, sets, patches=True)
+    hits = "; ".join(f"{PREFIX[r['setup']].strip()} {r['stat'].split(', ')[1]}" for r in rows
+                     if r["metric"] == "coding_probe_median" and r["sampling"].startswith("server"))
+    footnote(fig, notes, "Bar and number = median of the 36 prompts, line = min to max. Hatched = older release. "
+             "Up to 768 tokens out; decode tok/s = (tokens - 1) / time after the first token.\n"
+             f"Server defaults (thinking on) hit max_tokens inside reasoning on most prompts ({hits}).")
+    save(fig, "coding")
 
 
-def benchy_tg_max(path):
-    """llama-benchy JSON -> {concurrency: max run tg tok/s total} at depth 0."""
-    out = {}
-    for b in json.loads(Path(path).read_text())["benchmarks"]:
-        if b["context_size"] == 0 and not b["is_context_prefill_phase"]:
-            out[b["concurrency"]] = max(b["tg_throughput"]["values"])
-    return out
+def chart_agents(rows):
+    fig, ax = plt.subplots(figsize=(11, 4.6))
+    fig.subplots_adjust(left=0.3)
+    notes = {}
+    style(ax, axis="x")
+    wl = ["agent8", "agent16", "long-4", "long-8", "long-12", "long-16"]
+    names = {"agent8": "8 sessions × 6 turns", "agent16": "16 sessions × 4 turns", "long-4": "4 sessions × 2 turns",
+             "long-8": "8 sessions × 2 turns", "long-12": "12 sessions × 2 turns", "long-16": "16 sessions × 2 turns"}
+    start = {"agent": "~32K-token start", "long-": "~128K-token start"}
+    sets = has(rows, "agent_wall_s")
+    h = 0.8 / len(sets)
+    for i, setup in enumerate(sets):
+        s = SETUPS[setup]
+        pts = {r["stat"]: r for r in rows if r["setup"] == setup and r["metric"] == "agent_wall_s"}
+        for j, k in enumerate(wl):
+            if k not in pts:
+                continue
+            r = pts[k]
+            y = j + (i - (len(sets) - 1) / 2) * h
+            ax.barh(y, r["value"], h * 0.88, color=s["color"], zorder=2)
+            ax.text(r["value"] + 8, y, f"{r['value']:.0f} s  {'TP=2' if setup == '2x' else 'DP=2'}", va="center",
+                    fontsize=9.5, color=INK)
+            notes.setdefault(setup, {}).setdefault((label(r), r["date"], r["harness"], old(r)), None)
+    ax.set_yticks(range(len(wl)), [f"{names[k]}, {start['agent' if k.startswith('agent') else 'long-']}"
+                                   for k in wl], fontsize=10)
+    ax.invert_yaxis()
+    ax.set_xlabel("Wall time for the whole workload, s (shorter is better)")
+    ax.set_xlim(0, max(r["value"] for r in rows if r["metric"] == "agent_wall_s") * 1.18)
+    title(fig, "Two Sparks, many agent sessions at once: TP=2 or DP=2?", y=1.0)
+    legend(fig, sets, patches=True)
+    pt = [r["value"] for r in rows if r["metric"] == "agent_prompt_tokens"]
+    ot = [r["value"] for r in rows if r["metric"] == "agent_output_tokens"]
+    footnote(fig, notes, "All sessions start together; every turn resends the conversation with tools on, "
+             "temperature 0.6, thinking off.\n"
+             f"Prompt work dominates: {min(pt) / 1e6:.1f}M to {max(pt) / 1e6:.1f}M prompt tokens against "
+             f"{min(ot):,.0f} to {max(ot):,.0f} output tokens per workload, so this compares prefill capacity.")
+    save(fig, "agents")
 
 
-def chart_concurrency():
-    fig, axes = plt.subplots(1, len(SRC["hc"]), figsize=(7.5 * len(SRC["hc"]), 4.6), sharey=True, squeeze=False)
-    axes = axes[0]
-    for ax, (title, d) in zip(axes, SRC["hc"].items()):
-        style_ax(ax)
-        series = (("Copy-heavy, max of 3 rounds", C_COPY, copy_best([d / "copy-streams.json"])),
-                  ("Counting, max of 5 rounds", C_COUNT, count_best(sorted(d.glob("count-c*.json")))),
-                  ("Coding, benchy tg512, max of 3 runs", C_CODE, benchy_tg_max(d / "benchy.json")))
-        for label, color, data in series:
-            pts = sorted((c, y) for c, y in data.items() if c in (1, 8, 16, 32))
-            assert pts, f"{title} {label}: no data"
-            xs, ys = zip(*pts)
-            ax.plot(xs, ys, color=color, lw=2.2, marker="o", ms=5, label=label)
-            ax.annotate(f"{ys[-1]:.0f}", (xs[-1], ys[-1]), xytext=(6, 0), textcoords="offset points",
-                        va="center", fontsize=10, color=INK, fontweight="bold")
-        ax.set_xscale("log", base=2)
-        ax.set_xticks([1, 8, 16, 32], ["1", "8", "16", "32"])
-        ax.set_xlim(0.85, 32 * 1.5)
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK)
-        ax.set_xlabel("Concurrent requests")
-    axes[0].set_ylabel("Aggregate decode tok/s")
-    axes[0].set_ylim(0, None)
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.14), fontsize=10)
-    fig.text(0.0, -0.26, "Measured with max_num_seqs 32 (the shipped recipe uses 16); the quality gate "
-             "was not run at this cap.\nOne boot; coding measured at c16 and c32 only. Raw files: "
-             "results/high-conc-k46b-20261005/.", fontsize=8.5, color=MUTED)
-    save(fig, "concurrency.svg")
+def chart_gains(rows):
+    sets = [s for s in ("1x", "2x") if any(r["setup"] == s and r["metric"] == "release_gain_pct" for r in rows)]
+    data = {s: sorted((r for r in rows if r["setup"] == s and r["metric"] == "release_gain_pct"),
+                      key=lambda r: vkey(r["release"])) for s in sets}
+    n = max(len(v) for v in data.values())
+    fig, axes = plt.subplots(1, len(sets), figsize=(12.5, 0.62 * n + 1.6), squeeze=False,
+                             gridspec_kw={"wspace": 0.5})
+    cap = 60
+    for ax, s in zip(axes[0], sets):
+        style(ax, axis="x")
+        col = SETUPS[s]["color"]
+        for i, r in enumerate(data[s]):
+            v = r["value"]
+            unpaired = "not paired" in r["stat"]
+            ax.barh(i, min(v, cap), 0.62, color=GRID if unpaired else col, hatch="//" if unpaired else None,
+                    edgecolor=col if unpaired else "none", zorder=2)
+            noise = f" (noise {float(r['sd']):.1f}%)" if r["sd"] else ""
+            cell = r["stat"].split(" (")[0].split(":")[0]
+            more = r["stat"][len(cell):].strip(" :") if not unpaired else ""
+            if v > cap:
+                for dx in (-3.5, -1.5):   # break mark: the bar is cut at the axis cap
+                    ax.plot([cap + dx - 0.6, cap + dx + 0.6], [i + 0.4, i - 0.4], color=INK, lw=1.4, zorder=3)
+            if v > 32:
+                ax.text(1.2, i, f"+{v:.0f}%  {cell}" if v > cap else f"+{v:.1f}%  {cell}", va="center", fontsize=10,
+                        color=INK if unpaired else CARD, fontweight="bold", zorder=4,
+                        bbox=dict(facecolor=CARD, edgecolor="none", pad=1.5) if unpaired else None)
+                tail = (f"{more} " if more else "") + noise.strip()
+                if tail:
+                    ax.text(min(v, cap) + 1.2, i, tail, va="center", fontsize=9, color=INK, zorder=3)
+            else:
+                ax.text(v + 1.2, i, f"+{v:.1f}%  {cell}{(' ' + more) if more else ''}{noise}", va="center",
+                        fontsize=9.5, color=INK, zorder=3)
+        ax.set_yticks(range(len(data[s])), [f"{label(r, prefix=False).replace(' (', chr(10) + '(')}"
+                                            for r in data[s]], fontsize=9.5)
+        ax.invert_yaxis()
+        ax.set_xlim(0, cap + 4)
+        ax.set_xlabel("Gain over the previous release, %")
+        ax.set_title(SETUPS[s]["name"])
+    title(fig, "Largest gain beyond noise in each release's own A/B", y=1.02)
+    fig.text(0.01, -0.02, "Each bar: that release against the one before it, same Sparks, boots alternating; noise = "
+             "the control's boot-to-boot spread (1× v1.2.0: run-to-run sd). Cells differ, so bars do not add up.\n"
+             "A release is promoted only if no cell at 1-4 requests got slower beyond noise. 1× v1.0.0 and 2× v1.0.0 "
+             "are measured against the builds before them (2×: the shipped recipe of 2026-09-23).\n"
+             "cN = N concurrent requests; tg512 = 512-token decode; pp2048 = 2,048-token prefill; 16K = 16K tokens of "
+             "context; probe fresh = T=0 decode on a new prompt;\ncounting = a task where MTP accepts nearly every "
+             "draft (upper bound). Hatched grey (1× v1.3.0): the KV pool grew from 6 to 14 GiB, so 8 requests at 16K no longer "
+             "queue for KV space (22 to 109 tok/s);\ntwo single-boot runs, not paired. "
+             "Data: docs/data/capability.csv.", fontsize=9.5, color=MUTED, va="top", linespacing=1.45)
+    save(fig, "release-gains")
 
 
-def chart_quality():
-    t2f = fidelity(SRC["tp2_fidelity"])
-    v = json.loads(SRC["tp2_verdict"].read_text())
-    tc2 = re.search(r"Score:\s+([\d.]+) ±", SRC["tp2_tc45"].read_text()).group(1)
-    rows = [
-        ("Hard multi-step tool use (88 scenarios)", f"{min(v['quality_gate']['hardmode_scores'])}/100", "≥ 88"),
-        ("tool_choice=required (TC-45, 5 trials)", f"{float(tc2):.0f}/100", "-"),
-    ]
-    for tok2, ex2 in t2f[:4]:
-        rows.append((f"Tool-call retrieval at {round(tok2, -3) / 1000:.0f}k tokens", f"{ex2}/20", "20/20"))
-    stragglers2 = "none" if not v["quality_gate"]["straggler_violations"] else "FAIL"
-    rows.append(("Batch stragglers", f"{stragglers2} (c5–c16)", "none"))
+# ---------- README table ----------
 
-    fig, ax = plt.subplots(figsize=(8, 0.46 * (len(rows) + 1) + 0.4))
-    ax.axis("off")
-    fig.subplots_adjust(left=0.01, right=0.99)
-    cols = (0.0, 0.58, 0.85)
-    for x, h in zip(cols, ("Check", "2× Spark b1.4", "Threshold")):
-        ax.text(x, len(rows), h, fontweight="bold", fontsize=11, color=INK, va="center")
-    for i, (name, a, thr) in enumerate(rows):
-        y = len(rows) - 1 - i
-        ax.axhline(y + 0.5, color=GRID, lw=0.8)
-        ax.text(cols[0], y, name, fontsize=10.5, color=INK, va="center")
-        ax.text(cols[1], y, "✓", fontsize=12, color=C_COUNT, va="center", fontweight="bold")
-        ax.text(cols[1] + 0.04, y, a, fontsize=10.5, color=INK, va="center", fontweight="bold")
-        ax.text(cols[2], y, thr, fontsize=9.5, color=MUTED, va="center")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(-0.6, len(rows) + 0.5)
-    fig.text(0.0, -0.02, "Retrieval depths are the logged prompt sizes (labels 8k/32k/64k/128k in the probe). "
-             "2× Spark: re-gate boot, seed 7. A build that misses any check is not promoted.",
-             fontsize=8.5, color=MUTED)
-    save(fig, "quality-gate.svg")
+def table(rows):
+    """Markdown capability table; every number carries a letter for its release, date and run."""
+    keys = []
+
+    def cell(setup, metrics, fmt="{:,.1f}", **eq):
+        pts = [r for r in rows if r["setup"] == setup and r["metric"] in metrics
+               and all(r[k] == v for k, v in eq.items())]
+        if not pts:
+            return None
+        r = max(pts, key=lambda r: (not old(r), r["date"]))   # shipped release first, then the newest run
+        k = (label(r), r["date"], r["campaign"], r["harness"], r["source"])
+        if k[:4] not in [x[:4] for x in keys]:
+            keys.append(k)
+        i = [x[:4] for x in keys].index(k[:4])
+        v = r["value"]
+        return (fmt.format(v) if isinstance(v, float) else v) + f" <sup>{chr(97 + i)}</sup>"
+
+    def join(*cells, sep=" / "):
+        return sep.join(c or "–" for c in cells) if any(cells) else "not measured"
+
+    out = ["| | 1× Spark | 2× Spark, TP=2 | 2× Spark, DP=2 |", "|---|---|---|---|"]
+
+    def row(name, f):
+        out.append(f"| {name} | " + " | ".join(f(s) for s in SETUPS) + " |")
+
+    tg = lambda m, c: lambda s: join(cell(s, [m], conc=c, depth_tokens=None))  # noqa: E731
+    row("Decode tok/s, 1 request", tg("tg_total", 1))
+    for c in (4, 8, 16):
+        def f(s, c=c):
+            if s == "1x" and c > 8:
+                return "over the cap (max_num_seqs 8)"
+            return join(cell(s, ["tg_req"], conc=c, depth_tokens=None), cell(s, ["tg_total"], conc=c, depth_tokens=None))
+        row(f"Decode tok/s, {c} requests: each / total", f)
+    sizes = (2048, 16384, 65536, 131072)
+    row("Prefill tok/s at 2K / 16K / 64K / 128K prompt, 1 request",
+        lambda s: join(*(cell(s, ["pp", "pp_benchy"], "{:,.0f}", conc=1, prompt_tokens=p) for p in sizes)))
+    row("Time to first token at 2K / 16K / 64K / 128K, uncached, s",
+        lambda s: join(*(cell(s, ["ttft_s", "ttft_benchy_s"], "{:.1f}", conc=1, prompt_tokens=p) for p in sizes)))
+    row("Decode, mean ms per token at 1 / 8 requests (MTP emits several tokens per step)",
+        lambda s: join(cell(s, ["itl_p50_ms"], "{:.0f}", conc=1, depth_tokens=0),
+                       cell(s, ["itl_p50_ms"], "{:.0f}", conc=8, depth_tokens=0)))
+    row("Gap between streamed chunks p50 at 1 / 8 requests, ms",
+        lambda s: join(cell(s, ["chunk_gap_p50_ms"], "{:.0f}", conc=1, depth_tokens=0),
+                       cell(s, ["chunk_gap_p50_ms"], "{:.0f}", conc=8, depth_tokens=0)))
+    row("Decode tok/s total at 0 → 64K context, 1 request / 4 requests",
+        lambda s: join(*(join(cell(s, ["decode_depth_total"], conc=c, depth_tokens=0),
+                              cell(s, ["decode_depth_total"], conc=c, depth_tokens=65536), sep=" → ")
+                         for c in (1, 4))) if cell(s, ["decode_depth_total"], conc=1, depth_tokens=0)
+        else "not measured")
+    row("Max context per request", lambda s: "262,144 (recipe)")
+    row("KV pool, tokens", lambda s: join(cell(s, ["kv_tokens"], "{:,.0f}")))
+    row("Requests of 262,144 tokens the pool holds (vLLM's count)", lambda s: join(cell(s, ["kv_conc_262k"], "{:.2f}")))
+    row("Requests that fit the KV pool at 16K / 64K / 128K",
+        lambda s: join(*(cell(s, ["sessions_fit"], "{:.1f}", prompt_tokens=p) for p in (16384, 65536, 131072))))
+    row("Quality gate: hardmode / TC-45 / retrieval to ~245K / stragglers",
+        lambda s: join(cell(s, ["gate_hardmode"], "{:.0f}"), cell(s, ["gate_tc45"], "{:.0f}"),
+                       cell(s, ["gate_retrieval"], "{}"), cell(s, ["gate_stragglers"], "{}")))
+    out += ["", "Releases and runs behind the numbers:", ""]
+    for i, (rel, date, camp, harness, src) in enumerate(keys):
+        repo, path = src.split(":", 1)
+        d = path if path.endswith(".md") else str(Path(path).parent) + "/"
+        link = d if repo == REPO else (GH[repo].replace("/tree/", "/blob/") if d.endswith(".md") else GH[repo]) + d
+        out.append(f"- <sup>{chr(97 + i)}</sup> {rel}, {date}, {camp}" + (f", {harness}" if harness else "")
+                   + f" ([files]({link}))")
+    return "\n".join(out)
+
+
+REPO = "2x" if (ROOT / "tools" / "dp2").exists() else "1x"   # the DP=2 router ships only in the tp-2 repo
+
+
+def write_table(rows):
+    readme = ROOT / "README.md"
+    text = readme.read_text()
+    a, b = "<!-- capability-table:start (scripts/make_charts.py writes this block) -->", "<!-- capability-table:end -->"
+    if a not in text:
+        print("README.md has no capability-table markers; table not written")
+        return
+    new = re.sub(re.escape(a) + r".*?" + re.escape(b), lambda m: f"{a}\n{table(rows)}\n{b}", text, flags=re.S)
+    if new != text:
+        readme.write_text(new)
+    print("wrote README.md capability table")
+
+
+def selftest():
+    """Line breaks at gaps; an older release only fills x values the newest lacks."""
+    global SHIPPED
+    SHIPPED = {"2x": "v3.1.0"}
+    assert segments({1: 0, 4: 0, 8: 0}, {1, 2, 4, 8, 16}) == [[1], [4, 8]]
+    mk = lambda rel, x, d: dict(setup="2x", metric="m", release=rel, alias=rel, campaign="c", conc=x, date=d, value=1.0)
+    rows = [mk("v3.1.0", 1, "2026-10-08"), mk("v3.1.0", 4, "2026-10-08"), mk("v3.0.0", 1, "2026-10-01"),
+            mk("v3.0.0", 16, "2026-10-01")]
+    g = by_release(rows, "2x", "m", "conc")
+    assert [sorted(p) for p in g] == [[1, 4], [16]] and old(g[1][16]) and not old(g[0][1])
+    print("selftest ok")
 
 
 if __name__ == "__main__":
-    tp2, prefill, hist, lib = load()
-    chart_throughput(tp2)
-    chart_prefill(prefill)
-    chart_builds(hist)
-    chart_depth(lib)
-    chart_quality()
-    chart_concurrency()
+    import sys
+    if "--selftest" in sys.argv:
+        selftest()
+        raise SystemExit
+    rows = load()
+    chart_concurrency(rows)
+    chart_prefill(rows)
+    chart_depth(rows)
+    chart_coding(rows)
+    chart_agents(rows)
+    chart_gains(rows)
+    write_table(rows)

@@ -1,6 +1,11 @@
 # Benchmarks: full tables
 
+Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v3.1.0 (old name b1.6); every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+
+
 ## b1.6 image: retrained MTP drafter on 2× Spark (2026-10-08)
+
+Release 2× v3.1.0 (old name b1.6), the current default.
 
 b1.6 = b1.4 with the retrained drafter of the 1× v3e (#97 refit run 1). The main model stays
 `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`: b1.5's GDN-MSE requant of the main weights failed the TP=2
@@ -363,6 +368,8 @@ prefill read-ahead raises pp2048 c1.
 
 ## b1.4 image (2026-10-01)
 
+Release 2× v3.0.0 (old name b1.4), the default from 2026-10-01 to 2026-10-08.
+
 The current default build.
 
 Terms used: **concurrency (c)** = requests running at the same time;
@@ -445,6 +452,8 @@ Total wall time for the 42 runs 1,498 s at `medium` vs 8,982 s at `xhigh`. Jev o
 
 ## b1.3 image (2026-09-29)
 
+Release 2× v2.1.0 (old name b1.3), history.
+
 Recommended from 2026-09-29 to 2026-10-01, now the `-previous` fallback; superseded by b1.4 (above).
 
 Terms used: **concurrency (c)** = requests running at the same time;
@@ -509,6 +518,8 @@ with no score; GSM8K, IFEval, LiveCodeBench and the comparison with the previous
 
 ## b1.2 image (2026-09-27)
 
+Release 2× v2.0.0 (old name b1.2), history.
+
 Recommended from 2026-09-27 to 2026-09-29, then the `-previous` fallback until 2026-10-01 (archived).
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1.2-20260927-b7fbaf96-a9aa81b2-warm`
@@ -546,6 +557,8 @@ c1 +11.1%, c2 +13.3%, c5 +10.4%, c8 +3.3%, c10 +7.4% beyond noise; c4 +7.6% and 
 c1 is the median of 5 single runs per boot (c1 is bimodal on this pair).
 
 ## b1.1 image (2026-09-26)
+
+Release 2× v1.1.0 (old name b1.1), history.
 
 Recommended from 2026-09-26 to 2026-09-27, then the `-previous` fallback until 2026-09-29 (archived).
 
@@ -598,6 +611,8 @@ code 56.5, structured 81.6, counting 102.5, prose 48.2 on the 2026-09-25 build; 
 
 ## b1 image (2026-09-25)
 
+Release 2× v1.0.0 (old name b1), history.
+
 Recommended from 2026-09-25 to 2026-09-26, now the `-previous` fallback; superseded by b1.1 (README).
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm`
@@ -637,6 +652,8 @@ c1 is the median of 10 single runs (5 per boot; range 85-103, c1 is bimodal on t
 code 56.5, structured 81.6, counting 102.5, prose 48.2 (previous build: 61.3 / 88.9 / 96.9 / 49.0; single runs vary ±15%).
 
 ## b0 shipped image (2026-09-23)
+
+Before v1.0.0: the shipped build of 2026-09-23 (date tag `v2026.09.23-shipped`), history.
 
 Previous default, superseded 2026-09-25 by b1 (README). Pinned checkpoint on both ranks; not hybrid.
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b0-20260918-a8333658-warm`
@@ -690,7 +707,7 @@ code 61.3, structured 88.9, counting 96.9, prose 49.0.
 > EEST. In that window rank 1 loaded checkpoint revision `ada4da32` while rank 0
 > loaded `7c4f1bc1` (at least 2026-09-18 onward, probably 2026-09-17 too). All
 > numbers below are therefore (hybrid). Pinned-checkpoint results are in the
-> [b0 shipped image](#b0-shipped-image-2026-09-23) and the README: [Results](../README.md#results-default-b1-image) and
+> [b0 shipped image](#b0-shipped-image-2026-09-23) and
 > [Checkpoint revision split](#checkpoint-revision-split-fixed-2026-09-23).
 
 Full measurement tables behind the [README](../README.md) headline numbers.
@@ -698,7 +715,7 @@ Every figure names its workload and source file. Paths under `results/arms/`
 are partly on dgx-01 only; see [results/README.md](../results/README.md).
 
 Contents: [Headline grid](#headline-numbers) ·
-[Default recipe tables](#default-recipe-la-probabilistic-mtp-drafts--measured-numbers) ·
+[Default recipe tables](#default-recipe-la-probabilistic-mtp-drafts-measured-numbers) ·
 [Old la vs probabilistic](#old-la-vs-probabilistic-by-workload) ·
 [How to read these numbers](#how-to-read-these-numbers) ·
 [Other single-stream probes](#other-single-stream-probes) ·
@@ -811,7 +828,7 @@ in the two reruns above.
 **Quality.** tool-eval-bench `--hardmode` 86/100, rerun 90/100; fidelity
 8k/32k/64k 20/20, 128k 19/20 then 20/20 and 20/20; straggler c5-16 no
 one-request stall, 3.96-4.00 accepted/draft. Details in
-[Quality](../README.md#quality).
+[Quality](../README.md#quality-gate).
 
 **Against the old argmax config** (same workloads, tables below): sampled
 throughput improves mostly at concurrency and long context (agent coding c16
@@ -948,7 +965,7 @@ the bench_sweep counting prompt acceptance is far higher: 98.9% overall,
 The README became a short guide on 2026-09-23. These sections were in it before;
 they are kept here unchanged apart from link paths and wording. Numbers marked (hybrid) had
 rank 1 on the old checkpoint revision and are superseded by the shipped-image
-results in the [README](../README.md#results-default-b1-image) and [b0 shipped image](#b0-shipped-image-2026-09-23).
+results in [b0 shipped image](#b0-shipped-image-2026-09-23).
 
 ### Recipe at the time
 
