@@ -73,11 +73,17 @@ Noise per cell:
 Acceptance per draft position is accepted / drafted from `/metrics`, pooled over the T=0 probe cells
 that finished on both sides.
 
+A screen must be complete before it can promote. The required passes are 1 and 2 plus any other K with a
+`ctl-pK` or `arm-pK` dir (pooled runs with more passes, symlinked pass dirs). A pass dir missing on either
+side is INCONCLUSIVE. A cell is judged only when every required pass has its result on both sides (probe
+cells also need the same request ids), so benchy compares matched passes only; otherwise the cell is
+missing and the reason line names the pass.
+
 | verdict | when |
 |---------|------|
 | KILL | any cell worse than 2x its noise; acceptance moved by more than 0.03 at any draft position both sides have; an arm boot failed; the arm server died during a boot; or an arm cell timed out or errored in a pass where the control's finished |
 | PROMOTE | every cell measured, none worse than 1x its noise, at least one better than 1x its noise |
-| INCONCLUSIVE | anything else: a cell worse than 1x but not 2x its noise, missing cells, control boot failed, a cold boot, or nothing better than noise |
+| INCONCLUSIVE | anything else: a cell worse than 1x but not 2x its noise, a missing pass dir, missing cells, control boot failed, a cold boot, or nothing better than noise |
 
 The logits captures are reported, not judged. For each boot the report gives the a/b self-noise and the
 arm-vs-control drift: identical prompts, and mean and max |dlogprob| before the first divergence.
