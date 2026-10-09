@@ -3,6 +3,7 @@
 
   scripts/validate_recipes.py [PATH ...]        # default: recipes/ under the repo root
   scripts/validate_recipes.py archive/recipes   # the archived arms (not registry-visible)
+  scripts/validate_recipes.py --selftest        # checks the credential-name rule
 
 Complements `sparkrun recipe validate`, which checks the schema. Every rule here comes from a
 failure this project actually hit, so a clean run means the recipe will not fail in one of the
@@ -26,6 +27,9 @@ SGLANG_QSA_TARGET = "qwen_sparse_attn_backend.py"
 # sglang builds from 2026-09-03 on carry upstream's SM121 kernel (#36845); mounting the older
 # guard extension over it reinstates the path that corrupts >~95k context on SM121 (#36806)
 SEP03_DIGEST = "5ae5816783d58e2e"
+# env names that hold a credential: TOKEN etc. as a whole _-separated word, so HF_TOKEN is flagged and
+# VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS (a row count) is not
+CREDENTIAL = re.compile(r"(^|_)(token|secret|password|api_key)($|_)", re.I)
 
 
 def err(f: Path, msg: str) -> None: ERRORS.append(f"{f.name}: ERROR {msg}")
@@ -198,11 +202,22 @@ def check(path: Path) -> None:
 
     # --- secrets
     for k, v in env.items():
-        if re.search(r"token|secret|password|api_key", k, re.I) and str(v) not in ("", "0", "1"):
+        if CREDENTIAL.search(k) and str(v) not in ("", "0", "1"):
             err(path, f"env `{k}` looks like a credential; keep it out of the recipe")
 
 
+def selftest() -> None:
+    for k in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "OPENAI_API_KEY", "MY_SECRET", "DB_PASSWORD", "TOKEN_FILE"):
+        assert CREDENTIAL.search(k), k
+    for k in ("VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS", "MAX_NUM_BATCHED_TOKENS", "VLLM_MAX_TOKENS_PER_STEP", "TOKENIZERS_PARALLELISM"):
+        assert not CREDENTIAL.search(k), k
+    print("selftest ok")
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--selftest"]:
+        selftest()
+        return 0
     args = sys.argv[1:] or [str(REPO / "recipes")]
     files: list[Path] = []
     for a in args:

@@ -1,6 +1,14 @@
 """CPU tests for tools/mtp_refit on a tiny random checkpoint (hidden 64, 8 experts, 4 HC streams).
 
     PYTHONPATH=<b12x checkout> python -m pytest tools/mtp_refit/tests -q
+
+Environment: mtp_ref.py imports transformers.models.qwen4_exp, which only our internal transformers build has.
+With a stock transformers (e.g. on a Mac) collection stops at ModuleNotFoundError; do not try to install it there.
+The mtpcap image the refit runs used (spark-vllm-b12x:mtpcap-21e0b201-fe5c57fb, local on the Sparks) carries that
+build, torch, safetensors and b12x. Run the suite inside it from the repo root, CPU only (no GPU, no GPU lock):
+
+    docker run --rm -e CUDA_VISIBLE_DEVICES= -v "$PWD":/w -w /w --entrypoint bash \
+      spark-vllm-b12x:mtpcap-21e0b201-fe5c57fb -c 'python3 -m pytest --version || pip install -q pytest; python3 -m pytest tools/mtp_refit/tests -q'
 """
 import argparse
 import gzip
