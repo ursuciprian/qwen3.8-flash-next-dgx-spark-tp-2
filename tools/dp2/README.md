@@ -35,14 +35,19 @@ k72 ran the router on dgx-01 and pointed it at the CX-7 addresses of both Sparks
 | `--backends` | required | Comma-separated replica base URLs |
 | `--host` | `0.0.0.0` | Listen address |
 | `--port` | `8100` | Listen port |
-| `--selftest` | | Runs the routing and streaming checks against two local stub servers, then exits |
+| `--selftest` | | Runs the routing and streaming checks (turns 1-3 of a conversation on one replica, interleaved conversations, session ids) against two local stub servers, then exits |
 
 There are no environment variables.
 
 ## How it routes
 
-- The key of a request is the sha1 of its first two non-system messages (for `/v1/completions`, the first 4,096
-  characters of the prompt). The system prompt and tools are left out, because agents share them.
+- The key of a request is the client's session id when it sends one: the `X-Session-Id` header, else the
+  `prompt_cache_key` body field. Without one, the key is the sha1 of the first user message (for `/v1/completions`,
+  the first 4,096 characters of the prompt). The system prompt and tools are left out, because agents share them.
+  The first user message stays the same from turn 1 on, so turns 2, 3, ... keep the key of turn 1. The body's `user`
+  field is not used: it names the end user, often one value for all of a client's conversations.
+- Before 2026-10-09 the key was the first two non-system messages, so turn 1 (`[user]`) and turn 2
+  (`[user, assistant, user]`) had different keys and turn 2 could go to the other replica with a cold prefix cache.
 - A key the router has not seen goes to the replica with the fewest conversations so far. Every later request with
   that key goes to the same replica, so each turn of a conversation hits the replica that holds its prefix cache.
 - Streaming responses pass through chunk by chunk. Each response carries `X-Router-Backend: <index>`.
@@ -59,7 +64,10 @@ There are no environment variables.
   can land on the replica without the prefix cache. Memory grows by one entry per conversation.
 - Balance is by conversation count, not by live load. One very long conversation and one short one count the same.
 - A client that rewrites the start of its history (context compaction, a new first user message) becomes a new
-  conversation and can move to the other replica, with a cold prefix cache there.
+  conversation and can move to the other replica, with a cold prefix cache there, unless it sends a session id.
+- Conversations without a session id whose first user messages are identical share one key, so they all go to the
+  same replica. A harness that opens every session with the same text should send `X-Session-Id` or
+  `prompt_cache_key`.
 - No TLS, no API key, no request limits, and it listens on all interfaces by default. Keep it on a trusted network,
   or bind `--host 127.0.0.1` and put an authenticating proxy in front.
 - One thread per connection, responses close the connection (HTTP/1.0), backend timeout 2 h per request.
