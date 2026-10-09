@@ -1,0 +1,24 @@
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.853 arm 0.852 shift -0.001
+  pos 1: control 0.709 arm 0.710 shift +0.001
+  pos 2: control 0.589 arm 0.587 shift -0.002
+  pos 3: control 0.492 arm 0.485 shift -0.007
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1     +18.95%  noise 11.58%  better    n=4 CI [+9.5,+32.6] control boot-to-boot +4.64%, step -6.72%
+  probe  fresh-c4      +3.22%  noise  4.69%            n=16 CI [+0.6,+5.8] control boot-to-boot +4.69%, step -3.96%
+  probe  fresh-c8      +8.60%  noise 10.35%            n=32 CI [+6.3,+10.9] control boot-to-boot +10.35%, step -3.14%
+  probe  d16k-c4       +4.83%  noise  5.47%            n=16 CI [+2.1,+7.6] control boot-to-boot +5.47%, step -5.34%
+  probe  count-c8     +11.98%  noise 17.74%            n=32 CI [+7.1,+17.6] control boot-to-boot +17.74%, step -10.15%
+  wall   d16k-c8       +4.60%  noise  7.45%            wall s control 94/87 arm 87/86 (cut counts as the time)
+  benchy pp2048 (c1)   +0.82%  noise  1.55%            control 2807.8 arm 2830.9 t/s (boots 2/2)
+  benchy tg512 (c1)    +8.38%  noise 12.34%            control 82.4 arm 89.3 t/s (boots 2/2)
+  benchy tg512 (c8)    +8.41%  noise 11.26%            control 173.3 arm 187.9 t/s (boots 2/2)
+== logits_equiv (reported, not judged)
+  self  ctl-p1 a/b: 15/20 prompts identical, |dlogprob| mean 0.0354 max 0.3546
+  self  ctl-p2 a/b: 15/20 prompts identical, |dlogprob| mean 0.0438 max 0.9824
+  self  arm-p1 a/b: 12/20 prompts identical, |dlogprob| mean 0.0345 max 0.3486
+  self  arm-p2 a/b: 13/20 prompts identical, |dlogprob| mean 0.0381 max 0.3675
+  cross ctl-p1/arm-p1: 13/20 prompts identical, |dlogprob| mean 0.0449 max 0.5017
+  cross ctl-p2/arm-p2: 10/20 prompts identical, |dlogprob| mean 0.0387 max 0.3440
+better: probe fresh-c1 +18.95% (noise 11.58%)
+VERDICT=PROMOTE
