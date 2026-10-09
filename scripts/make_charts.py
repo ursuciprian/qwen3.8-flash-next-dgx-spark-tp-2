@@ -245,7 +245,7 @@ def draw(ax, setup, main, extra, fmt, dy=0, left=False):
         ax.plot([k, x], [main[k]["value"], r["value"]], ":", color=s["color"], lw=2, alpha=a, zorder=1)
         ax.plot([x], [r["value"]], s["marker"], color=s["color"], mfc=CARD, mew=2, ms=9, alpha=a, zorder=3)
         ax.annotate(f"{fmt(r)}\nolder release {r['release']}", (x, r["value"]), xytext=(0, 14),
-                    textcoords="offset points", ha="center", va="bottom", fontsize=12, color=MUTED)
+                    textcoords="offset points", ha="center", va="bottom", fontsize=14, color=MUTED)
     return max(list(main) + list(extra)), max(r["value"] for r in list(main.values()) + list(extra.values()))
 
 
@@ -279,15 +279,42 @@ def chart_users(rows):
         if 1 in main:
             own = setup == REPO or (REPO == "2x" and setup == "dp2")
             ax.annotate(f"{main[1]['value']:.0f}", (1, main[1]["value"]), xytext=(-12, 0), textcoords="offset points",
-                        ha="right", va="center", fontsize=14, color=INK if own else MUTED,
+                        ha="right", va="center", fontsize=14, color=INK if own else SETUPS[setup]["color"],
                         fontweight="bold" if own else "normal")
         ymax = max(ymax, v)
         notes.append(f"{SETUPS[setup]['name']}: release {provenance(main.values())}"
                      + (f"; hollow point: older release {provenance(extra.values())}" if extra else ""))
+    code = {r["conc"]: r for r in sorted(rows, key=lambda r: (vkey(r["release"]), r["date"]))
+            if r["setup"] == REPO and r["metric"] == "coding_total" and r["sampling"] == "T=0, thinking off"}
+    if not code and (c1 := coding_one(rows, REPO)):
+        code = {1: c1}
+    if code:   # coding prompts, T=0: star markers (dashed line if 2+ points), the own setup only
+        xs, col = sorted(code), SETUPS[REPO]["color"]
+        near = lambda k: any(abs(r["value"] - code[k]["value"]) < 0.06 * code[k]["value"] for r in rows  # noqa: E731
+                             if r["metric"] == "tg_total" and r["conc"] == k and r["depth_tokens"] is None
+                             and r["setup"] != REPO)
+        px = [k * 1.13 if near(k) else k for k in xs]   # side-step a coinciding chat point; the x is still k
+        if len(xs) > 1:
+            ax.plot(px, [code[k]["value"] for k in xs], "--", color=col, lw=2.2, zorder=3)
+        ax.plot(px, [code[k]["value"] for k in xs], "*", color=col, mec=INK, mew=1.2, ms=17, zorder=4)
+        k = xs[-1]
+        o = old(code[k])
+        ax.text(0.0, -0.25, "★", transform=ax.transAxes, ha="left", va="center", fontsize=22, color=col)
+        ax.text(0.045, -0.25, f"= coding, one chat, T=0, thinking off: {code[k]['value']:.0f} tok/s"
+                + (f" (older release {code[k]['release']})" if o else ""), transform=ax.transAxes, ha="left",
+                va="center", fontsize=13.5, color=INK)
+        ymax = max(ymax, max(r["value"] for r in code.values()))
+        notes.append(f"{SETUPS[REPO]['name']}, star (coding): " + provenance(code.values())
+                     + ("; median decode speed of 36 coding prompts sent one at a time, temperature 0, thinking off"
+                        if len(code) == 1 else "; 36 coding prompts, temperature 0, thinking off")
+                     + ((f"; at the server defaults (thinking on) the same prompts give {d['value']:.0f} tok/s"
+                         if (d := next((r for r in rows if r["setup"] == REPO and r["metric"] == "coding_probe_median"
+                                        and r["conc"] == 1 and r["sampling"] == "server defaults, thinking on"
+                                        and r["release"] == code[1]["release"]), None)) else "") if 1 in code else ""))
     cap = recipe_value("max_num_seqs", "1x")
     if "1x" in has(rows, "tg_total") and cap:
         ax.axvline(cap, color=GRID, lw=1.2, ls="--", zorder=1)
-        ax.text(cap * 1.06, 4, f"One Spark runs up\nto {cap} at once", fontsize=12, color=MUTED, va="bottom")
+        ax.text(cap * 1.06, 4, f"One Spark runs up\nto {cap} at once", fontsize=14, color=MUTED, va="bottom")
     ax.set_xscale("log", base=2)
     ax.set_xticks(ticks, [str(t) for t in ticks])
     ax.minorticks_off()
@@ -295,8 +322,8 @@ def chart_users(rows):
     ax.set_ylim(0, ymax * 1.28)
     ax.set_xlabel("People or agents using it at the same time")
     missing = [SETUPS[s]["name"] for s in SETUPS if s not in has(rows, "tg_total")]
-    caption("speed-chart", ["Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking "
-                            "on. Total = all tokens written per second, including the time spent reading prompts; each reply = how fast one "
+    caption("speed-chart", ["Solid lines (chat): each user sends a 2,048-token prompt and gets 512 tokens back; default "
+                            "sampling, thinking on. Total = all tokens written per second, including the time spent reading prompts; each reply = how fast one "
                             "answer streams once it has started, so it is more than total / users."]
             + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else [])
             + ["Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), "
@@ -354,32 +381,53 @@ def hero(rows):
     many = pick("tg_total", [r for r in pool if r["depth_tokens"] is None])
     tc = pick("gate_tc45", [r for r in rows if r["setup"] == s])
     ctx = recipe_value("max_model_len")
-    tiles = [(f"{one['value']:.0f}", "tok/s", "answer speed, one chat"),
-             (f"{many['value']:.0f}", "tok/s", f"{many['conc']} chats at once, combined"),
-             (f"{ctx // 1000}K", "tokens", "max context per chat (setting)"),
-             (f"{tc['value']:.0f}", "/100", "tool calls made when required")]
-    W, H = 10, 3.7
+    code = coding_one(rows, s)
+    rel = lambda r: [] if r["release"] == SHIPPED[s] else [f"older release {r['release']} (shipped {SHIPPED[s]})"]  # noqa: E731
+    tiles = ([(f"{code['value']:.0f}", "tok/s", "coding, one chat",
+               ["36 coding prompts, T=0, thinking off"] + rel(code))]
+             if code else [(f"{ctx // 1000}K", "tokens", "max context per chat (setting)", [])])
+    tiles += [(f"{one['value']:.0f}", "tok/s", "chat, default settings", ["one chat, T=1.0, thinking on"] + rel(one)),
+              (f"{many['value']:.0f}", "tok/s", f"{many['conc']} chats at once, combined", ["default settings"] + rel(many)),
+              (f"{tc['value']:.0f}", "/100", "tool calls made when required", ["quality gate"] + rel(tc))]
+    W, H = 10, 4.4
     fig = plt.figure(figsize=(W, H))
     fig.patch.set_alpha(0)
     fig.add_artist(FancyBboxPatch((0.006, 0.012), 0.988, 0.976, boxstyle="round,pad=0,rounding_size=0.035",
                                   transform=fig.transFigure, facecolor=CARD, edgecolor=GRID, lw=1.5,
                                   mutation_aspect=W / H))
     col, r = SETUPS[s]["color"], fig.canvas.get_renderer()
-    for i, (num, unit, cap) in enumerate(tiles):
-        x, y = (0.07, 0.54)[i % 2], (0.56, 0.17)[i // 2]
-        fig.add_artist(plt.Rectangle((x - 0.03, y - 0.06), 0.009, 0.3, transform=fig.transFigure, color=col))
-        t = fig.text(x, y + 0.06, num, fontsize=54, fontweight="bold", color=INK, va="baseline")
+    for i, (num, unit, cap, sub) in enumerate(tiles):
+        x, y = (0.07, 0.54)[i % 2], (0.6, 0.16)[i // 2]
+        fig.add_artist(plt.Rectangle((x - 0.03, y - 0.11), 0.009, 0.33, transform=fig.transFigure, color=col))
+        t = fig.text(x, y + 0.065, num, fontsize=48, fontweight="bold", color=INK, va="baseline")
         w = t.get_window_extent(r).transformed(fig.transFigure.inverted()).width
-        fig.text(x + w + 0.012, y + 0.06, unit, fontsize=22, color=INK, va="baseline")
-        fig.text(x, y + 0.005, cap, fontsize=20, color=MUTED, va="top")
+        fig.text(x + w + 0.012, y + 0.065, unit, fontsize=21, color=INK, va="baseline")
+        fig.text(x, y + 0.015, cap, fontsize=19, color=INK, va="top")
+        for j, line in enumerate(sub):
+            fig.text(x, y - 0.045 - 0.058 * j, line, fontsize=16, color=MUTED, va="top")
     where = {"1x": "One DGX Spark", "2x": "Two DGX Sparks"}[s]
-    dates = sorted({one["date"], many["date"], tc["date"]})
-    fig.text(0.04, 0.89, f"{where}  ·  release {SHIPPED[s]}  ·  measured {' and '.join(dates)}", fontsize=16,
-             color=MUTED, va="center")
+    extra = f"  ·  {ctx // 1000}K context" if code and ctx else ""
+    fig.text(0.04, 0.91, f"{where}  ·  release {SHIPPED[s]}{extra}", fontsize=17, color=MUTED, va="center")
     save(fig, "hero", card=True)
-    caption("hero", [f"tok/s = tokens per second; a token is about 3/4 of a word. Speed: release {one['release']}, "
-                     f"{one['date']}, each chat sends 2,048 tokens and gets 512 back. Tool calls: release "
+    caption("hero", ["tok/s = tokens per second; a token is about 3/4 of a word. "
+                     + (f"Coding: {code['harness']}, median decode speed of 36 prompts (Python, C++, Rust, Go) sent one "
+                        f"at a time, temperature 0, thinking off, release {code['release']}, {code['date']}; "
+                        "coding replies repeat code and names, so the built-in draft model guesses more tokens right"
+                        + (f"; at the server defaults (thinking on) the same prompts give {d['value']:.0f} tok/s. "
+                           if (d := next((r for r in rows if r["setup"] == s and r["metric"] == "coding_probe_median"
+                                          and r["conc"] == 1 and r["sampling"] == "server defaults, thinking on"
+                                          and r["release"] == code["release"]), None)) else ". ")
+                        if code else "")
+                     + f"Chat: release {one['release']}, {one['date']}, each chat sends 2,048 tokens and gets 512 back "
+                     "at the server defaults (temperature 1.0, thinking on), the everyday floor. Tool calls: release "
                      f"{tc['release']}, {tc['date']}. How each was measured: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)."])
+
+
+def coding_one(rows, setup):
+    """Median decode tok/s of the coding corpus, one chat at a time, greedy: the newest release that has it."""
+    c = [r for r in rows if r["setup"] == setup and r["metric"] == "coding_probe_median" and r["conc"] == 1
+         and r["sampling"] == "T=0, thinking off"]
+    return max(c, key=lambda r: (vkey(r["release"]), r["date"])) if c else None
 
 
 def icons():
@@ -600,6 +648,13 @@ def table(rows):
                 return "over the cap (max_num_seqs 8)"
             return join(cell(s, ["tg_req"], conc=c, depth_tokens=None), cell(s, ["tg_total"], conc=c, depth_tokens=None))
         row(f"Decode tok/s, {c} requests: each / total", f)
+    row("Coding, 36 prompts one at a time: median (max) decode tok/s, T=0 / server defaults",
+        lambda s: join(*((lambda a, b: a and f"{a} {b or ''}".strip())(
+            cell(s, ["coding_probe_median"], "{:.0f}", conc=1, sampling=m),
+            cell(s, ["coding_probe_max"], "({:.0f})", conc=1, sampling=m))
+            for m in ("T=0, thinking off", "server defaults, thinking on"))))
+    row("Copy-heavy (MTP accepts nearly every draft) total tok/s at 1 / 4 / 8 requests, max of 3 rounds",
+        lambda s: join(*(cell(s, ["copy_total_max"], "{:.0f}", conc=c) for c in (1, 4, 8))))
     sizes = (2048, 16384, 65536, 131072)
     row("Prefill tok/s at 2K / 16K / 64K / 128K prompt, 1 request",
         lambda s: join(*(cell(s, ["pp", "pp_benchy"], "{:,.0f}", conc=1, prompt_tokens=p) for p in sizes)))
@@ -672,10 +727,11 @@ def quality(rows):
         f"release {r}, {d}" for r, d in rel) + ". Every release passes this gate before it ships."
 
 
-IMAGES = {"hero": ("hero", "Four numbers for this setup: answer speed for one chat and combined speed for many chats at "
-                   "once (measured), the context length setting, and the tool-call score (measured)."),
+IMAGES = {"hero": ("hero", "Four measured numbers for this setup: answer speed for one chat on coding prompts (temperature 0, thinking off) "
+                   "and at the default settings, combined speed for many chats at once, and the tool-call score."),
           "speed-chart": ("speed-users", "Line chart: tokens per second, all users together, against the number of "
-                          "people or agents using the server at the same time. Values are labelled on the chart."),
+                          "people or agents using the server at the same time, for chat at the default settings, with "
+                          "the coding speed of this setup (temperature 0, thinking off) as a star. Values are labelled on the chart."),
           "first-token-chart": ("first-token", "Line chart: seconds until the answer starts against prompt length, "
                                 "prompt not cached. Values are labelled on the chart.")}
 
