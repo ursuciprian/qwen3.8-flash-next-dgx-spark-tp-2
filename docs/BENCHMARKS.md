@@ -1,11 +1,11 @@
 # Benchmarks: full tables
 
-Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v3.1.0 (old name b1.6); every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v1.5.0 (old name b1.6); every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
 
 
 ## b1.6 image: retrained MTP drafter on 2× Spark (2026-10-08)
 
-Release 2× v3.1.0 (old name b1.6), the current default.
+Release 2× v1.5.0 (old name b1.6), the current default.
 
 b1.6 = b1.4 with the retrained drafter of the 1× v3e (#97 refit run 1). The main model stays
 `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`: b1.5's GDN-MSE requant of the main weights failed the TP=2
@@ -368,7 +368,7 @@ prefill read-ahead raises pp2048 c1.
 
 ## b1.4 image (2026-10-01)
 
-Release 2× v3.0.0 (old name b1.4), the default from 2026-10-01 to 2026-10-08.
+Release 2× v1.4.0 (old name b1.4), the default from 2026-10-01 to 2026-10-08.
 
 The current default build.
 
@@ -452,7 +452,7 @@ Total wall time for the 42 runs 1,498 s at `medium` vs 8,982 s at `xhigh`. Jev o
 
 ## b1.3 image (2026-09-29)
 
-Release 2× v2.1.0 (old name b1.3), history.
+Release 2× v1.3.0 (old name b1.3), history.
 
 Recommended from 2026-09-29 to 2026-10-01, now the `-previous` fallback; superseded by b1.4 (above).
 
@@ -518,7 +518,7 @@ with no score; GSM8K, IFEval, LiveCodeBench and the comparison with the previous
 
 ## b1.2 image (2026-09-27)
 
-Release 2× v2.0.0 (old name b1.2), history.
+Release 2× v1.2.0 (old name b1.2), history.
 
 Recommended from 2026-09-27 to 2026-09-29, then the `-previous` fallback until 2026-10-01 (archived).
 

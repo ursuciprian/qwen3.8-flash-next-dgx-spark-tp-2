@@ -12,7 +12,7 @@ Two Sparks can also run one 1× copy each behind a router ([DP=2](#which-setup-s
 [![retrieval](https://img.shields.io/badge/tool--call%20retrieval-20%2F20%20up%20to%20245k%20tokens-2ea44f)](#quality-gate)
 [![stragglers](https://img.shields.io/badge/batch%20stragglers-none-2ea44f)](#quality-gate)
 <br>
-[![release](https://img.shields.io/badge/release-v3.1.0%20·%202026--10--08-blue)](VERSIONS.md)
+[![release](https://img.shields.io/badge/release-v1.5.0%20·%202026--10--08-blue)](VERSIONS.md)
 [![Engine](https://img.shields.io/badge/engine-vLLM%20V2%20+%20b12x-blue)](docs/REFERENCE.md#what-is-in-the-image)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 
@@ -22,7 +22,7 @@ Two Sparks can also run one 1× copy each behind a router ([DP=2](#which-setup-s
 
 ## Capabilities at a glance
 
-Shipped releases: 2× v3.1.0 (old name b1.6) and 1× v3.0.0 (old name v3e), both from 2026-10-08. Every number carries a letter that names the
+Shipped releases: 2× v1.5.0 (old name b1.6) and 1× v2.1.0 (old name v3e), both from 2026-10-08. Every number carries a letter that names the
 release, the date and the run it comes from. Where the shipped release has no measurement yet, the table shows the
 newest release that has one; a full grid of the shipped releases is queued ([tp-2 #128](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/128)).
 Decode rows are aggregate over all requests unless marked "each"; sampling is the server default (temperature 1.0,
@@ -48,18 +48,18 @@ thinking on) unless the run says otherwise. Same table in both repos.
 
 Releases and runs behind the numbers:
 
-- <sup>a</sup> 1× v3.0.0 (old name v3e), 2026-10-08, shipped-image check, llama-benchy task mode ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3e-hf-20261008/bench/))
-- <sup>b</sup> 2× v3.1.0 (old name b1.6), 2026-10-08, promotion A/B, llama-benchy task mode ([files](results/k71-tp2-refit-pinned-plans-20261008-0921/screen/))
-- <sup>c</sup> 2× v3.0.0 (old name b1.4), 2026-10-01, promotion A/B, llama-benchy task mode ([files](results/b1.4-20261001/))
+- <sup>a</sup> 1× v2.1.0 (old name v3e), 2026-10-08, shipped-image check, llama-benchy task mode ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3e-hf-20261008/bench/))
+- <sup>b</sup> 2× v1.5.0 (old name b1.6), 2026-10-08, promotion A/B, llama-benchy task mode ([files](results/k71-tp2-refit-pinned-plans-20261008-0921/screen/))
+- <sup>c</sup> 2× v1.4.0 (old name b1.4), 2026-10-01, promotion A/B, llama-benchy task mode ([files](results/b1.4-20261001/))
 - <sup>d</sup> 1× v2.0.0 (old name v3d), 2026-10-05, depth and prefill sweep, llm-inference-bench 0.7.6 ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3d-20261005/bench/))
-- <sup>e</sup> 2× v3.0.0 (old name b1.4), 2026-10-05, depth and prefill sweep, llm-inference-bench 0.7.6 ([files](results/lib-bench-20261005/tp2-b1.4/))
-- <sup>f</sup> 1× v3.0.0 (old name v3e), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
-- <sup>g</sup> 2× v3.1.0 (old name b1.6), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
-- <sup>h</sup> DP=2 on 1× v3.0.0 (old name v3e), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
-- <sup>i</sup> 1× v1.3.0 (old name v3c), 2026-10-05, kv-capacity page accounting, same 14 GiB pool in 1× v2.0.0 and v3.0.0 ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3c-20261005/))
-- <sup>j</sup> 1× v3.0.0 (old name v3e), 2026-10-07, promotion gate ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/blob/main/docs/BENCHMARKS.md))
-- <sup>k</sup> 2× v3.1.0 (old name b1.6), 2026-10-08, promotion gate ([files](docs/BENCHMARKS.md))
-- <sup>l</sup> DP=2 on 1× v3.0.0 (old name v3e), 2026-10-08, quality gate through the router ([files](results/dp2-gate-k72-20261008-1135/))
+- <sup>e</sup> 2× v1.4.0 (old name b1.4), 2026-10-05, depth and prefill sweep, llm-inference-bench 0.7.6 ([files](results/lib-bench-20261005/tp2-b1.4/))
+- <sup>f</sup> 1× v2.1.0 (old name v3e), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
+- <sup>g</sup> 2× v1.5.0 (old name b1.6), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
+- <sup>h</sup> DP=2 on 1× v2.1.0 (old name v3e), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
+- <sup>i</sup> 1× v1.3.0 (old name v3c), 2026-10-05, kv-capacity page accounting, same 14 GiB pool in 1× v2.0.0 and v2.1.0 ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3c-20261005/))
+- <sup>j</sup> 1× v2.1.0 (old name v3e), 2026-10-07, promotion gate ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/blob/main/docs/BENCHMARKS.md))
+- <sup>k</sup> 2× v1.5.0 (old name b1.6), 2026-10-08, promotion gate ([files](docs/BENCHMARKS.md))
+- <sup>l</sup> DP=2 on 1× v2.1.0 (old name v3e), 2026-10-08, quality gate through the router ([files](results/dp2-gate-k72-20261008-1135/))
 <!-- capability-table:end -->
 
 Full grids, every build and method: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Release names and contents:
@@ -75,7 +75,7 @@ Full grids, every build and method: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Re
 | Two Sparks, more long contexts at once than one Spark holds | 2× TP=2 | One KV pool of 3,650,419 tokens, about 14 requests at 262,144 tokens by vLLM's count; a 1× replica holds about 7.5 requests at 128K |
 
 The agent replay (tools on, thinking off, temperature 0.6, all sessions starting together) against
-2× v3.1.0 (old name b1.6) and DP=2 on two 1× v3.0.0 (old name v3e) replicas, 2026-10-08:
+2× v1.5.0 (old name b1.6) and DP=2 on two 1× v2.1.0 (old name v3e) replicas, 2026-10-08:
 
 | Workload | Wall time, TP=2 / DP=2 (s) | First-turn TTFT mean, TP=2 / DP=2 (s) | Follow-up TTFT mean, TP=2 / DP=2 (s) |
 |---|:---:|:---:|:---:|
@@ -103,27 +103,27 @@ PNG copies sit next to the SVGs in [`docs/img/`](docs/img/).
 
 How fast is one request, and how much do all requests get together?
 
-<img src="docs/img/decode-concurrency.svg" alt="Decode tok/s by concurrent requests, per request and all together. 1× v3.0.0 (old name v3e): 56.9 at 1 request, 132.9 total at 8. 2× v3.1.0 (old name b1.6): 73.7 at 1 request, 194.0 total at 8; at 2 and 16 requests only the older 2× v3.0.0 (old name b1.4) was measured, 242.8 total at 16." width="900">
+<img src="docs/img/decode-concurrency.svg" alt="Decode tok/s by concurrent requests, per request and all together. 1× v2.1.0 (old name v3e): 56.9 at 1 request, 132.9 total at 8. 2× v1.5.0 (old name b1.6): 73.7 at 1 request, 194.0 total at 8; at 2 and 16 requests only the older 2× v1.4.0 (old name b1.4) was measured, 242.8 total at 16." width="900">
 
 How fast is the prompt read, and how long until the first token?
 
-<img src="docs/img/prefill-ttft.svg" alt="Prefill tok/s and time to first token by prompt length, one uncached request, measured on 1× v2.0.0 (old name v3d) and 2× v3.0.0 (old name b1.4). 2×: 2,931 tok/s at 16K, 2,384 at 128K, first token after 54 s at 128K and 124 s at 245K. 1×: 2,182 at 16K, 1,880 at 128K, first token after 68 s at 128K." width="900">
+<img src="docs/img/prefill-ttft.svg" alt="Prefill tok/s and time to first token by prompt length, one uncached request, measured on 1× v2.0.0 (old name v3d) and 2× v1.4.0 (old name b1.4). 2×: 2,931 tok/s at 16K, 2,384 at 128K, first token after 54 s at 128K and 124 s at 245K. 1×: 2,182 at 16K, 1,880 at 128K, first token after 68 s at 128K." width="900">
 
 Does decode slow down with a long context already in the prompt?
 
-<img src="docs/img/decode-depth.svg" alt="Decode tok/s at 0, 16K and 64K tokens of cached context at 1, 4 and 8 requests, measured on 1× v2.0.0 (old name v3d) and 2× v3.0.0 (old name b1.4). 2× at 8 requests: 249, 255, 257. 1× at 8 requests: 173, 192, 179." width="900">
+<img src="docs/img/decode-depth.svg" alt="Decode tok/s at 0, 16K and 64K tokens of cached context at 1, 4 and 8 requests, measured on 1× v2.0.0 (old name v3d) and 2× v1.4.0 (old name b1.4). 2× at 8 requests: 249, 255, 257. 1× at 8 requests: 173, 192, 179." width="900">
 
 Coding, one request at a time:
 
-<img src="docs/img/coding.svg" alt="Median decode tok/s over 36 coding prompts, one request at a time, with min to max: 1× v2.0.0 (old name v3d) 73 and 2× v3.0.0 (old name b1.4) 106 at T=0 thinking off; 60 and 88 with server defaults, thinking on." width="780">
+<img src="docs/img/coding.svg" alt="Median decode tok/s over 36 coding prompts, one request at a time, with min to max: 1× v2.0.0 (old name v3d) 73 and 2× v1.4.0 (old name b1.4) 106 at T=0 thinking off; 60 and 88 with server defaults, thinking on." width="780">
 
 Two Sparks, many agent sessions at once: TP=2 or DP=2?
 
-<img src="docs/img/agents.svg" alt="Wall time of six agent workloads on 2× v3.1.0 (old name b1.6) at TP=2 and on DP=2 with two 1× v3.0.0 (old name v3e) replicas: DP=2 finished each 29 to 37 percent sooner, for example 16 sessions from 128K tokens in 568 s against 902 s." width="900">
+<img src="docs/img/agents.svg" alt="Wall time of six agent workloads on 2× v1.5.0 (old name b1.6) at TP=2 and on DP=2 with two 1× v2.1.0 (old name v3e) replicas: DP=2 finished each 29 to 37 percent sooner, for example 16 sessions from 128K tokens in 568 s against 902 s." width="900">
 
 What each release added, on the cell it was promoted for:
 
-<img src="docs/img/release-gains.svg" alt="Largest gain beyond noise of each release over the one before it, in its own A/B. 1×: v1.1.0 (old name v3a) +7.6% probe fresh c4, v1.2.0 (old name v3b) +50.2% prefill pp2048 c1, v1.3.0 (old name v3c) KV pool 6 to 14 GiB so 8 requests at 16K no longer queue, 22 to 109 tok/s, v2.0.0 (old name v3d) +19.3% tg512 c1, v3.0.0 (old name v3e) +6.8% probe fresh c8. 2×: v1.0.0 (old name b1) +13.0% counting c10, v1.1.0 (old name b1.1) +26.6% tg512 16K c16, v2.0.0 (old name b1.2) +15.7% tg512 c1, v2.1.0 (old name b1.3) +5.3% tg512 16K c1, v3.0.0 (old name b1.4) +4.9% counting c1, v3.1.0 (old name b1.6) +10.9% probe fresh c4." width="900">
+<img src="docs/img/release-gains.svg" alt="Largest gain beyond noise of each release over the one before it, in its own A/B. 1×: v1.1.0 (old name v3a) +7.6% probe fresh c4, v1.2.0 (old name v3b) +50.2% prefill pp2048 c1, v1.3.0 (old name v3c) KV pool 6 to 14 GiB so 8 requests at 16K no longer queue, 22 to 109 tok/s, v2.0.0 (old name v3d) +19.3% tg512 c1, v2.1.0 (old name v3e) +6.8% probe fresh c8. 2×: v1.0.0 (old name b1) +13.0% counting c10, v1.1.0 (old name b1.1) +26.6% tg512 16K c16, v1.2.0 (old name b1.2) +15.7% tg512 c1, v1.3.0 (old name b1.3) +5.3% tg512 16K c1, v1.4.0 (old name b1.4) +4.9% counting c1, v1.5.0 (old name b1.6) +10.9% probe fresh c4." width="900">
 
 ## Quick start
 
@@ -171,7 +171,7 @@ and does not refresh them on `run`.
 
 A release ships only if it passes every check.
 
-| Check | Tool | 2× v3.1.0 |
+| Check | Tool | 2× v1.5.0 |
 |---|---|:---:|
 | Hard multi-step tool use (88 scenarios, thinking on, T=0); gate ≥ 88 | [tool-eval-bench](https://github.com/SeraphimSerapis) `--hardmode` | 92/100 |
 | `tool_choice=required` compliance, 5 trials | TC-45 | 100/100 |
@@ -193,7 +193,7 @@ GSM8K, IFEval, LiveCodeBench.
 | **Disk** | ~130 GB per node (98.5 GiB checkpoint + ~25 GB image + 4.5 GB drafter copy in the runtime cache) |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) |
-| **Boot** | ~4 min warm (221 s on the v3.1.0 image check), ~9.5 min cold |
+| **Boot** | ~4 min warm (221 s on the v1.5.0 image check), ~9.5 min cold |
 | **Concurrency** | `max_num_seqs` 16, KV pool 3,650,419 tokens on the k72 boot (vLLM sizes it at each boot; b1.x boots logged 3.57M to 3.69M) |
 
 Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface.co/local-inference-lab/Qwen3.8-Flash-Next-NVFP4)
@@ -206,7 +206,7 @@ Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface
 - By vLLM's count the KV pool fits about 14 requests at 262,144 tokens, under the 16-request cap. Four different
   ~256K contexts at once used 28% of the pool; more than four at once have not been run
   ([long contexts at once](docs/BENCHMARKS.md#long-contexts-at-once-on-2-b14-2026-10-07)).
-- v3.1.0 serves a copy of the 7c4f1bc1 snapshot at a fixed path in sparkrun's runtime cache, and its plan seed is
+- v1.5.0 serves a copy of the 7c4f1bc1 snapshot at a fixed path in sparkrun's runtime cache, and its plan seed is
   keyed to that path. Deleting `~/.cache/sparkrun/runtime-cache` costs a rebuild of the copy on the next boot;
   deleting the HF cache needs the 7c4f1bc1 download again.
 - 1-request decode varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting).
@@ -218,9 +218,9 @@ Checkpoint: [`local-inference-lab/Qwen3.8-Flash-Next-NVFP4`](https://huggingface
 
 | Recipe | Release | Image | Use |
 |---|---|---|---|
-| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | v3.1.0 (old name b1.6) | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | Default |
-| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | v3.0.0 (old name b1.4) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | Rollback, original drafter |
-| `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | 1× v3.0.0 / v2.0.0 | | Compatibility copies; the 1× recipes live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
+| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | v1.5.0 (old name b1.6) | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | Default |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | v1.4.0 (old name b1.4) | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | Rollback, original drafter |
+| `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | 1× v2.1.0 / v2.0.0 | | Compatibility copies; the 1× recipes live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
 
 The pair shares the runtime cache, so a rollback boots warm. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
 
