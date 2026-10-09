@@ -114,6 +114,8 @@ spark() { # host -> gen, capture passes, assemble; writes $RES/s0<h>.done with "
     x $h "rm -rf $D3/data-s0$h-$pn"
     pyrun_h $h -m tools.mtp_refit.assemble --capture $CD3/capture/shards-s0$h-$pn --manifest $CD3/capture/man-s0$h-$pn.all.jsonl \
       --out $CD3/data-s0$h-$pn > "$RES/s0$h-assemble-$pn.txt" 2>&1
+    # the container writes root 0600 parts: the host's anchors() and the dgx-02 -> dgx-01 rsync need them readable
+    x $h "docker run --rm --network none -v $D3:/d --entrypoint chmod $IMG -R a+rX /d/data-s0$h-$pn"
     if python3 - "$RES/s0$h-assemble-$pn.txt" "$out.all.jsonl" <<'EOF'
 import json, sys
 s = json.loads(open(sys.argv[1]).read().strip().splitlines()[-1])
