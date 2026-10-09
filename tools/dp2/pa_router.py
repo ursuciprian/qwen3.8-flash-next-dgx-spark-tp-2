@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Minimal prefix-affinity router for DP=2 (k60, 2026-10-07): one OpenAI-compatible endpoint in front of N replicas.
 
-A request goes to replica sha1(key) mod N, where key = the first two non-system messages of the conversation (or the
-first 4096 chars of a completion prompt). Agent conversations only append, so every turn of a session lands on the
-replica that already holds its prefix cache. The system prompt and tools are left out of the key: agents share them,
+A request goes to replica sha1(key) mod N, where key = the client's session id when it sends one (X-Session-Id header,
+else the prompt_cache_key body field), else the first user message of the conversation (or the first 4096 chars of a
+completion prompt). Agent conversations only append, so every turn of a session lands on the replica that already holds
+its prefix cache. Conversations with identical opening user messages and no session id share a key, hence a replica.
+2026-10-09: the key was the first two non-system messages, so turn 1 [user] and turn 2 [user, assistant, user] differed
+and turn 2 went to the other replica. The system prompt and tools are left out of the key: agents share them,
 and keying on them would send every session to one replica.
 k63 change (2026-10-07): sticky least-sessions instead of hash mod N. k60 agent16 put 13 of 16 sessions on one Spark with
 the static hash. Now the first request of a conversation goes to the replica with the fewest conversations so far and
@@ -23,15 +26,18 @@ NCHARS = 4096
 HOP = {"connection", "keep-alive", "transfer-encoding", "content-length", "host", "proxy-connection", "upgrade", "te", "trailer"}
 
 
-def key(body):
+def key(body, headers=None):
+    sid = (headers or {}).get("X-Session-Id") or body.get("prompt_cache_key")
+    if sid:
+        return "sid:" + str(sid)
     msgs = body.get("messages")
-    if isinstance(msgs, list):
-        return json.dumps([m for m in msgs if m.get("role") != "system"][:2], sort_keys=True)[:NCHARS]
+    if isinstance(msgs, list):   # stable from turn 1 on: the later turns only append
+        return json.dumps([m for m in msgs if isinstance(m, dict) and m.get("role") == "user"][:1], sort_keys=True)[:NCHARS]
     return str(body.get("prompt", ""))[:NCHARS]
 
 
-def pick(body, n):
-    return int(hashlib.sha1(key(body).encode()).hexdigest(), 16) % n
+def pick(body, n, headers=None):
+    return int(hashlib.sha1(key(body, headers).encode()).hexdigest(), 16) % n
 
 
 class Router(BaseHTTPRequestHandler):
@@ -72,7 +78,9 @@ class Router(BaseHTTPRequestHandler):
             parsed = json.loads(body)
         except ValueError:
             parsed = {}
-        h = hashlib.sha1(key(parsed).encode()).hexdigest()
+        if not isinstance(parsed, dict):
+            parsed = {}
+        h = hashlib.sha1(key(parsed, self.headers).encode()).hexdigest()
         with self.lock:
             i = self.assign.get(h)
             if i is None:
@@ -123,6 +131,7 @@ def selftest():
             for part in (b"data: 1\n\n", b"data: [DONE]\n\n"):
                 self.wfile.write(b"%x\r\n%s\r\n" % (len(part), part)); self.wfile.flush(); time.sleep(0.05)
             self.wfile.write(b"0\r\n\r\n")
+            self.close_connection = True   # the router closes after one response; no reset traceback
         def do_GET(self):
             self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
     be = [ThreadingHTTPServer(("127.0.0.1", 0), Echo) for _ in range(2)]
@@ -144,6 +153,29 @@ def selftest():
     assert all(post(c) == b for c, b in first.items())             # sticky: a conversation keeps its replica
     st = json.load(urllib.request.urlopen(base + "/router/stats"))
     assert sorted(st["sessions"]) == [8, 9], st                     # 17 conversations split 8/9, not by hash
+    rt.shutdown()
+    rt = serve(0, [f"http://127.0.0.1:{s.server_port}" for s in be], "127.0.0.1")   # fresh assignment state
+    threading.Thread(target=rt.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{rt.server_port}"
+    def turn(conv, n, stream=False, hdrs=None, **extra):
+        """POST turn n of conversation conv (n user messages, n-1 assistant replies); returns the backend."""
+        msgs = [sysmsg]
+        for i in range(1, n + 1):
+            msgs += [{"role": "user", "content": f"{conv} u{i}"}] + ([{"role": "assistant", "content": f"{conv} a{i}"}] if i < n else [])
+        b = json.dumps({"messages": msgs, "stream": stream, **extra}).encode()
+        r = urllib.request.urlopen(urllib.request.Request(base + "/v1/chat/completions", b, {"Content-Type": "application/json", **(hdrs or {})}))
+        assert r.read() == b"data: 1\n\ndata: [DONE]\n\n"
+        return r.headers["X-Router-Backend"]
+    a = [turn("A", n, stream=n % 2 == 1) for n in (1, 2, 3)]
+    assert len(set(a)) == 1, a                                      # turns 1-3 of one conversation: one replica
+    bc = [turn(c, n) for n in (1, 2, 3) for c in ("B", "C")]       # two conversations, interleaved
+    assert bc[0::2] == [bc[0]] * 3 and bc[1::2] == [bc[1]] * 3 and bc[0] != bc[1], bc
+    st = json.load(urllib.request.urlopen(base + "/router/stats"))
+    assert sorted(st["sessions"]) == [1, 2] and sum(st["requests"]) == 9, st   # 3 conversations, 9 requests
+    d, e = turn("same", 1, hdrs={"X-Session-Id": "s-1"}), turn("same", 1, hdrs={"X-Session-Id": "s-2"})
+    assert d != e                                                   # same opening, different session ids: balanced
+    assert turn("compacted", 1, hdrs={"X-Session-Id": "s-1"}) == d  # session id wins over a rewritten history
+    assert turn("other", 2, prompt_cache_key="s-1") == d            # prompt_cache_key is the same session id
     for s in be + [rt]:
         s.shutdown()
     print("router selftest OK")
