@@ -3,11 +3,15 @@
 A ready-made recipe that runs Qwen3.8-Flash-Next on two NVIDIA DGX Sparks as one private, OpenAI-compatible
 server, for chat, coding and agents. Two commands to start.
 
-<img src="docs/img/hero.svg" alt="Qwen3.8-Flash-Next on two DGX Sparks: answer speed for one chat, combined speed for many chats at once, context length and tool-calling score. Each number is measured; the release and date are in the small print of the card." width="100%">
+<!-- hero:start (scripts/make_charts.py writes this block) -->
+<img src="docs/img/hero.svg" alt="Four measured numbers for this setup: answer speed for one chat, combined speed for many chats at once, context length and tool-call score." width="100%">
+
+<sub>tok/s = tokens per second; a token is about 3/4 of a word. Speed: release v1.5.0, 2026-10-08, llama-benchy task mode, each chat sends 2,048 tokens and gets 512 back. Tool calls: TC-45, release v1.5.0, 2026-10-08. Context: recipe max_model_len 262,144. Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).</sub>
+<!-- hero:end -->
 
 ## Quick start
 
-You need two DGX Sparks with their ConnectX-7 ports cabled to each other, and
+You need two DGX Sparks joined by a cable between their fast network ports (ConnectX-7), and
 [sparkrun](https://github.com/eugr/sparkrun) 0.3.6 or newer with the two Sparks set up as a cluster.
 
 ```sh
@@ -16,8 +20,9 @@ sparkrun run qwen3.8-flash-next-2x-dgx-spark
 ```
 
 The first start downloads the model and the image (about 130 GB per Spark), then boots in about 10 minutes; later
-starts take about 4. `sparkrun run` returns before the server is ready. Once `http://<head>:8000/health` answers, point
-any OpenAI client at `http://<head>:8000/v1`, model `qwen3.8-flash-next`:
+starts take about 4. `sparkrun run` returns before the server is ready. Once `http://<head>:8000/health` answers
+(`<head>` is the hostname or IP of the first Spark), point any OpenAI client at `http://<head>:8000/v1`, model
+`qwen3.8-flash-next`:
 
 ```sh
 curl http://<head>:8000/v1/chat/completions -H 'Content-Type: application/json' \
@@ -65,14 +70,22 @@ and does not refresh them on `run`.
 
 ## How fast is it?
 
-<img src="docs/img/speed-users.svg" alt="Line chart: tokens per second, all users together, against the number of people or agents using the server at the same time, for one Spark and for two Sparks (TP=2). Values are labelled on the chart." width="100%">
+<!-- speed-chart:start (scripts/make_charts.py writes this block) -->
+<img src="docs/img/speed-users.svg" alt="Line chart: tokens per second, all users together, against the number of people or agents using the server at the same time. Values are labelled on the chart." width="100%">
 
-The more people use it at once, the more text it writes in total, while each person's share gets slower. One Spark
-takes up to 8 chats at once, two Sparks up to 16.
+<sub>Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking on. Total = all tokens written per second; each reply = how fast one answer streams.<br>One Spark: release v2.1.0, 2026-10-08, llama-benchy task mode<br>Two Sparks, TP=2: release v1.5.0, 2026-10-08, llama-benchy task mode; hollow point: older release v1.4.0, 2026-10-01, llama-benchy task mode<br>Two Sparks, DP=2: not measured on this test yet.<br>Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
+<!-- speed-chart:end -->
+
+The more people use it at once, the more text it writes in total, while each reply streams more slowly. One Spark
+runs up to 8 chats at once, two Sparks up to 16; more requests wait in line.
 
 ## How long until the first word?
 
-<img src="docs/img/first-token.svg" alt="Line chart: seconds until the answer starts against prompt length, for one Spark and two Sparks (TP=2), prompt not cached. Values are labelled on the chart." width="100%">
+<!-- first-token-chart:start (scripts/make_charts.py writes this block) -->
+<img src="docs/img/first-token.svg" alt="Line chart: seconds until the answer starts against prompt length, prompt not cached. Values are labelled on the chart." width="100%">
+
+<sub>One request with a prompt the server has not seen before. Later turns of a chat reuse the cached prompt and start sooner.<br>One Spark: release v2.0.0, 2026-10-05, llm-inference-bench 0.7.6<br>Two Sparks, TP=2: release v1.4.0, 2026-10-05, llm-inference-bench 0.7.6; v1.4.0, 2026-10-07, fidelity_probe.py<br>One Spark: not measured above 128K yet.<br>Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
+<!-- first-token-chart:end -->
 
 Long prompts take a while to read the first time. In a running chat, only the new part of the prompt is read.
 
@@ -94,27 +107,28 @@ gets faster and more long chats fit at once.
 
 **Two Sparks, many agents at once: DP=2.** Each Spark runs the one-Spark recipe and a small
 [router](tools/dp2/README.md) splits the chats between them. In my agent tests it finished the same work sooner than
-TP=2 ([chart](#more-charts)).
+TP=2 ([chart](docs/img/agents.svg)).
 <br clear="left">
 
 ## What's inside
 
-- The model: Qwen3.8-Flash-Next, with its large expert layers in 4-bit NVFP4 and the rest in 8-bit MXFP8, plus a
-  draft head I retrained so more of its guesses are accepted.
-- Inference engine: vLLM with b12x kernels written for the Spark's GB10 chip, in a prebuilt image whose kernel tuning is
-  already done, so a restart does not tune again.
-- Speculative decoding: the draft head proposes 4 tokens per step and the model checks them in one pass; the output
-  follows the same distribution as without it.
-- TP=2: every layer is split across the two Sparks, which talk over the ConnectX-7 cable.
+- The model: Qwen3.8-Flash-Next, stored at 4 and 8 bits per weight so it fits (NVFP4 and MXFP8), plus a draft head I
+  retrained so more of its guesses are accepted.
+- Several tokens per step: the draft head guesses 4 tokens ahead and the model checks them in one pass; the output
+  follows the same distribution as without it (speculative decoding).
+- Two Sparks as one server: every layer is split across both, which talk over the ConnectX-7 cable (tensor
+  parallelism, TP=2).
+- Software: vLLM with kernels written for the Spark's GB10 chip (b12x), in a prebuilt image with the kernel tuning
+  already done.
 - Thinking on by default at `medium` effort, tool calling, 262,144-token context, OpenAI-compatible API.
 
 ## Quality checks
 
 <!-- quality:start (scripts/make_charts.py writes this block) -->
-- ![tool calling](https://img.shields.io/badge/tool%20calling-100%2F100-2ea44f) When a request requires a tool call, the reply contains one (TC-45, 5 trials).
-- ![multi-step tools](https://img.shields.io/badge/multi--step%20tools-92%2F100-2ea44f) Score on 88 hard multi-step tool-use scenarios; a release ships only at 88/100 or more.
+- ![tool calls](https://img.shields.io/badge/tool%20calls-100%2F100-2ea44f) When a request requires a tool call, the reply makes one (TC-45, 5 trials).
+- ![hard tool use](https://img.shields.io/badge/hard%20tool%20use-92%2F100-2ea44f) 92 out of 100 on 88 hard multi-step tool-use scenarios; the pass mark is 88.
 - ![long prompts](https://img.shields.io/badge/long%20prompts-20%2F20%20up%20to%20~245K%20tokens-2ea44f) Finds 20 facts hidden in a long prompt and returns each through a tool call.
-- ![stalled requests](https://img.shields.io/badge/stalled%20requests-none-2ea44f) No request falls behind the others while 8 to 16 are sent at once.
+- ![stalled requests](https://img.shields.io/badge/stalled%20requests-none-2ea44f) No request falls behind the others when 8 to 16 are sent at once.
 
 Gate run: release v1.5.0, 2026-10-08. Every release passes this gate before it ships.
 <!-- quality:end -->

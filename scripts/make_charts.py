@@ -229,98 +229,115 @@ def provenance(points):
 
 def draw(ax, setup, main, extra, fmt, dy=0, left=False):
     """Solid line through the main release, hollow points for older ones; the setup's name and last value at the
-    end of the line instead of a legend."""
-    s = SETUPS[setup]
+    end of the line instead of a legend. This repo's own setup is drawn bold, the others lighter."""
+    s, own = SETUPS[setup], setup == REPO or (REPO == "2x" and setup == "dp2")
+    a, lw = (1, 3.2) if own else (0.5, 2.2)
     xs = list(main)
-    ax.plot(xs, [main[k]["value"] for k in xs], "-", color=s["color"], lw=3, marker=s["marker"], ms=9, zorder=3)
-    if extra:
-        ex = [xs[-1]] + list(extra)
-        ax.plot(ex, [main[xs[-1]]["value"]] + [extra[k]["value"] for k in extra], ":", color=s["color"], lw=2,
-                zorder=2)
-        ax.plot(list(extra), [extra[k]["value"] for k in extra], s["marker"], color=s["color"], mfc=CARD, mew=2,
-                ms=9, zorder=3)
-    end = extra or main
-    k = max(end)
-    for text, off, kw in ((s["name"], 10, dict(color=s["color"], fontsize=14)), (fmt(end[k]), -10, dict(color=INK))):
-        ax.annotate(text, (k, end[k]["value"]), xytext=(-14 if left else 12, dy + off), textcoords="offset points",
-                    va="center", ha="right" if left else "left", fontweight="bold", **{"fontsize": 13.5, **kw}, zorder=4)
-    return k, end[k]["value"]
+    ax.plot(xs, [main[k]["value"] for k in xs], "-", color=s["color"], lw=lw, marker=s["marker"], ms=9, alpha=a,
+            zorder=3 if own else 2)
+    k = xs[-1]
+    for text, off, kw in ((s["name"], 11, dict(color=s["color"], fontsize=15)), (fmt(main[k]), -11, dict(color=INK))):
+        ax.annotate(text, (k, main[k]["value"]), xytext=(-14 if left else 12, dy + off), textcoords="offset points",
+                    va="center", ha="right" if left else "left", fontweight="bold" if own else "normal",
+                    **{"fontsize": 14, **kw}, zorder=4)
+    for x, r in extra.items():   # older release beyond the line's end: hollow, dotted, labelled with its release
+        ax.plot([k, x], [main[k]["value"], r["value"]], ":", color=s["color"], lw=2, alpha=a, zorder=1)
+        ax.plot([x], [r["value"]], s["marker"], color=s["color"], mfc=CARD, mew=2, ms=9, alpha=a, zorder=3)
+        ax.annotate(f"{fmt(r)}\nolder release {r['release']}", (x, r["value"]), xytext=(0, 14),
+                    textcoords="offset points", ha="center", va="bottom", fontsize=12, color=MUTED)
+    return max(list(main) + list(extra)), max(r["value"] for r in list(main.values()) + list(extra.values()))
 
 
 def big(ax):
     """Larger type for the two README charts, so they stay readable when a phone scales them to ~400 px."""
-    ax.tick_params(labelsize=13)
-    ax.xaxis.label.set_size(13.5)
-    ax.yaxis.label.set_size(13.5)
+    ax.tick_params(labelsize=14)
+    ax.xaxis.label.set_size(14.5)
+    ax.yaxis.label.set_size(14.5)
 
 
-def small_print(fig, lines, y=-0.02):
-    fig.text(0.01, y, "\n".join(lines), fontsize=10, color=MUTED, va="top", ha="left", linespacing=1.5)
+CAPTIONS = {}
+
+
+def caption(name, lines):
+    """Provenance under a README image, written into the README by write_blocks (small print, not in the image)."""
+    CAPTIONS[name] = "<sub>" + "<br>".join(lines) + "</sub>"
 
 
 def chart_users(rows):
     """How fast is it? Combined tok/s against the number of users; each line labelled where it ends."""
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
     big(ax)
     style(ax, "Tokens per second, all users together")
     notes, ymax, ticks = [], 0, [1, 2, 4, 8, 16]
-    for setup in has(rows, "tg_total"):
-        main, extra = main_line(rows, setup, "tg_total", "conc", keep=ticks, depth_tokens=None)
-        k, v = draw(ax, setup, main, extra, lambda r: f"{r['value']:.0f} tok/s" + (
-            f", {e['value']:.0f} per user" if (e := twin(rows, r, "tg_req")) and r["conc"] > 1 else ""))
-        ax.annotate(f"{main[1]['value']:.0f}", (1, main[1]["value"]), xytext=(-12, 0), textcoords="offset points",
-                    ha="right", va="center", fontsize=13.5, color=INK, fontweight="bold") if 1 in main else None
+    lines = {s: main_line(rows, s, "tg_total", "conc", keep=ticks, depth_tokens=None) for s in has(rows, "tg_total")}
+    top = max(lines, key=lambda s: lines[s][0][max(lines[s][0])]["value"]) if len(lines) > 1 else None
+    for setup, (main, extra) in lines.items():   # the top line is labelled above-left of its end, the rest right
+        _, v = draw(ax, setup, main, extra, lambda r: f"{r['value']:.0f} tok/s" + (
+            f"\neach reply {e['value']:.0f} tok/s" if (e := twin(rows, r, "tg_req")) and r["conc"] > 1 else ""),
+            dy=40 if setup == top else 0, left=setup == top)
+        if 1 in main:
+            ax.annotate(f"{main[1]['value']:.0f}", (1, main[1]["value"]), xytext=(-12, 0), textcoords="offset points",
+                        ha="right", va="center", fontsize=14, color=INK, fontweight="bold")
         ymax = max(ymax, v)
-        notes.append(f"{SETUPS[setup]['name']}: {provenance(main.values())}"
-                     + (f"\n    hollow point: older release {provenance(extra.values())}" if extra else ""))
-    if "1x" in has(rows, "tg_total"):
-        ax.axvline(8, color=GRID, lw=1.2, ls="--", zorder=1)
-        ax.text(8.3, 6, "One Spark takes\nup to 8 at once", fontsize=11.5, color=MUTED, va="bottom")
+        notes.append(f"{SETUPS[setup]['name']}: release {provenance(main.values())}"
+                     + (f"; hollow point: older release {provenance(extra.values())}" if extra else ""))
+    cap = recipe_value("max_num_seqs", "1x")
+    if "1x" in has(rows, "tg_total") and cap:
+        ax.axvline(cap, color=GRID, lw=1.2, ls="--", zorder=1)
+        ax.text(cap * 1.06, 4, f"One Spark runs up\nto {cap} at once", fontsize=12, color=MUTED, va="bottom")
+    ax.set_xscale("log", base=2)
     ax.set_xticks(ticks, [str(t) for t in ticks])
-    ax.set_xlim(-0.5, 18)
-    ax.set_ylim(0, ymax * 1.2)
+    ax.minorticks_off()
+    ax.set_xlim(0.75, 22)
+    ax.set_ylim(0, ymax * 1.28)
     ax.set_xlabel("People or agents using it at the same time")
     missing = [SETUPS[s]["name"] for s in SETUPS if s not in has(rows, "tg_total")]
-    small_print(fig, ["Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking on."]
-                + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else [])
-                + ["Data: docs/data/capability.csv (source file per point)."])
+    caption("speed-chart", ["Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking "
+                            "on. Total = all tokens written per second; each reply = how fast one answer streams."]
+            + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else [])
+            + ["Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), "
+               "with the source file of every point."])
     save(fig, "speed-users")
 
 
 def chart_first_token(rows):
     """How long until the first word? Seconds to the first token against prompt length, prompt not cached."""
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
     big(ax)
     style(ax, "Seconds until the answer starts")
-    notes, ymax = [], 0
+    notes, ymax, xmax, ends = [], 0, 0, {}
     for setup in has(rows, "ttft_s"):
         main, extra = main_line(rows, setup, "ttft_s", "prompt_tokens", conc=1)
         k, v = draw(ax, setup, main, extra, lambda r: f"{r['value']:.0f} s at {ktok(r['prompt_tokens'])}",
-                    dy=26 if setup == "1x" else 0, left=setup == "1x")
+                    dy=28 if setup == "1x" else 0, left=setup == "1x")
         if 131072 in main and k != 131072:
             r = main[131072]
-            ax.annotate(f"{r['value']:.0f} s", (131072, r["value"]), xytext=(4, -16), textcoords="offset points",
-                        ha="left", va="center", fontsize=13.5, color=INK, fontweight="bold")
-        ymax = max(ymax, v)
-        notes.append(f"{SETUPS[setup]['name']}: {provenance((main | extra).values())}".replace("; ", "\n    "))
+            ax.annotate(f"{r['value']:.0f} s at 128K", (131072, r["value"]), xytext=(6, -18),
+                        textcoords="offset points", ha="left", va="center", fontsize=13, color=INK)
+        ymax, xmax, ends[setup] = max(ymax, v), max(xmax, k), k
+        notes.append(f"{SETUPS[setup]['name']}: release {provenance((main | extra).values())}")
     ticks = [8192, 32768, 65536, 131072, 262144]
-    ax.set_xticks(ticks, [f"{t // 1024}K" for t in ticks])
+    ax.set_xticks(ticks, ["8K", "32K", "64K", "128K", "256K"])
     ax.set_xlim(0, 285000)
     ax.set_ylim(0, ymax * 1.2)
     ax.set_xlabel("Prompt length in tokens (a token is about 3/4 of a word)")
-    small_print(fig, ["One request with a prompt the server has not seen before.",
-                      "Later turns of a chat reuse the cached prompt and start sooner."] + notes
-                + ["Data: docs/data/capability.csv (source file per point)."])
+    caption("first-token-chart", ["One request with a prompt the server has not seen before. Later turns of a chat "
+                                  "reuse the cached prompt and start sooner."] + notes
+            + [f"{SETUPS[s]['name']}: not measured above {ktok(k)} yet." for s, k in ends.items() if k < xmax]
+            + ["Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point."])
     save(fig, "first-token")
 
 
-def recipe_value(key):
-    m = re.search(rf"^\s*{key}:\s*(\d+)", RECIPE.read_text(), re.M) if RECIPE.exists() else None
+def recipe_value(key, setup=None):
+    """A number from this repo's recipe (or the one-Spark recipe, which both repos carry)."""
+    path = RECIPE.parent / f"qwen3.8-flash-next-{setup or REPO}-dgx-spark.yaml"
+    m = re.search(rf"^\s*{key}:\s*(\d+)", path.read_text(), re.M) if path.exists() else None
     return int(m.group(1)) if m else None
 
 
 def hero(rows):
-    """The card at the top of the README: four measured numbers for this repo's setup, run and date in small print."""
+    """The card at the top of the README: four measured numbers for this repo's setup; release and date on the card,
+    the runs behind them in the caption under it."""
     s = REPO
     ship = [r for r in rows if r["setup"] == s and r["release"] == SHIPPED[s]]
 
@@ -336,27 +353,30 @@ def hero(rows):
     tiles = [(f"{one['value']:.0f}", "tok/s", "answer speed, one chat"),
              (f"{many['value']:.0f}", "tok/s", f"{many['conc']} chats at once, combined"),
              (f"{ctx // 1000}K", "tokens", "of context in one chat"),
-             (f"{tc['value']:.0f}", "/100", "on a tool-calling test")]
-    fig = plt.figure(figsize=(10, 4.6))
+             (f"{tc['value']:.0f}", "/100", "tool calls made when required")]
+    W, H = 10, 3.7
+    fig = plt.figure(figsize=(W, H))
     fig.patch.set_alpha(0)
-    fig.add_artist(FancyBboxPatch((0.006, 0.01), 0.988, 0.98, boxstyle="round,pad=0,rounding_size=0.035",
+    fig.add_artist(FancyBboxPatch((0.006, 0.012), 0.988, 0.976, boxstyle="round,pad=0,rounding_size=0.035",
                                   transform=fig.transFigure, facecolor=CARD, edgecolor=GRID, lw=1.5,
-                                  mutation_aspect=10 / 4.6))
+                                  mutation_aspect=W / H))
     col, r = SETUPS[s]["color"], fig.canvas.get_renderer()
     for i, (num, unit, cap) in enumerate(tiles):
-        x, y = (0.07, 0.54)[i % 2], (0.6, 0.27)[i // 2]
-        fig.add_artist(plt.Rectangle((x - 0.03, y - 0.035), 0.009, 0.24, transform=fig.transFigure, color=col))
-        t = fig.text(x, y + 0.04, num, fontsize=54, fontweight="bold", color=INK, va="baseline")
+        x, y = (0.07, 0.54)[i % 2], (0.56, 0.17)[i // 2]
+        fig.add_artist(plt.Rectangle((x - 0.03, y - 0.06), 0.009, 0.3, transform=fig.transFigure, color=col))
+        t = fig.text(x, y + 0.06, num, fontsize=54, fontweight="bold", color=INK, va="baseline")
         w = t.get_window_extent(r).transformed(fig.transFigure.inverted()).width
-        fig.text(x + w + 0.012, y + 0.04, unit, fontsize=22, color=INK, va="baseline")
-        fig.text(x, y - 0.015, cap, fontsize=20, color=MUTED, va="top")
-    where = {"1x": "One DGX Spark", "2x": "Two DGX Sparks, TP=2"}[s]
-    fig.text(0.04, 0.9, f"Qwen3.8-Flash-Next  ·  {where}  ·  release {SHIPPED[s]}", fontsize=13, color=INK,
-             fontweight="bold", va="center")
-    fig.text(0.04, 0.075, f"Speed: release {provenance([one, many])}; each chat sends 2,048 tokens and gets 512 "
-             f"back.\nTool calling: TC-45, release {tc['release']}, {tc['date']}.  Context: recipe max_model_len "
-             f"{ctx:,}.  Sources: docs/BENCHMARKS.md", fontsize=10, color=MUTED, va="center", linespacing=1.5)
+        fig.text(x + w + 0.012, y + 0.06, unit, fontsize=22, color=INK, va="baseline")
+        fig.text(x, y + 0.005, cap, fontsize=20, color=MUTED, va="top")
+    where = {"1x": "One DGX Spark", "2x": "Two DGX Sparks"}[s]
+    dates = sorted({one["date"], many["date"], tc["date"]})
+    fig.text(0.04, 0.9, f"{where}  ·  release {SHIPPED[s]}  ·  measured {' and '.join(dates)}", fontsize=14,
+             color=MUTED, va="center")
     save(fig, "hero", card=True)
+    caption("hero", [f"tok/s = tokens per second; a token is about 3/4 of a word. Speed: release "
+                     f"{provenance([one, many])}, each chat sends 2,048 tokens and gets 512 back. Tool calls: TC-45, "
+                     f"release {tc['release']}, {tc['date']}. Context: recipe max_model_len {ctx:,}. "
+                     "Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)."])
 
 
 def icons():
@@ -627,30 +647,52 @@ def quality(rows):
         x.replace("-", "--").replace("_", "__").replace(" ", "%20").replace("/", "%2F") for x in (label, value))
         + "-2ea44f)")  # noqa: E731
     v = lambda m, f="{:.0f}": f.format(g[m]["value"]) if isinstance(g[m]["value"], float) else g[m]["value"]  # noqa: E731
-    retr = v("retrieval").split(" (")[0]
+    retr, note = (v("retrieval") + " (").split(" (")[:2]
+    worst = min(re.findall(r"\d+/\d+", v("retrieval")), key=lambda f: int(f.split("/")[0]))
+    seqs = recipe_value("max_num_seqs")
+    hi = re.search(r"c(\d+)-c(\d+)", v("stragglers"))
     lines = [
-        (badge("tool calling", v("tc45") + "/100"), "When a request requires a tool call, the reply contains one (TC-45, 5 trials)."),
-        (badge("multi-step tools", v("hardmode") + "/100"), "Score on 88 hard multi-step tool-use scenarios; a release ships only at 88/100 or more."),
-        (badge("long prompts", retr + " up to ~245K tokens"), "Finds 20 facts hidden in a long prompt and returns each through a tool call."
-         + (f" ({v('retrieval').split(' (')[1].rstrip(')').replace('seeds', 'prompts')})" if " (" in v("retrieval")
-            else "")),
-        (badge("stalled requests", v("stragglers").split(",")[0]), "No request falls behind the others while "
-         + re.sub(r"c(\d+)-c(\d+)", r"\1 to \2", v("stragglers").split(", ")[-1]) + " are sent at once."),
+        (badge("tool calls", v("tc45") + "/100"), "When a request requires a tool call, the reply makes one (TC-45, 5 "
+         "trials)."),
+        (badge("hard tool use", v("hardmode") + "/100"), f"{v('hardmode')} out of 100 on 88 hard multi-step tool-use "
+         "scenarios; the pass mark is 88."),
+        (badge("long prompts", (f"{worst} or better" if worst != retr else retr) + " up to ~245K tokens"),
+         "Finds 20 facts hidden in a long prompt and returns each through a tool call"
+         + (": 20 of 20 in every run except " + re.sub(r"\s(\d+)/(\d+)$", r" (\1 of \2)",
+                                                    note.rstrip(")").replace("seeds", "prompts")) + "." if note else ".")),
+        (badge("stalled requests", v("stragglers").split(",")[0]), "No request falls behind the others when "
+         + (f"{hi[1]} to {hi[2]} are sent at once" if hi else "many are sent at once")
+         + (f"; it runs {seqs} at a time and queues the rest." if hi and seqs and seqs < int(hi[2]) else ".")),
     ]
     rel = sorted({(g[m]["release"], g[m]["date"]) for m in g})
     return "\n".join(f"- {b} {t}" for b, t in lines) + "\n\nGate run: " + "; ".join(
         f"release {r}, {d}" for r, d in rel) + ". Every release passes this gate before it ships."
 
 
+IMAGES = {"hero": ("hero", "Four measured numbers for this setup: answer speed for one chat, combined speed for many "
+                   "chats at once, context length and tool-call score."),
+          "speed-chart": ("speed-users", "Line chart: tokens per second, all users together, against the number of "
+                          "people or agents using the server at the same time. Values are labelled on the chart."),
+          "first-token-chart": ("first-token", "Line chart: seconds until the answer starts against prompt length, "
+                                "prompt not cached. Values are labelled on the chart.")}
+
+
+def image_block(name):
+    file, alt = IMAGES[name]
+    return f'<img src="docs/img/{file}.svg" alt="{alt}" width="100%">\n\n{CAPTIONS[name]}'
+
+
 def write_blocks(rows):
     readme = ROOT / "README.md"
     text = new = readme.read_text()
-    for name, body in (("capability-table", table), ("quality", quality)):
+    blocks = {"capability-table": lambda: table(rows), "quality": lambda: quality(rows)}
+    blocks.update({n: (lambda n=n: image_block(n)) for n in IMAGES})
+    for name, body in blocks.items():
         a, b = f"<!-- {name}:start (scripts/make_charts.py writes this block) -->", f"<!-- {name}:end -->"
         if a not in text:
             print(f"README.md has no {name} markers; block not written")
             continue
-        new = re.sub(re.escape(a) + r".*?" + re.escape(b), lambda m: f"{a}\n{body(rows)}\n{b}", new, flags=re.S)
+        new = re.sub(re.escape(a) + r".*?" + re.escape(b), lambda m: f"{a}\n{body()}\n{b}", new, flags=re.S)
         print(f"wrote README.md {name} block")
     if new != text:
         readme.write_text(new)
