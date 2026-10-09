@@ -14,7 +14,8 @@ the README charts join measured points, the detail charts also break a line at a
 
 Rules: the shipped release of a setup is its highest version in the CSV. The hero card shows this repo's setup
 (tools/dp2 present = the two-Spark repo) from its shipped release. In the two README charts each line is the newest
-release with 2+ points; an older release adds hollow points on a dotted line only beyond that line's last x. In the
+release with 2+ points (this repo's own setup in front, the others lighter); for the own setup only, an older
+release adds hollow points on a dotted line beyond that line's last x. In the
 detail charts, points from any older release are hollow, on a dotted line, and listed in the footnote. Every chart
 lists the release, date and harness of each line in its small print.
 
