@@ -31,7 +31,7 @@
 #     on top of 41 was INCONCLUSIVE and is not part of this release.
 #   - Gate (one TP=2 boot): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k plus two more 128k seeds
 #     20/20, stragglers c8/c12/c16 0 preemptions, min MemAvailable 9.48 GiB.
-#   Results: results/k73-tp2-gdnmse-dispatch-20261009-1621, results/k77-2x-ship-check. Rollback:
+#   Results: results/k73-tp2-gdnmse-dispatch-20261009-1621, results/k77-2x-ship-check-20261009-2149. Rollback:
 #   qwen3.8-flash-next-2x-dgx-spark-previous (v1.5.0).
 #
 # Base: v1.5.0 (old name b1.6) header below.
@@ -92,8 +92,10 @@ model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
 # see below). Check boot (results/b1.6-20261008): 221 s, 0 b12x plans measured (scripts/check_seed.py).
 # v2.0.0 image (2026-10-09, k73): built from the 1x v3e image's base with vLLM d21d7ade and b12x 21e0b201, plus the
 # TP=2 plan seed 6fdfaa4c and the torch AOT cache of both ranks, plus docker/b0-warm (CI build-b0-warm). The same image
-# is also tagged 2x-v2.0.0. Digest: @DIGEST@ (arm64; kept as a tag, see above).
-# Check boot (k77-2x-ship-check): @CHECK@
+# is also tagged 2x-v2.0.0. Digest: sha256:8abb60eeeb79ca13680341c17d87975801da1218c06df2505856b23da7ed1821 (arm64; kept as a tag, see above).
+# Check boot (k77-2x-ship-check, results/k77-2x-ship-check-20261009-2149): runtime caches without the plan file and
+# AOT keys, up in 170 s, 0 b12x plans measured on both ranks (scripts/check_seed.py), AOT loaded, no Dynamo compile,
+# fresh-c4 T=0 acceptance 0.842/0.692/0.562/0.449, llama-benchy tg512 c1 81.2 / c8 199.7 / c16 236.6 tok/s.
 # Previous recommended (b1.6 image, 2026-10-08): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
 container: ghcr.io/ursuciprian/spark-vllm-b12x:k73-20261009-21e0b201-d21d7ade-warm
 runtime: vllm
