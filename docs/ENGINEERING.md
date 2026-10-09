@@ -91,7 +91,7 @@ stack.
   every model on the shared engine (Kimi K2, GLM-4.7-MoE, DeepSeek variants,
   Gemma4, Mistral, SeedOss, NemotronV3, Minimax M2). Fix exists
   (`archive/mods/vllm-tc45-reasoning-structag-fix/`, hardmode 93/100) but is not
-  enabled — see [Quality](../README.md#quality).
+  enabled — see [Quality](../README.md#quality-gate).
 - **`scripts/gate_arm.sh`** needs `--hardmode` to run all 88 scenarios; the
   first `la` gate accidentally ran the 69-scenario default set and gave a
   score that wasn't comparable — fixed, always pass `--hardmode` for a real
@@ -297,7 +297,7 @@ Where each file went: [recipes/RENAMES.md](../recipes/RENAMES.md).
 | TP2 preparation hangs from an empty plan cache on b12x commits past `a8333658` | **Fixed in default recipe** | `B12X_ROCE_SPIN_LIMIT: "300000000"` + `archive/mods/b12x-startup-boundedwait/` (baked into the image); [`results/kernel-pass/prep-deadlock/mechanism.md`](../results/kernel-pass/prep-deadlock/mechanism.md) |
 | TC-45: `tool_choice=required` silently unconstrained (shared Qwen3 `ParserEngine`) | **Fixed in b1** (default since 2026-09-25); still open on `-b0` / `-argmax-drafts` | Cheap variant in vLLM `14077fb35` gates only `required`/named, no measured speed cost; hardmode TC-45 passes, targeted re-runs 5/5. History: `archive/mods/vllm-tc45-reasoning-structag-fix/` |
 | `scripts/gate_arm.sh` without `--hardmode` runs only 69 of 88 scenarios | **Usage** | Always pass `--hardmode` for a real promotion decision |
-| Prose 64k-cached c16 regresses vs old la (38.15 -> 36.78) | **Known** | See the comparison in [At a glance](BENCHMARKS.md#default-vs-previous-default-old-la-one-hot-argmax-drafts) |
+| Prose 64k-cached c16 regresses vs old la (38.15 -> 36.78) | **Known** | See the comparison in [At a glance](BENCHMARKS.md#default-vs-previous-default-old-la-one-hot-argmax-drafts-hybrid) |
 | Raw `results/arms/` files | **Not all mirrored** | Some live on dgx-01 only, see [results/README.md](../results/README.md) |
 
 Full write-ups (deadlock mechanism, parser detail, lm_head MXFP8):

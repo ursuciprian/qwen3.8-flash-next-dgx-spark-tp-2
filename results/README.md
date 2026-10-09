@@ -30,9 +30,8 @@ Workload key used below — every number carries one of these tags:
   `results/showcase-20261004/A/copy-streams.json` (2x Spark b1.4) and
   `B/dgx0{1,2}/copy-streams.json` (1x Spark v3a on each Spark), with the
   counting files of the same run; earlier: `results/b1.2-20260927/copy-streams-20260929.json`
-  (2x b1.2). The README charts (`docs/img/`) are rendered by `scripts/make_charts.py` from `b14.json`,
-  `b1.4-20261001/benchy/`, `showcase-20261004/A/`, `lib-bench-20261005/`, `high-conc-k46b-20261005/` and the b1.x
-  verdict files.
+  (2x b1.2). The README charts (`docs/img/`) and the capability table are rendered by `scripts/make_charts.py`
+  from `docs/data/capability.csv`; each CSV row names the raw file it came from.
 - **[lib]** llm-inference-bench 0.7.6: 30 s sustained decode per cell at
   c1/c4/c8 with 0/16K/64K context, standalone prefill 8K-128K, hotel-lights x8,
   server default sampling.
