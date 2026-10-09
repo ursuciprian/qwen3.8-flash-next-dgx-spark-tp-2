@@ -56,6 +56,7 @@ class PartWriter:
         save_file({k: v.contiguous() for k, v in t.items()}, path + ".tmp",
                   metadata={"format": "mtp-refit-train-v1", "docs": json.dumps(self.meta)})
         os.replace(path + ".tmp", path)
+        os.chmod(path, 0o644)  # written as root in the training image: the host reads and copies the parts
         self.n, self.docs, self.meta, self.rows = self.n + 1, [], [], 0
 
 
