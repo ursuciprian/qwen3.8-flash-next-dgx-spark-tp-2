@@ -4,15 +4,16 @@ A ready-made recipe that runs Qwen3.8-Flash-Next on two NVIDIA DGX Sparks as one
 server, for chat, coding and agents. Two commands to start.
 
 <!-- hero:start (scripts/make_charts.py writes this block) -->
-<img src="docs/img/hero.svg" alt="Four measured numbers for this setup: answer speed for one chat, combined speed for many chats at once, context length and tool-call score." width="100%">
+<img src="docs/img/hero.svg" alt="Four numbers for this setup: answer speed for one chat and combined speed for many chats at once (measured), the context length setting, and the tool-call score (measured)." width="100%">
 
-<sub>tok/s = tokens per second; a token is about 3/4 of a word. Speed: release v1.5.0, 2026-10-08, llama-benchy task mode, each chat sends 2,048 tokens and gets 512 back. Tool calls: TC-45, release v1.5.0, 2026-10-08. Context: recipe max_model_len 262,144. Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).</sub>
+<sub>tok/s = tokens per second; a token is about 3/4 of a word. Speed: release v1.5.0, 2026-10-08, each chat sends 2,048 tokens and gets 512 back. Tool calls: release v1.5.0, 2026-10-08. How each was measured: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).</sub>
 <!-- hero:end -->
 
 ## Quick start
 
 You need two DGX Sparks joined by a cable between their fast network ports (ConnectX-7), and
-[sparkrun](https://github.com/eugr/sparkrun) 0.3.6 or newer with the two Sparks set up as a cluster.
+[sparkrun](https://github.com/eugr/sparkrun) 0.3.6 or newer with the two Sparks set up as a cluster (the sparkrun
+README shows how).
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
@@ -73,7 +74,7 @@ and does not refresh them on `run`.
 <!-- speed-chart:start (scripts/make_charts.py writes this block) -->
 <img src="docs/img/speed-users.svg" alt="Line chart: tokens per second, all users together, against the number of people or agents using the server at the same time. Values are labelled on the chart." width="100%">
 
-<sub>Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking on. Total = all tokens written per second; each reply = how fast one answer streams.<br>One Spark: release v2.1.0, 2026-10-08, llama-benchy task mode<br>Two Sparks, TP=2: release v1.5.0, 2026-10-08, llama-benchy task mode; hollow point: older release v1.4.0, 2026-10-01, llama-benchy task mode<br>Two Sparks, DP=2: not measured on this test yet.<br>Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
+<sub>Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking on. Total = all tokens written per second, including the time spent reading prompts; each reply = how fast one answer streams once it has started, so it is more than total / users.<br>One Spark: release v2.1.0, 2026-10-08, llama-benchy task mode<br>Two Sparks, TP=2: release v1.5.0, 2026-10-08, llama-benchy task mode; hollow point: older release v1.4.0, 2026-10-01, llama-benchy task mode<br>Two Sparks, DP=2: not measured on this test yet.<br>Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
 <!-- speed-chart:end -->
 
 The more people use it at once, the more text it writes in total, while each reply streams more slowly. One Spark
@@ -126,7 +127,7 @@ TP=2 ([chart](docs/img/agents.svg)).
 
 <!-- quality:start (scripts/make_charts.py writes this block) -->
 - ![tool calls](https://img.shields.io/badge/tool%20calls-100%2F100-2ea44f) When a request requires a tool call, the reply makes one (TC-45, 5 trials).
-- ![hard tool use](https://img.shields.io/badge/hard%20tool%20use-92%2F100-2ea44f) 92 out of 100 on 88 hard multi-step tool-use scenarios; the pass mark is 88.
+- ![hard tool use](https://img.shields.io/badge/hard%20tool%20use-92%2F100-2ea44f) Score 92/100 on 88 hard multi-step tool-use scenarios (pass mark: 88/100).
 - ![long prompts](https://img.shields.io/badge/long%20prompts-20%2F20%20up%20to%20~245K%20tokens-2ea44f) Finds 20 facts hidden in a long prompt and returns each through a tool call.
 - ![stalled requests](https://img.shields.io/badge/stalled%20requests-none-2ea44f) No request falls behind the others when 8 to 16 are sent at once.
 

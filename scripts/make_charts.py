@@ -236,11 +236,11 @@ def draw(ax, setup, main, extra, fmt, dy=0, left=False):
     ax.plot(xs, [main[k]["value"] for k in xs], "-", color=s["color"], lw=lw, marker=s["marker"], ms=9, alpha=a,
             zorder=3 if own else 2)
     k = xs[-1]
-    for text, off, kw in ((s["name"], 11, dict(color=s["color"], fontsize=15)), (fmt(main[k]), -11, dict(color=INK))):
+    for text, off, kw in ((s["name"], 14, dict(color=s["color"], fontsize=15)), (fmt(main[k]), -12, dict(color=INK))):
         ax.annotate(text, (k, main[k]["value"]), xytext=(-14 if left else 12, dy + off), textcoords="offset points",
                     va="center", ha="right" if left else "left", fontweight="bold" if own else "normal",
-                    **{"fontsize": 14, **kw}, zorder=4)
-    for x, r in extra.items():   # older release beyond the line's end: hollow, dotted, labelled with its release
+                    bbox=dict(facecolor=CARD, edgecolor="none", pad=0.5), **{"fontsize": 14, **kw}, zorder=4)
+    for x, r in extra.items() if own else ():   # older release beyond the line's end: hollow, dotted, labelled with its release
         ax.plot([k, x], [main[k]["value"], r["value"]], ":", color=s["color"], lw=2, alpha=a, zorder=1)
         ax.plot([x], [r["value"]], s["marker"], color=s["color"], mfc=CARD, mew=2, ms=9, alpha=a, zorder=3)
         ax.annotate(f"{fmt(r)}\nolder release {r['release']}", (x, r["value"]), xytext=(0, 14),
@@ -276,8 +276,10 @@ def chart_users(rows):
             f"\neach reply {e['value']:.0f} tok/s" if (e := twin(rows, r, "tg_req")) and r["conc"] > 1 else ""),
             dy=40 if setup == top else 0, left=setup == top)
         if 1 in main:
+            own = setup == REPO or (REPO == "2x" and setup == "dp2")
             ax.annotate(f"{main[1]['value']:.0f}", (1, main[1]["value"]), xytext=(-12, 0), textcoords="offset points",
-                        ha="right", va="center", fontsize=14, color=INK, fontweight="bold")
+                        ha="right", va="center", fontsize=14, color=INK if own else MUTED,
+                        fontweight="bold" if own else "normal")
         ymax = max(ymax, v)
         notes.append(f"{SETUPS[setup]['name']}: release {provenance(main.values())}"
                      + (f"; hollow point: older release {provenance(extra.values())}" if extra else ""))
@@ -293,7 +295,8 @@ def chart_users(rows):
     ax.set_xlabel("People or agents using it at the same time")
     missing = [SETUPS[s]["name"] for s in SETUPS if s not in has(rows, "tg_total")]
     caption("speed-chart", ["Each user sends a 2,048-token prompt and gets 512 tokens back; default sampling, thinking "
-                            "on. Total = all tokens written per second; each reply = how fast one answer streams."]
+                            "on. Total = all tokens written per second, including the time spent reading prompts; each reply = how fast one "
+                            "answer streams once it has started, so it is more than total / users."]
             + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else [])
             + ["Versions are numbered per setup. Data: [docs/data/capability.csv](docs/data/capability.csv), "
                "with the source file of every point."])
@@ -352,7 +355,7 @@ def hero(rows):
     ctx = recipe_value("max_model_len")
     tiles = [(f"{one['value']:.0f}", "tok/s", "answer speed, one chat"),
              (f"{many['value']:.0f}", "tok/s", f"{many['conc']} chats at once, combined"),
-             (f"{ctx // 1000}K", "tokens", "of context in one chat"),
+             (f"{ctx // 1000}K", "tokens", "max context per chat (setting)"),
              (f"{tc['value']:.0f}", "/100", "tool calls made when required")]
     W, H = 10, 3.7
     fig = plt.figure(figsize=(W, H))
@@ -370,13 +373,12 @@ def hero(rows):
         fig.text(x, y + 0.005, cap, fontsize=20, color=MUTED, va="top")
     where = {"1x": "One DGX Spark", "2x": "Two DGX Sparks"}[s]
     dates = sorted({one["date"], many["date"], tc["date"]})
-    fig.text(0.04, 0.9, f"{where}  ·  release {SHIPPED[s]}  ·  measured {' and '.join(dates)}", fontsize=14,
+    fig.text(0.04, 0.89, f"{where}  ·  release {SHIPPED[s]}  ·  measured {' and '.join(dates)}", fontsize=16,
              color=MUTED, va="center")
     save(fig, "hero", card=True)
-    caption("hero", [f"tok/s = tokens per second; a token is about 3/4 of a word. Speed: release "
-                     f"{provenance([one, many])}, each chat sends 2,048 tokens and gets 512 back. Tool calls: TC-45, "
-                     f"release {tc['release']}, {tc['date']}. Context: recipe max_model_len {ctx:,}. "
-                     "Details: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)."])
+    caption("hero", [f"tok/s = tokens per second; a token is about 3/4 of a word. Speed: release {one['release']}, "
+                     f"{one['date']}, each chat sends 2,048 tokens and gets 512 back. Tool calls: release "
+                     f"{tc['release']}, {tc['date']}. How each was measured: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)."])
 
 
 def icons():
@@ -654,8 +656,8 @@ def quality(rows):
     lines = [
         (badge("tool calls", v("tc45") + "/100"), "When a request requires a tool call, the reply makes one (TC-45, 5 "
          "trials)."),
-        (badge("hard tool use", v("hardmode") + "/100"), f"{v('hardmode')} out of 100 on 88 hard multi-step tool-use "
-         "scenarios; the pass mark is 88."),
+        (badge("hard tool use", v("hardmode") + "/100"), f"Score {v('hardmode')}/100 on 88 hard multi-step tool-use "
+         "scenarios (pass mark: 88/100)."),
         (badge("long prompts", (f"{worst} or better" if worst != retr else retr) + " up to ~245K tokens"),
          "Finds 20 facts hidden in a long prompt and returns each through a tool call"
          + (": 20 of 20 in every run except " + re.sub(r"\s(\d+)/(\d+)$", r" (\1 of \2)",
@@ -669,8 +671,8 @@ def quality(rows):
         f"release {r}, {d}" for r, d in rel) + ". Every release passes this gate before it ships."
 
 
-IMAGES = {"hero": ("hero", "Four measured numbers for this setup: answer speed for one chat, combined speed for many "
-                   "chats at once, context length and tool-call score."),
+IMAGES = {"hero": ("hero", "Four numbers for this setup: answer speed for one chat and combined speed for many chats at "
+                   "once (measured), the context length setting, and the tool-call score (measured)."),
           "speed-chart": ("speed-users", "Line chart: tokens per second, all users together, against the number of "
                           "people or agents using the server at the same time. Values are labelled on the chart."),
           "first-token-chart": ("first-token", "Line chart: seconds until the answer starts against prompt length, "
