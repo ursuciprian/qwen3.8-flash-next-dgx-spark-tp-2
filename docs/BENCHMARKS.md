@@ -29,6 +29,40 @@ Raw gate logs of 2× v2.0.0 (hardmode, TC-45, stragglers, fidelity):
 [`results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/`](../results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/);
 DP=2 gate through the router: [`results/dp2-gate-k72-20261008-1135/gate/`](../results/dp2-gate-k72-20261008-1135/gate/).
 
+## Boot-to-boot noise and GPU power of the shipped builds (k86, 2026-10-10)
+
+Until k76 most headline values came from one boot, so the spread between boots was not known. k86 booted each shipped
+build 3 times and ran the same cells at every boot: 1× v2.2.0 on both Sparks at once (6 boots pooled) and 2× v2.0.0
+(3 boots). The README headline now quotes these means.
+
+Cells: llama-benchy task mode, ISL/OSL 2048/512, 3 runs per boot, c1 and c8, at the server defaults (T=1.0, top-p 0.95,
+top-k 20, thinking on; "TG defaults") and at T=0 with thinking off ("TG T=0"); the 36-prompt coding probe at T=0,
+thinking off, c1 and c8, 3 passes per boot, aggregate output tok/s per pass. sd = standard deviation of the per-boot
+means. GPU W = nvidia-smi power.draw at 1 Hz averaged over the cell, GPU only (no CPU, memory, NIC or PSU loss, so not
+wall power); the 2× rows add both Sparks. Idle = 120 s with the server up and no requests.
+
+| Setup (boots) | Cell | Mean tok/s | sd between boots | cv % | GPU W | tok/s/W |
+|---|---|--:|--:|--:|--:|--:|
+| 1× v2.2.0 (6) | idle | | | | 9.7 | |
+| 1× v2.2.0 (6) | TG defaults c1 | 60.4 | 3.22 | 5.3 | 24.2 | 2.49 |
+| 1× v2.2.0 (6) | TG defaults c8 | 136.7 | 3.30 | 2.4 | 28.9 | 4.73 |
+| 1× v2.2.0 (6) | TG T=0 c1 | 72.8 | 2.07 | 2.8 | 25.6 | 2.84 |
+| 1× v2.2.0 (6) | TG T=0 c8 | 149.2 | 7.52 | 5.0 | 29.5 | 5.07 |
+| 1× v2.2.0 (6) | coding T=0 c1 | 74.9 | 0.31 | 0.4 | 24.3 | 3.09 |
+| 1× v2.2.0 (6) | coding T=0 c8 | 192.0 | 1.02 | 0.5 | 26.2 | 7.32 |
+| 2× v2.0.0 (3) | idle | | | | 19.5 | |
+| 2× v2.0.0 (3) | TG defaults c1 | 86.3 | 2.37 | 2.7 | 49.8 | 1.73 |
+| 2× v2.0.0 (3) | TG defaults c8 | 195.3 | 5.12 | 2.6 | 61.4 | 3.18 |
+| 2× v2.0.0 (3) | TG T=0 c1 | 108.3 | 3.05 | 2.8 | 52.0 | 2.08 |
+| 2× v2.0.0 (3) | TG T=0 c8 | 227.4 | 5.02 | 2.2 | 62.9 | 3.62 |
+| 2× v2.0.0 (3) | coding T=0 c1 | 112.8 | 0.02 | 0.0 | 49.6 | 2.28 |
+| 2× v2.0.0 (3) | coding T=0 c8 | 317.4 | 1.34 | 0.4 | 58.6 | 5.41 |
+
+What it shows: the coding probe at T=0 repeats within 0.5% between boots; llama-benchy at the server defaults moves
+2.4-5.3% between boots, so a single-boot difference below that is noise. Against the single-boot k76 run of the same
+2× build, TG defaults c8 differs most (k76 172.2, k86 195.3 ± 5.1); the README now quotes the multi-boot means. Per-Spark rows, per-boot values and the 1 Hz power traces:
+[`results/k86-boot-noise-power-20261010-1704/`](../results/k86-boot-noise-power-20261010-1704/).
+
 ## v2.0.0: GDN-MSE checkpoint with the M-dispatch on 2× Spark (2026-10-09)
 
 Release 2× v2.0.0 (experiment k73-2x-gdnmse-dispatch, #123), the current default. No old build name.

@@ -174,11 +174,18 @@ def main_line(rows, setup, metrics, x, keep=None, **eq):
     return dict(sorted(main.items())), dict(sorted(extra.items()))
 
 
+def boots(r):
+    """Number of boots behind a value, from its stat ('mean of 3 boots', 'mean of 6 boots (3 per Spark)'); else 1."""
+    m = re.search(r"(\d+) boots", r.get("stat") or "")
+    return int(m[1]) if m else 1
+
+
 def pick(rows, setup, metrics, **eq):
-    """The row to quote for one cell: shipped release first, then the newest release, then the newest date."""
+    """The row to quote for one cell: shipped release first, then the newest release, then the newest date, then the
+    run with the most boots (a multi-boot mean over a single-boot run of the same day)."""
     metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
     c = [r for r in rows if r["setup"] == setup and r["metric"] in metrics and all(r[k] == v for k, v in eq.items())]
-    return max(c, key=lambda r: (not old(r), vkey(r["release"]), r["date"])) if c else None
+    return max(c, key=lambda r: (not old(r), vkey(r["release"]), r["date"], boots(r))) if c else None
 
 
 def twin(rows, r, metric):
@@ -357,118 +364,91 @@ def figure_block(*names):
 
 # ---------- hero ----------
 
-def hero_tiles(rows):
-    s = REPO
-    ship = [r for r in rows if r["setup"] == s and r["release"] == SHIPPED[s]]
-    pool = ship if any(r["metric"] == "tg_total" for r in ship) else [r for r in rows if r["setup"] == s]
-
-    def top(metric, pool, **eq):
-        c = [r for r in pool if r["metric"] == metric and r["depth_tokens"] is None and numeric(r)
-             and all(r[k] == v for k, v in eq.items())]
-        return max(c, key=lambda r: (r["conc"] or 0, r["date"])) if c else None
-
-    one, many = top("tg_total", pool, conc=1), top("tg_total", pool)
-    tc = pick(rows, s, "gate_tc45")
-    code = coding_one(rows, s)
-    ctx = recipe_value("max_model_len")
-    rel = lambda r: f", {r['release']}" if old(r) else ""  # noqa: E731
-    tiles = []
-    if code:
-        tiles.append(("Coding, one chat", f"{code['value']:.0f}", "tok/s", "T=0, thinking off" + rel(code)))
-    tiles += [("Chat, one at a time", f"{one['value']:.0f}", "tok/s", "default settings, thinking on" + rel(one)),
-              (f"{many['conc']} chats at once", f"{many['value']:.0f}", "tok/s", "combined, default settings" + rel(many))]
-    if tc:
-        tiles.append(("Tool calls when required", f"{tc['value']:.0f}", "/100", "quality gate" + rel(tc)))
-    return tiles[:4], dict(code=code, one=one, many=many, tc=tc, ctx=ctx)
-
-
-def short_stat(r):
-    """n and statistic in spec-sheet form: 'mean of 2 boots x 4 runs, sd between boots' -> '2 boots × 4 runs, mean'."""
-    st = r["stat"]
-    if m := re.search(r"(\d+) prompts", st):
-        k = re.search(r"mean of (\d+ Sparks x )?(\d+) runs", st)
-        return f"{m[1]} prompts, {st.split()[0]}" + (f"; mean of {(k[1] or '').replace(' x ', ' × ')}{k[2]} runs"
-                                                       if k else "")
-    if m := re.search(r"(\d+) Sparks x (\d+) runs", st):
-        return f"{m[1]} Sparks × {m[2]} runs, mean"
-    if m := re.search(r"(\d+) boots x (\d+) runs", st):
-        return f"{m[1]} boots × {m[2]} runs, mean"
-    runs_ = re.search(r"(\d+) runs", st)
-    boots = "1 boot" if "one boot" in st else ""
-    return ", ".join(x for x in ((f"{runs_[1]} runs" if runs_ else ""), boots, "mean" if "mean" in st else "") if x) \
-        or st
-
-
 def capped(r):
     """'100/108 requests hit max_tokens' in a coding row's stat -> (100, 108), else None."""
     m = re.search(r"(\d+)/(\d+) requests hit max_tokens", r["stat"])
     return (int(m[1]), int(m[2])) if m else None
 
 
-def fmt_val(r, dec=1, unit="tok/s"):
-    return f"{r['value']:.{dec}f}" + (f" ± {r['sd']:.{dec}f}" if r["sd"] else "") + f" {unit}"
-
-
 def numbers(rows):
-    """Headline numbers as README text: each TG cell gives the server-defaults number first and the T=0 coding number
-    beside it; then TTFT and the hardmode gate score. A one-line key and the runs behind every number in a collapsed
-    table. Values are means or medians, never maxima. Newest shipped value per pick(); an older release is named."""
-    _, d = hero_tiles(rows)
-    code, ctx = d["code"], d["ctx"]
+    """Headline numbers as README text. TG cells give the server-defaults value first and the T=0 coding value second,
+    both as aggregate output tok/s, from the same run where possible; then the hardmode gate score and TG per GPU watt.
+    Values are means (sd between boots where the run has several boots), never maxima. Newest shipped value per pick();
+    an older release is named. The details table lists every number with its boots, sd, workload and source."""
+    ctx = recipe_value("max_model_len")
     rel = lambda r: f", {r['release']}" if r and old(r) else ""  # noqa: E731
     chat = "ISL/OSL 2048/512"
     dflt = "T=1.0, top-p 0.95, top-k 20, thinking on"
     t0 = "T=0, thinking off"
-    one = pick(rows, REPO, "tg_total", conc=1, depth_tokens=None)
-    agg_c = 8 if pick(rows, REPO, "tg_total", conc=8, depth_tokens=None) else max(
-        r["conc"] for r in rows if r["setup"] == REPO and r["metric"] == "tg_total" and r["depth_tokens"] is None)
-    agg = pick(rows, REPO, "tg_total", conc=agg_c, depth_tokens=None)
-    agg0 = pick(rows, REPO, "coding_total", conc=agg_c, sampling=t0)
+    g = lambda m, **eq: pick(rows, REPO, m, **eq)  # noqa: E731
+    one, agg = g("tg_total", conc=1, depth_tokens=None), g("tg_total", conc=8, depth_tokens=None)
+    c1, c8 = g("coding_total", conc=1, sampling=t0), g("coding_total", conc=8, sampling=t0)
+    med = coding_one(rows, REPO)
     cd = coding_one(rows, REPO, "server defaults, thinking on")
-    ttft = pick(rows, REPO, ["ttft_s", "ttft_benchy_s"], conc=1, prompt_tokens=16384)
-    hm = pick(rows, REPO, "gate_hardmode")
-    cells, rows_ = [], []
-    cells.append((f"{one['value']:.0f} / {code['value']:.0f} tok/s" if code else f"{one['value']:.0f} tok/s", "TG c1",
-                  f"defaults ({chat}){rel(one)}" + (f"<br>/ {t0} (coding, median of 36){rel(code)}" if code else "")))
-    cells.append((f"{agg['value']:.0f} / {agg0['value']:.0f} tok/s" if agg0 else f"{agg['value']:.0f} tok/s",
-                  f"TG aggregate c{agg_c}", f"defaults ({chat}){rel(agg)}" + (f"<br>/ {t0} (coding){rel(agg0)}"
-                                                                               if agg0 else "")))
-    if ttft:
-        cells.append((f"{ttft['value']:.1f} s", "TTFT, ISL 16K", f"c1, cold prefix{rel(ttft)}"))
+    ttft = g(["ttft_s", "ttft_benchy_s"], conc=1, prompt_tokens=16384)
+    hm = g("gate_hardmode")
+    w = {k: next((r for r in rows if r["setup"] == REPO and r["metric"] == "gpu_w" and r["conc"] == k
+                  and r["sampling"].startswith("T=1.0") and not old(r)), None) for k in (1, 8)}
+    idle = next((r for r in rows if r["setup"] == REPO and r["metric"] == "gpu_w_idle" and not old(r)), None)
+    tpw = {k: next((r for r in rows if r["setup"] == REPO and r["metric"] == "tok_s_per_w" and r["conc"] == k
+                    and r["sampling"].startswith("T=1.0") and not old(r)), None) for k in (1, 8)}
+    pair = lambda a, b: f"{a['value']:.0f} / {b['value']:.0f} tok/s" if b else f"{a['value']:.0f} tok/s"  # noqa: E731
+    cells = [(pair(one, c1), "TG c1", f"defaults ({chat}){rel(one)}"
+              + (f"<br>/ {t0} (coding){rel(c1)}" if c1 else "")),
+             (pair(agg, c8), "TG aggregate c8", f"defaults ({chat}){rel(agg)}" + (f"<br>/ {t0} (coding){rel(c8)}"
+                                                                                  if c8 else ""))]
     if hm:
         cells.append((f"{hm['value']:.0f}/100", "Hardmode", f"pass ≥ 88, T=0, thinking on{rel(hm)}"))
-    rows_.append(("TG c1, defaults", fmt_val(one), f"llama-benchy task mode, {chat}", dflt, short_stat(one), one))
-    if code:
-        rows_.append(("TG c1, coding", f"{code['value']:.1f} tok/s median", "36 prompts (Python, C++, Rust, Go), OSL ≤768",
-                      t0, short_stat(code), code))
+    if tpw[8] and w[8]:
+        cells.append((f"{tpw[8]['value']:.1f} tok/s/W", "TG per GPU watt, c8",
+                      f"defaults, {w[8]['value']:.0f} W GPU only<br>(nvidia-smi, not wall)"))
+    rows_ = []
+
+    def add(name, r, val, work, samp):
+        if not r:
+            return
+        bt = boots(r)
+        sdb = f"{r['sd']:,.2f}" if r["sd"] and "between boots" in r["stat"] else "–"
+        rows_.append((name, val, sdb, str(bt), work, samp, r))
+    tgv = lambda r: f"{r['value']:.1f} tok/s"  # noqa: E731
+    add("TG c1, defaults", one, tgv(one) if one else "", f"llama-benchy task mode, {chat}", dflt)
+    add("TG c1, coding", c1, tgv(c1) if c1 else "", "36 prompts, OSL ≤768, aggregate output tok/s per pass", t0)
+    add("TG c1, coding, per-prompt median", med, f"{med['value']:.1f} tok/s" if med else "",
+        "36 prompts (Python, C++, Rust, Go), OSL ≤768, median over prompts", t0)
     if cd:
         cap = capped(cd)
-        rows_.append(("TG c1, coding, defaults", f"{cd['value']:.1f} tok/s median", "36 prompts, OSL ≤768"
-                      + (f"; {cap[0]}/{cap[1]} requests hit the 768-token cap inside thinking" if cap else ""),
-                      "server defaults, thinking on", short_stat(cd), cd))
-    rows_.append((f"TG aggregate c{agg_c}, defaults", fmt_val(agg), f"llama-benchy task mode, {chat}", dflt,
-                  short_stat(agg), agg))
-    if agg0:
-        rows_.append((f"TG aggregate c{agg_c}, coding", fmt_val(agg0), f"36 prompts, OSL ≤768, c{agg_c}", t0,
-                      short_stat(agg0), agg0))
-    if ttft:
-        rows_.append(("TTFT, ISL 16K", fmt_val(ttft, 2, "s"), f"{ttft['harness']}, c1, cold prefix", "–",
-                      short_stat(ttft), ttft))
-    if hm:
-        rows_.append(("Hardmode", f"{hm['value']:.0f}/100", "88 multi-step tool-use scenarios; pass ≥ 88", "T=0, thinking on",
-                      "1 gate run", hm))
+        add("TG c1, coding, defaults, per-prompt median", cd, f"{cd['value']:.1f} tok/s", "36 prompts, OSL ≤768"
+            + (f"; {cap[0]}/{cap[1]} requests hit the 768-token cap inside thinking" if cap else ""),
+            "server defaults, thinking on")
+    add("TG aggregate c8, defaults", agg, tgv(agg) if agg else "", f"llama-benchy task mode, {chat}", dflt)
+    add("TG aggregate c8, coding", c8, tgv(c8) if c8 else "", "36 prompts, OSL ≤768, aggregate output tok/s per pass", t0)
+    add("TTFT, ISL 16K", ttft, f"{ttft['value']:.2f} s" if ttft else "", "c1, cold prefix", "–")
+    add("Hardmode", hm, f"{hm['value']:.0f}/100" if hm else "", "88 multi-step tool-use scenarios; pass ≥ 88",
+        "T=0, thinking on")
+    add("GPU power, idle", idle, f"{idle['value']:.1f} W" if idle else "", "server up, no requests, 120 s", "–")
+    for k in (1, 8):
+        add(f"GPU power, TG c{k} defaults", w[k], f"{w[k]['value']:.1f} W" if w[k] else "",
+            "nvidia-smi power.draw, GPU only (not wall), mean over the cell", dflt)
+        add(f"TG per GPU watt, c{k} defaults", tpw[k], f"{tpw[k]['value']:.2f} tok/s/W" if tpw[k] else "",
+            "TG aggregate / GPU W", dflt)
     td = "\n".join(f'    <td align="center"><h2>{n}</h2><b>{lab}</b><br><sub>{sub}</sub></td>' for n, lab, sub in cells)
     seqs = recipe_value("max_num_seqs")
     spec = ", ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
-                                  "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
-    key = (f"TG cells: server defaults ({chat}, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second. "
-           f"Means and medians only. Release {one['release']}.")
-    tab = ["| Metric | Value | Workload | Sampling | n | Release (date) | Source |", "|---|--:|---|---|---|---|---|"]
-    tab += [f"| {m} | {v} | {w} | {sm} | {n} | {r['release']} ({r['date']}) | "
+                                 "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
+    power = (f"GPU power (nvidia-smi, GPU only, not wall): idle {idle['value']:.1f} W, c1 {w[1]['value']:.1f} W, "
+             f"c8 {w[8]['value']:.1f} W; TG per GPU watt {tpw[1]['value']:.2f} (c1) and {tpw[8]['value']:.2f} (c8) "
+             "tok/s/W at server defaults." if idle and w[1] and w[8] and tpw[1] and tpw[8] else "")
+    key = (f"TG cells: server defaults ({chat}, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second, "
+           f"both aggregate output tok/s. Means over {boots(one)} boots where measured; sd between boots in the details. "
+           f"Release {one['release']}.")
+    tab = ["| Metric | Mean | sd between boots | Boots | Workload | Sampling | Release (date) | Source |",
+           "|---|--:|--:|--:|---|---|---|---|"]
+    tab += [f"| {m} | {v} | {sd} | {n} | {wk} | {sm} | {r['release']} ({r['date']}) | "
             f"[{'BENCHMARKS' if r['source'].endswith('.md') else 'results'}]({src_link(r)}) |"
-            for m, v, w, sm, n, r in rows_]
+            for m, v, sd, n, wk, sm, r in rows_]
     return (f'<table align="center">\n  <tr>\n{td}\n  </tr>\n</table>\n\n<p align="center"><sub>{spec}</sub></p>\n\n'
-            f"<sub>{key}</sub>\n\n<details>\n<summary><sub>Measurement details</sub></summary>\n\n"
+            + (f"<sub>{power}</sub>\n\n" if power else "")
+            + f"<sub>{key}</sub>\n\n<details>\n<summary><sub>Measurement details</sub></summary>\n\n"
             + "\n".join(tab) + "\n\nMethod and full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).\n\n</details>")
 
 
@@ -845,8 +825,8 @@ def chart_history(rows):
              + ", ".join(f"{v} {r['date']}" for v, r in sorted(hard.items(), key=lambda i: vkey(i[0])))
              + "".join(f"; {v}: score not in the data" for v in rels if v not in hard) + "."]
     caption("history", ["TG: llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on, from each release's own "
-                        "promotion run (unpaired across releases, so day-to-day drift is included; paired A/B per "
-                        "release in [VERSIONS.md](VERSIONS.md))."]
+                        "first run (usually its promotion A/B; the runs line below names each), unpaired across releases, so "
+                        "day-to-day drift is included; paired A/B per release in [VERSIONS.md](VERSIONS.md)."]
             + ([f"Shaded ({xh[0]} to {xh[-1]}): chat template default reasoning_effort xhigh; later releases at the "
                 "recipe default, medium. Different reasoning lengths, so not like-for-like across the shade."]
                if xh else [])
