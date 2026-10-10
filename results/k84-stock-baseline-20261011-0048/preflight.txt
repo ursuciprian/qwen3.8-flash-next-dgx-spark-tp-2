@@ -1,0 +1,17 @@
+coding selftest OK (36 prompts, max_tokens 768)
+tokenizer /home/nvidia/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+dgx01: 7c4f1bc1 36/36 shards
+dgx01: 560 GB free
+dgx01: power.draw readable
+dgx02: 7c4f1bc1 36/36 shards
+dgx02: 1014 GB free
+dgx02: power.draw readable
+image vllm/vllm-openai:v0.31.0 on Docker Hub: arm64:sha256:3f7dd5b777d34d1724456ce71f87385dca288c3bb23029ab27dee358f5d2b971
+image vllm/vllm-openai:nightly-7d0b4e57aac4c4323225b0eee9ae960ce75ffffe on Docker Hub: arm64:sha256:f853a6833fea509edf1298cad31b630003c242a8b2b70c353e831fa716c8da0b
+checkpoint architectures: Qwen4ExpForConditionalGeneration Qwen3_8FlashNextForConditionalGeneration
+image vllm/vllm-openai:v0.31.0: ARCHCHECK 0.31.0 Qwen4ExpForConditionalGeneration 2 (registered, modelopt_mixed present)
+image vllm/vllm-openai:nightly-7d0b4e57aac4c4323225b0eee9ae960ce75ffffe: ARCHCHECK 0.31.1rc1.dev253+g7d0b4e57a Qwen4ExpForConditionalGeneration 2 (registered, modelopt_mixed present)
+recipe 2x mtp on: /home/nvidia/GEN-AI/backlog/k84/rec/k84-dry-2x-on.yaml (1 spec lines)
+registry 2x = k73-20261009-21e0b201-d21d7ade-warm (restore target)
+benchy: llama-benchy 0.4.1.dev4+g0d4de4271 (/home/nvidia/GEN-AI/llama-benchy-fork @ 0d4de42)
+results dir writable: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results
