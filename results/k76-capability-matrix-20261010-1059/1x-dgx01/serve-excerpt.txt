@@ -1,0 +1,26 @@
+{
+  "kv_tokens": 993754,
+  "vllm_version": "v20260926.dev28+g884b4ff68.d20261002",
+  "vllm_commit": "884b4ff68",
+  "served_model_path": "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+  "drafter": "mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+  "snapshot_paths": [
+    "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+    "[/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d]"
+  ],
+  "overlay": [],
+  "aot": "AOT loaded",
+  "b12x_measured_plans": 0,
+  "max_num_seqs_log": 8
+}
+--- excerpt
+(APIServer pid=103) INFO 10-10 08:00:41 [api_utils.py:286] non-default args: {'model_tag': 'ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE', 'default_chat_template_kwargs': {'reasoning_effort': 'medium'}, 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'host': '0.0.0.0', 'model': 'ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE', 'trust_remote_code': True, 'dtype': 'bfloat16', 'revisi
+(APIServer pid=103) INFO 10-10 08:00:41 [arg_utils.py:905] HF_HUB_OFFLINE is True, replace model_id [ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE] to model_path [/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d]
+(EngineCore pid=340) INFO 10-10 08:00:58 [core.py:123] Initializing a V1 LLM engine (v20260926.dev28+g884b4ff68.d20261002) with config: model='/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d', speculative_config=SpeculativeConfig(method='mtp', model='/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-
+b12x ready sequence.ple_embedding: 7/7 ready, 0 measured, 0 cached, 0 compilations, 0:10
+(EngineCore pid=340) INFO 10-10 08:02:26 [decorators.py:313] Directly load AOT compilation from path /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/7cd50bbf768018f59362acdf82a9d5790840cfa16492162cf007b055befde398/rank_0_0/model
+(EngineCore pid=340) INFO 10-10 08:02:28 [decorators.py:313] Directly load AOT compilation from path /cache/runtime/vllm/torch_compile_cache/torch_aot_compile/8f128bc44496b1d640bb2261a55f33abf6cffa1b3d2dd111764262655bad674d/rank_0_0/model
+(EngineCore pid=340) INFO 10-10 08:02:29 [kv_cache_utils.py:2258] GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+b12x ready gemm.blockscaled_precision: 271/271 ready, 0 measured, 10 cached, 0 compilations, 0:06
+b12x ready sequence.ple_embedding: 20/20 ready, 0 measured, 0 cached, 0 compilations, 0:06
+(APIServer pid=103) WARNING 10-10 08:03:01 [model.py:1781] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'temperature': 1.0, 'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.

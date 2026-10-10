@@ -1,0 +1,14 @@
+k76 selftest OK
+coding selftest OK (36 prompts, max_tokens 768)
+copy bench: /home/nvidia/GEN-AI/k46/tools/bench_copy_streams.py
+recipe /home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml @ bb20490: release=v2.1.0 alias=v3e image_tag=tp1-v3e-hf-20261008-21e0b201-5dad364d-warm max_num_seqs=8 sampling=T=1.0 top-p 0.95 top-k 20, thinking on
+  dgx01: image present
+  dgx02: image present
+recipe /home/nvidia/.cache/sparkrun/registries/_url_e47b9e8b5e91/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml @ 4fe31f0: release= alias=k73-20261009-21e0b201-d21d7ade-warm image_tag=k73-20261009-21e0b201-d21d7ade-warm max_num_seqs=16 sampling=T=1.0 top-p 0.95 top-k 20, thinking on
+  dgx01: image present
+  dgx02: image present
+registry 2x tag = lib.sh SHIPPED_TAG_DEFAULT (k73-20261009-21e0b201-d21d7ade-warm)
+router tools/dp2/pa_router.py @ 4fe31f02: selftest OK
+benchy: llama-benchy 0.4.1.dev4+g0d4de4271 (/home/nvidia/GEN-AI/llama-benchy-fork @ 0d4de42)
+llm-inference-bench: 0.7.6 (/home/nvidia/GEN-AI/k31/lib @ 7c142e8)
+results dir writable: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results
