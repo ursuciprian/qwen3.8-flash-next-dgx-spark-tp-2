@@ -785,11 +785,11 @@ Full measurement tables behind the [README](../README.md) headline numbers.
 Every figure names its workload and source file. Paths under `results/arms/`
 are partly on dgx-01 only; see [results/README.md](../results/README.md).
 
-Contents: [Headline grid](#headline-numbers) ·
-[Default recipe tables](#default-recipe-la-probabilistic-mtp-drafts-measured-numbers) ·
-[Old la vs probabilistic](#old-la-vs-probabilistic-by-workload) ·
-[How to read these numbers](#how-to-read-these-numbers) ·
-[Other single-stream probes](#other-single-stream-probes) ·
+Contents: [Headline grid](#headline-numbers),
+[Default recipe tables](#default-recipe-la-probabilistic-mtp-drafts-measured-numbers),
+[Old la vs probabilistic](#old-la-vs-probabilistic-by-workload),
+[How to read these numbers](#how-to-read-these-numbers),
+[Other single-stream probes](#other-single-stream-probes),
 [MTP acceptance](#mtp-acceptance-per-draft-position)
 
 ## Headline numbers

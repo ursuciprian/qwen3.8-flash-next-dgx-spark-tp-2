@@ -371,7 +371,7 @@ def hero_tiles(rows):
     tc = pick(rows, s, "gate_tc45")
     code = coding_one(rows, s)
     ctx = recipe_value("max_model_len")
-    rel = lambda r: f" · {r['release']}" if old(r) else ""  # noqa: E731
+    rel = lambda r: f", {r['release']}" if old(r) else ""  # noqa: E731
     tiles = []
     if code:
         tiles.append(("Coding, one chat", f"{code['value']:.0f}", "tok/s", "T=0, thinking off" + rel(code)))
@@ -415,7 +415,7 @@ def numbers(rows):
     table. Values are means or medians, never maxima. Newest shipped value per pick(); an older release is named."""
     _, d = hero_tiles(rows)
     code, ctx = d["code"], d["ctx"]
-    rel = lambda r: f" · {r['release']}" if r and old(r) else ""  # noqa: E731
+    rel = lambda r: f", {r['release']}" if r and old(r) else ""  # noqa: E731
     chat = "ISL/OSL 2048/512"
     dflt = "T=1.0, top-p 0.95, top-k 20, thinking on"
     t0 = "T=0, thinking off"
@@ -428,10 +428,10 @@ def numbers(rows):
     ttft = pick(rows, REPO, ["ttft_s", "ttft_benchy_s"], conc=1, prompt_tokens=16384)
     hm = pick(rows, REPO, "gate_hardmode")
     cells, rows_ = [], []
-    cells.append((f"{one['value']:.0f} · {code['value']:.0f} tok/s" if code else f"{one['value']:.0f} tok/s", "TG c1",
-                  f"defaults ({chat}){rel(one)}" + (f" · {t0} (coding, median of 36){rel(code)}" if code else "")))
-    cells.append((f"{agg['value']:.0f} · {agg0['value']:.0f} tok/s" if agg0 else f"{agg['value']:.0f} tok/s",
-                  f"TG aggregate c{agg_c}", f"defaults ({chat}){rel(agg)}" + (f" · {t0} (coding){rel(agg0)}"
+    cells.append((f"{one['value']:.0f} / {code['value']:.0f} tok/s" if code else f"{one['value']:.0f} tok/s", "TG c1",
+                  f"defaults ({chat}){rel(one)}" + (f"<br>/ {t0} (coding, median of 36){rel(code)}" if code else "")))
+    cells.append((f"{agg['value']:.0f} / {agg0['value']:.0f} tok/s" if agg0 else f"{agg['value']:.0f} tok/s",
+                  f"TG aggregate c{agg_c}", f"defaults ({chat}){rel(agg)}" + (f"<br>/ {t0} (coding){rel(agg0)}"
                                                                                if agg0 else "")))
     if ttft:
         cells.append((f"{ttft['value']:.1f} s", "TTFT, ISL 16K", f"c1, cold prefix{rel(ttft)}"))
@@ -459,7 +459,7 @@ def numbers(rows):
                       "1 gate run", hm))
     td = "\n".join(f'    <td align="center"><h2>{n}</h2><b>{lab}</b><br><sub>{sub}</sub></td>' for n, lab, sub in cells)
     seqs = recipe_value("max_num_seqs")
-    spec = " · ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
+    spec = ", ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
                                   "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
     key = (f"TG cells: server defaults ({chat}, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second. "
            f"Means and medians only. Release {one['release']}.")
@@ -480,8 +480,8 @@ def legend_setups(sets):
 
 
 def short_runs(lines):
-    """'1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0' from {setup: [rows]}."""
-    return " · ".join(f"{SETUPS[s]['name']} {'/'.join(sorted({r['release'] for r in rs}, key=vkey, reverse=True))}"
+    """'1x Spark v2.1.0, 2x Spark TP=2 v2.0.0' from {setup: [rows]}."""
+    return ", ".join(f"{SETUPS[s]['name']} {'/'.join(sorted({r['release'] for r in rs}, key=vkey, reverse=True))}"
                       for s, rs in lines.items())
 
 
