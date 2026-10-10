@@ -1,0 +1,10 @@
+base recipe: 1x v2.2.0 (/home/nvidia/GEN-AI/backlog/k85/recipe-1x-v2.2.0.yaml)
+variant kld-mxfp8: MIN_TOKENS=1, spec lines 0, max-logprobs 1
+variant kld-nvfp4: MIN_TOKENS=0, spec lines 0, max-logprobs 1
+variant eval-7c4: MIN_TOKENS=1, spec lines 1, max-logprobs 0
+corpus: 44 sequences, sha256 5b1ea71bedb2ba42
+dgx01: GDN-MSE 03f4a057 36 shards, 7c4f1bc1 shard 35, image present
+dgx02: GDN-MSE 03f4a057 36 shards, 7c4f1bc1 shard 35, image present
+lm-eval 0.4.13, task ifeval_think
+IFEval 541 prompts cached, nltk data loaded
+results dir writable: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results
