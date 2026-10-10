@@ -16,13 +16,15 @@
 #
 # The recipes carry no bind mounts; the vLLM one pulls its engine overlays in as a sparkrun
 # mod. Adjust the fabric names first with scripts/detect-fabric.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP SPARK_CX7_PREFIX
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OPTION="${1:-}"; shift || true
 CLUSTER="${CLUSTER:-dgx-cluster-cx7}"
-HEAD_IP="${HEAD_IP:-192.168.100.62}"
-WORKER_IP="${WORKER_IP:-192.168.100.53}"
+HEAD_IP="${HEAD_IP:-${SPARK_HEAD_IP}}"
+WORKER_IP="${WORKER_IP:-${SPARK_WORKER_IP}}"
 BENCH=0; SKIP_DOWNLOAD=0; CHECK_ONLY=0
 
 for arg in "$@"; do
@@ -63,7 +65,7 @@ say "Checking cluster '$CLUSTER'"
 HOSTS=$("$SPARKRUN" cluster show "$CLUSTER" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -u)
 [ "$(echo "$HOSTS" | wc -l | tr -d ' ')" -eq 2 ] || fail "TP=2 needs exactly 2 hosts, cluster has: $(echo $HOSTS)"
 for ip in $HOSTS; do
-  case "$ip" in 192.168.100.*) ;; *) fail "host $ip is not on the CX-7 subnet; collectives would run over WiFi" ;; esac
+  case "$ip" in "$SPARK_CX7_PREFIX"*) ;; *) fail "host $ip is not on the CX-7 subnet; collectives would run over WiFi" ;; esac
 done
 echo "  ok: 2 hosts on CX-7 ($(echo $HOSTS | tr '\n' ' '))"
 

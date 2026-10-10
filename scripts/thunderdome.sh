@@ -47,10 +47,12 @@
 # that Spark's verdict is INCONCLUSIVE (cold): run `thunderdome.sh bake <recipe>` once, then screen again.
 # Exit: 0 done, 1 failed, 2 refused. STATE: $RES/STATE. Log: $RES/thunderdome.log.
 # Stop: kill -TERM <pid> (logged at start). Never pkill -f.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -u
 export PATH="$HOME/.local/bin:$PATH"
 R=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-H1=192.168.100.62; H2=192.168.100.53; MODEL=qwen3.8-flash-next
+H1=${SPARK_HEAD_IP}; H2=${SPARK_WORKER_IP}; MODEL=qwen3.8-flash-next
 SNAP=${SNAP:-$HOME/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd}
 CORPUS=${CORPUS:-$R/results/corpus-code.txt}
 BENCHY_SRC=${BENCHY_SRC:-$HOME/GEN-AI/llama-benchy-fork}

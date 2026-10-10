@@ -2,10 +2,12 @@
 # Drive llama-benchy against an already-loading sparkrun server.
 # run.sh exited on a false-positive "container exited during load", but sparkrun
 # kept loading, so the serve process is fine and only the bench step was lost.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO=/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
-HEAD=192.168.100.62; PORT=8000
+HEAD=${SPARK_HEAD_IP}; PORT=8000
 OUT="$REPO/results/retest-bigkv-g8"; mkdir -p "$OUT"
 TOK=$(ls -d "$HOME"/.cache/huggingface/hub/models--RadixArk--Qwen3.8-Flash-Next-NVFP4/snapshots/*/ | head -1)
 

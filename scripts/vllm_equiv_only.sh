@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Boot one arm, run the cached-vs-fresh equivalence probe, stop.  scripts/vllm_equiv_only.sh <arm>
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HEAD=${HEAD_IP:-192.168.100.62}; WORKER=${WORKER_IP:-192.168.100.53}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
+HEAD=${HEAD_IP:-${SPARK_HEAD_IP}}; WORKER=${WORKER_IP:-${SPARK_WORKER_IP}}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
 CORPUS=${CORPUS:-$REPO/codex-optimization/campaigns/20260907T154810Z/a1-c1/corpus.txt}
 arm="$1"; OUT="$REPO/results/arms/vllm-imp"; tag="equiv-$arm"; BASE="http://$HEAD:8000"
 echo "=== $(date +%T) $tag start"

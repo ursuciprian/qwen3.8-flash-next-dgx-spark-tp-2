@@ -2,10 +2,12 @@
 # A/B/A ladder for Qwen3.8-Flash-Next on SGLang TP=2: boot each arm, screening grid, counters, stop, next.
 # Fresh boot per arm is the point - single-run deltas on this hardware do not
 # survive a repeat (2026-09-06: a +34.2% cell came back at baseline on rerun).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HEAD=${HEAD_IP:-192.168.100.62}; WORKER=${WORKER_IP:-192.168.100.53}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
+HEAD=${HEAD_IP:-${SPARK_HEAD_IP}}; WORKER=${WORKER_IP:-${SPARK_WORKER_IP}}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
 DEPTHS=${DEPTHS:-"0 16384"}; CONC=${CONC:-"1 2 5 10"}
 # Boot gate. Decode drift between two fresh boots of the SAME recipe measured
 # 10.6% median / 25% worst on 2026-09-06, and the FlashInfer autotuner is known

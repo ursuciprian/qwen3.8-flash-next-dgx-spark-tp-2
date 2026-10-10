@@ -12,6 +12,12 @@ on to the gate, which is split across both Sparks.
 - Uses `depth_decode_probe.py`, `paired_decode_ab.py`, `logits_equiv.py`, `straggler_probe.py`,
   `fidelity_probe.py`, llama-benchy and tool-eval-bench.
 
+
+Addresses: the scripts read the CX-7 addresses of the pair (`SPARK_HEAD_IP`, `SPARK_WORKER_IP`) from the environment,
+else from the untracked file `~/.config/spark-pair.env` (or `$SPARK_PAIR_ENV`); template:
+[`scripts/spark-pair.env.example`](../scripts/spark-pair.env.example). A missing value stops the run with exit 2 and a
+message naming the variable.
+
 ## What runs
 
 Each Spark screens its own arm against a control on that Spark. The default control is the v3b recipe.
