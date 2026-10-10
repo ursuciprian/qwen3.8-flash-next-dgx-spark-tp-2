@@ -3,6 +3,32 @@
 Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.0.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
 
 
+## Quality gate: pass rule
+
+Every release passes the same gate before it ships. The rule is fixed:
+
+| Check | Pass rule |
+|---|---|
+| Hardmode (tool-eval-bench `--hardmode`, 88 multi-step tool-use scenarios, T=0, thinking on) | score ≥ 88/100 |
+| Fidelity (`scripts/fidelity_probe.py`, 20 tool-call retrievals per depth, 8K / 32K / 64K / 128K) | 20/20 at every depth |
+| Stragglers (`scripts/straggler_probe.py`, batches c5 to c16) | none |
+| TC-45 (regression test: 1 scenario, 2 points, 5 trials) | reported; 5/5 on every release with a recorded run |
+
+Retries: a fidelity depth that scores 19/20 is rerun on a fresh boot, and the release passes only if the rerun is 20/20 at
+every depth. Each retry is listed below with both results. The extra ~245K seeds are reported and not gated.
+
+Retries and partial results so far:
+
+- 2× v1.4.0 (b1.4): A/B gate boot 19/20 at 32K (one `no_call` on the first cold-prefill trial), 20/20 at 8K, 64K
+  and 128K. Re-gate on a fresh boot: 20/20 at every depth. Shipped after the re-gate.
+- 2026-09-23 build (b0, before v1.0.0): 19/20 at 128K, then 20/20 on two reruns.
+- One-Spark v2.1.0 (gated in this repo before the split): one of three ~245K seeds 19/20 (dgx-01); every gated depth
+  20/20.
+
+Raw gate logs of 2× v2.0.0 (hardmode, TC-45, stragglers, fidelity):
+[`results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/`](../results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/);
+DP=2 gate through the router: [`results/dp2-gate-k72-20261008-1135/gate/`](../results/dp2-gate-k72-20261008-1135/gate/).
+
 ## v2.0.0: GDN-MSE checkpoint with the M-dispatch on 2× Spark (2026-10-09)
 
 Release 2× v2.0.0 (experiment k73-2x-gdnmse-dispatch, #123), the current default. No old build name.
@@ -85,8 +111,7 @@ runs). Noise band = the cell's control boot-to-boot spread, at least 1%.
 Verdict PROMOTE, no cell worse beyond noise (tg512 c4 −1.1%, control boot-to-boot 9.9%). Gate (one TP=2 boot): hardmode
 92, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k and at two more ~245k seeds, stragglers c8/c12/c16 with 0
 preemptions (4.00 accepted per draft on the counting prompt), min MemAvailable 10.54 GiB (dgx-01) / 14.05 GiB
-(dgx-02). Jev (TypeSafe System One) on the same numbers: ship, confidence 0.88
-([`jev-ship.json`](../results/k71-tp2-refit-pinned-plans-20261008-0921/jev-ship.json)). Raw files:
+(dgx-02). Raw files:
 [`results/k71-tp2-refit-pinned-plans-20261008-0921/`](../results/k71-tp2-refit-pinned-plans-20261008-0921/).
 
 Shipped image check (b16, plain `sparkrun run` of the recipe with the overlay directory and the 15b63901 plan file
@@ -416,7 +441,7 @@ prefill read-ahead raises pp2048 c1.
 
 Release 2× v1.4.0 (old name b1.4), the default from 2026-10-01 to 2026-10-08.
 
-The current default build.
+History; superseded by b1.6 (2× v1.5.0) on 2026-10-08.
 
 Terms used: **concurrency (c)** = requests running at the same time;
 **depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
@@ -480,8 +505,8 @@ runs per boot (c1 is bimodal on this pair).
 | Long-context recall (`scripts/fidelity_probe.py`, 20 tool-call retrievals per depth) | A/B gate boot: 20/20 at 8k, 64k, 128k and **19/20 at 32k** (one `no_call` on the first cold-prefill trial). Re-gate on a fresh boot: 20/20 at 8k, 32k, 64k and 128k, plus 32k seeds 21 and 22 20/20 each. Cold-32k repro (20 fresh-prefix trials per build): b1.3 20/20, b1.4 20/20, cold TTFT ~23 s on both. 128k seeds 11 and 13: 20/20 each |
 | Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none |
 
-Verdict: `arm_verdict.py` v2 forced a reject on the 32k 19/20 alone; after the re-gate passed, Jev on the same fact sheet
-with the re-gate result: **ship** (0.78; distribution ship 0.83 / reject 0.10 / ship_with_caveat 0.05 / rerun 0.02).
+Verdict: `arm_verdict.py` v2 forced a reject on the 32k 19/20 alone; the re-gate on a fresh boot passed (20/20 at every
+depth), and I shipped it on the re-gate.
 Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dlogprob| 0.033-0.041, within the
 0.038-0.046 self-noise. Files: [`results/b1.4-20261001/`](../results/b1.4-20261001/).
 
@@ -493,14 +518,14 @@ Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dl
 | b1.4 candidate, `medium` | 95.9% | 29 / 42 | 0 / 42 | 33 s |
 | same weights at TP=1, `medium` | 97.8% | 35 / 42 | 0 / 42 | 105 s |
 
-Total wall time for the 42 runs 1,498 s at `medium` vs 8,982 s at `xhigh`. Jev on making `medium` the server default:
-**medium_default 1.00**. Per-task table: [`results/b1.4-20261001/devops-b14-medium.md`](../results/b1.4-20261001/devops-b14-medium.md).
+Total wall time for the 42 runs 1,498 s at `medium` vs 8,982 s at `xhigh`, so `medium` became the server default.
+Per-task table: [`results/b1.4-20261001/devops-b14-medium.md`](../results/b1.4-20261001/devops-b14-medium.md).
 
 ## b1.3 image (2026-09-29)
 
 Release 2× v1.3.0 (old name b1.3), history.
 
-Recommended from 2026-09-29 to 2026-10-01, now the `-previous` fallback; superseded by b1.4 (above).
+Recommended from 2026-09-29 to 2026-10-01, then the `-previous` fallback; superseded by b1.4 (above).
 
 Terms used: **concurrency (c)** = requests running at the same time;
 **depth** = tokens of earlier conversation already cached before the new prompt; **MTP** (multi-token prediction) = the
@@ -552,7 +577,7 @@ change is already captured by the paired probe above).
 | Batch stragglers, c5-c16 (`scripts/straggler_probe.py`) | none |
 
 Gate run on the A/B boots of the same build (`scripts/gate_arm.sh`); the published image adds only the plan-seed layer.
-Verdict: `arm_verdict.py` v2 + Jev, **ship with caveat** (confidence 1.00; the caveat is the d0 c5 coding cell); the same change as a mod on the previous image: ship 0.99 (2026-09-28). Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dlogprob| 0.031-0.035, within the 0.037-0.042 self-noise. Files: [`results/b1.3-20260929/`](../results/b1.3-20260929/).
+Verdict: `arm_verdict.py` v2, **ship with caveat** (the caveat is the d0 c5 coding cell); the same change as a mod on the previous image also passed (2026-09-28). Logits check (20 prompts x 16 tokens, 2 captures per boot): cross-build mean |dlogprob| 0.031-0.035, within the 0.037-0.042 self-noise. Files: [`results/b1.3-20260929/`](../results/b1.3-20260929/).
 
 **Task evals (2026-09-28, previous build b1.2, thinking on, card sampling):** a DevOps set of 14 prompts x 3 (Terraform, Kubernetes,
 GitHub Actions, IAM, bash, Helm, Dockerfile, Prometheus, incident triage), graded by terraform/kubeconform/actionlint/
@@ -659,7 +684,7 @@ code 56.5, structured 81.6, counting 102.5, prose 48.2 on the 2026-09-25 build; 
 
 Release 2× v1.0.0 (old name b1), history.
 
-Recommended from 2026-09-25 to 2026-09-26, now the `-previous` fallback; superseded by b1.1 (README).
+Recommended from 2026-09-25 to 2026-09-26, then the `-previous` fallback; superseded by b1.1.
 
 Image `ghcr.io/ursuciprian/spark-vllm-b12x:b1-20260925-b7fbaf96-14077fb3-warm`
 (`sha256:57c2fbd8cd811a5d22a7f2e547453f97b875f1fb4c7de60a0c3ff9fba3a79e5c`), checkpoint revision `7c4f1bc1`.
@@ -773,7 +798,7 @@ Every figure in this repo names its workload. Three workloads are used, and
 their numbers are not comparable with each other (see
 [How to read these numbers](#how-to-read-these-numbers)). "Old la" is the
 previous default (one-hot drafts + `use_local_argmax_reduction`, now
-`-la-argmax.yaml`); "probabilistic" is the current default
+`-la-argmax.yaml`); "probabilistic" was the default at the time
 (`draft_sample_method: probabilistic`). Aggregate = generated tokens per
 second summed over all concurrent streams; per-stream = one request's rate.
 
@@ -790,15 +815,15 @@ gen tok/s**; at c1 aggregate = per-stream.
 
 | cached depth | conc. | old la, temp 1.0 (default) | old la, temp 0 | probabilistic, temp 1.0 (default) | old la, temp 0.6 |
 |---:|---:|---:|---:|---:|---|
-| 0 | 1 | 46.1 ± 1.5 | 55.3 ± 3.6 | 45.6 ± 13.7 | pending |
-| 0 | 4 | 104.4 | 128.1 | 115.2 | pending |
-| 0 | 10 | 155.8 | 184.1 | 171.1 | pending |
-| 0 | 16 | 186.3 | 217.7 | 221.9 | pending |
-| 16k | 1 | 41.2 | 55.3 | 55.4 | pending |
-| 16k | 16 | 120.3 | 134.2 | 115.4 ± 24.3 | pending |
-| 64k | 1 | 42.4 | 55.9 | 58.4 | pending |
-| 64k | 16 | 100.0 | 111.4 | 106.8 | pending |
-| source | | `results/benchy/la-task16.md` | `results/benchy/la-task16-t0.md` | `results/benchy/la-mtpprob-task16.md` | `la-task16-t06` still running on dgx-01 |
+| 0 | 1 | 46.1 ± 1.5 | 55.3 ± 3.6 | 45.6 ± 13.7 | not measured |
+| 0 | 4 | 104.4 | 128.1 | 115.2 | not measured |
+| 0 | 10 | 155.8 | 184.1 | 171.1 | not measured |
+| 0 | 16 | 186.3 | 217.7 | 221.9 | not measured |
+| 16k | 1 | 41.2 | 55.3 | 55.4 | not measured |
+| 16k | 16 | 120.3 | 134.2 | 115.4 ± 24.3 | not measured |
+| 64k | 1 | 42.4 | 55.9 | 58.4 | not measured |
+| 64k | 16 | 100.0 | 111.4 | 106.8 | not measured |
+| source | | `results/benchy/la-task16.md` | `results/benchy/la-task16-t0.md` | `results/benchy/la-mtpprob-task16.md` | not completed, no file |
 
 Temperature 1.0 is the checkpoint default (1.0 / top-p 0.95 / top-k 20),
 i.e. what a client that sends no temperature gets. Probabilistic at temp 0 was
@@ -806,7 +831,7 @@ not measured on this workload.
 
 ## Default recipe (la, probabilistic MTP drafts), measured numbers
 
-All three tables are from the current default recipe
+All three tables are from the default recipe of the time
 (`qwen3.8-flash-next-nvfp4-tp2.yaml`, `draft_sample_method: probabilistic`),
 measured 2026-09-21/22. ± is the spread across runs as llama-benchy reports it.
 
@@ -832,7 +857,7 @@ temperature (1.0 / top-p 0.95 / top-k 20), prefix caching, 3 runs per cell.
 
 Temperature-0 and temperature-0.6 agent-coding grids exist only for the old
 argmax config so far (`results/benchy/la-task16-t0.md`: c1 55.3, c16 217.7;
-temp 0.6 still running) and are pending for this recipe.
+the temp 0.6 grid was not completed) and were not measured for this recipe.
 
 **Prose continuation.** `results/benchy/la-mtpprob-prose16.md`: llama-benchy
 0.4.0 default book corpus, 2048 new prompt tokens on a cached context of the
@@ -1051,7 +1076,7 @@ Both ranks on `7c4f1bc1`. Files: `results/arms/pinned-7c4f1bc1/` (dgx-01).
 | Counting diagnostic (bench_sweep, temp 0, thinking off; not user throughput) | c1 102.0, c4 305.6, c8 443.3, c16 650.6 agg tok/s |
 | decode_probe c1, temp 0 | code 56.2, structured 93.4, counting 102.9, prose 49.8 tok/s |
 | decode_probe c1, temp 0, shipped warm image, cold boot (5 runs, mean / peak) | code 61.3 / 65.6, structured 88.9 / 96.1, counting 96.9 / 102.7, prose 49.0 / 51.2 tok/s |
-| Agent coding and prose grids (default temperature) on the shipped image | **PENDING**: to be measured on the warm image; not measured yet |
+| Agent coding and prose grids (default temperature) on the shipped image | not measured on the shipped image |
 
 #### Checkpoint revision split (fixed 2026-09-23)
 
