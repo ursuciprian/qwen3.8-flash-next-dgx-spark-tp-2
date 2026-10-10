@@ -380,30 +380,46 @@ def hero_tiles(rows):
 
 
 def hero(rows):
-    """A banner under the headline numbers: setup, model, release and engine on a card with a decorative ribbon of
-    dots in the setup colour (no data). The numbers themselves are README text (the `numbers` block)."""
-    w, h = 12, 2.6
-    fig = plt.figure(figsize=(w, h))
-    fig.add_artist(FancyBboxPatch((0.004, 0.015), 0.992, 0.97, boxstyle="round,pad=0,rounding_size=0.05",
-                                  transform=fig.transFigure, facecolor=T["card"], edgecolor=T["axis"], lw=1.2,
-                                  mutation_aspect=w / h))
-    ax = fig.add_axes((0.42, 0.06, 0.55, 0.88), zorder=2)
-    ax.set_xlim(0, 1), ax.set_ylim(-1, 1), ax.axis("off")
-    u, v = np.meshgrid(np.linspace(0, 1, 120), np.linspace(0, 1, 16))
-    ph = 2 * np.pi * (1.15 * u + 0.18 * v)
-    y = 0.62 * np.sin(ph) * (0.35 + 0.65 * v) + (v - 0.5) * 0.55 * np.cos(np.pi * u)
-    depth = (np.cos(ph + 0.6) + 1) / 2
-    fade = np.clip(u * 1.6, 0, 1) * np.clip((1 - u) * 6, 0, 1)
-    dots = ax.scatter(u.ravel(), y.ravel(), s=(1.5 + 7 * depth).ravel(), linewidths=0, zorder=1, rasterized=True)
-    dots.set_facecolors([(*matplotlib.colors.to_rgb(color(REPO)), a) for a in (0.08 + 0.75 * depth * fade).ravel()])
-    where = {"1x": "ONE NVIDIA DGX SPARK", "2x": "TWO NVIDIA DGX SPARKS · TENSOR PARALLEL"}[REPO]
-    fig.text(0.05, 0.74, where, fontsize=15, fontweight="semibold", color=T["muted"], va="baseline")
-    fig.text(0.05, 0.42, "Qwen3.8-Flash-Next", fontsize=40, fontweight="semibold", color=T["ink"], va="baseline")
-    t = fig.text(0.055, 0.15, f"Release {SHIPPED[REPO]}", fontsize=15, color=T["ink"], va="baseline",
-                 bbox=dict(boxstyle="round,pad=0.45,rounding_size=0.8", facecolor=T["tile"], edgecolor=T["axis"]))
-    x2 = t.get_window_extent(fig.canvas.get_renderer()).x1 / fig.dpi / w + 0.025
-    fig.text(x2, 0.15, "vLLM · NVFP4 · MTP speculative decoding · OpenAI API", fontsize=15, color=T["muted"],
-             va="baseline")
+    """A typographic masthead with the serving topology; measurements stay in the README."""
+    w, h = 12, 3.8
+    dark = T is THEMES["dark"]
+    bg, ink = ("#111714", "#f1f5f0") if dark else ("#f5f7f2", "#17251d")
+    muted, rule = ("#a0afa3", "#35453b") if dark else ("#536558", "#c9d3c9")
+    accent = "#b6ed83" if dark else "#426f2a"
+    fig = plt.figure(figsize=(w, h), facecolor=bg)
+    ax = fig.add_axes((0, 0, 1, 1))
+    ax.set(xlim=(0, w), ylim=(0, h))
+    ax.axis("off")
+    ax.add_patch(FancyBboxPatch((0, 0), w, h, boxstyle="square,pad=0",
+                              facecolor=bg, edgecolor="none"))
+    ax.plot([0.55, 0.83], [3.28, 3.28], color=accent, lw=4, solid_capstyle="butt")
+    ax.text(1.0, 3.28, "LOCAL INFERENCE", fontsize=12, fontweight="semibold",
+            color=muted, va="center")
+    ax.text(11.45, 3.28, "01 / SINGLE SPARK" if REPO == "1x" else "02 / DUAL SPARK",
+            fontsize=12, color=muted, ha="right", va="center")
+    ax.text(0.55, 2.27, "Qwen3.8", fontsize=48, fontweight="semibold", color=ink)
+    ax.text(0.55, 1.39, "Flash Next", fontsize=48, fontweight="semibold", color=ink)
+    ax.text(0.59, 0.96, "One NVIDIA DGX Spark" if REPO == "1x" else "Two NVIDIA DGX Sparks · TP=2",
+            fontsize=15, color=muted)
+    # Each outlined module represents one Spark; the pair shares a tensor-parallel link.
+    centers = [9.40] if REPO == "1x" else [8.50, 10.30]
+    y, size = 1.55, 1.28
+    if REPO == "2x":
+        ax.plot([centers[0] + size / 2, centers[1] - size / 2],
+                [y + size / 2] * 2, color=accent, lw=2)
+    for i, x in enumerate(centers, 1):
+        ax.add_patch(FancyBboxPatch((x - size / 2, y), size, size,
+                                  boxstyle="round,pad=0,rounding_size=0.10",
+                                  facecolor=bg, edgecolor=rule, lw=1.5))
+        for yy in np.linspace(y + 0.22, y + 0.39, 4):
+            ax.plot([x - 0.38, x + 0.38], [yy, yy], color=rule, lw=1)
+        ax.text(x, y + 0.72, "DGX", fontsize=16, fontweight="semibold", color=ink,
+                ha="center", va="center")
+        ax.plot(x + 0.43, y + 1.06, "o", color=accent, markersize=4)
+        ax.text(x, y - 0.24, f"SPARK {i:02}", fontsize=10, color=muted, ha="center")
+    ax.plot([0.55, 11.45], [0.66, 0.66], color=rule, lw=0.8)
+    ax.text(0.59, 0.30, "vLLM  /  NVFP4  /  MTP", fontsize=12, color=muted)
+    ax.text(11.45, 0.30, f"RELEASE {SHIPPED[REPO]}", fontsize=12, color=muted, ha="right")
     return fig
 
 
@@ -1034,7 +1050,7 @@ if __name__ == "__main__":
     rows = load()
     who = {"1x": "one DGX Spark", "2x": "two DGX Sparks"}[REPO]
     render("hero", hero, rows, f"Qwen3.8-Flash-Next on {who}, release {SHIPPED[REPO]}: vLLM, NVFP4, MTP "
-           "speculative decoding, OpenAI API.", w=12, px=640)
+           "speculative decoding, OpenAI API.", w=12, px=840)
     hero_caption(rows)
     half = dict(w=5.0, px=420)
     render("throughput", chart_throughput, rows, "Line chart of decode tokens per second, all chats together, against 1 "
