@@ -1,0 +1,50 @@
+# k84-stock-baseline (2026-10-10): stock vLLM on the unmodified checkpoint. Template; run.sh (mkrec) fills the
+# placeholders: name, image, topology, TP, utilization, context, sequences, MTP. Flags follow the upstream vLLM recipe for Qwen3.8-Flash-Next (FP8 on 4x GB300:
+# prefix caching, no flashinfer autotune, fp8 KV and indexer KV, MTP with 3 draft tokens, qwen3 reasoning parser,
+# qwen3_coder tool parser), with the GB10 memory settings of the 2x recipe (utilization 0.80, 262144 context,
+# 16 sequences). One addition: the server default reasoning effort "medium", which the shipped recipes also set,
+# so stock and shipped get the same chat prompt. No quantization flag: vLLM reads hf_quant_config.json.
+recipe_version: "1"
+name: stock-2x-mtp3-v0.31.0
+description: "k84 stock vLLM baseline, unmodified local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1"
+
+model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+container: vllm/vllm-openai:v0.31.0
+runtime: vllm
+
+build_args: []
+
+cluster_only: true
+min_nodes: 2
+max_nodes: 2
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  tensor_parallel: 2
+  pipeline_parallel: 1
+  max_model_len: 262144
+  max_num_seqs: 16
+  gpu_memory_utilization: 0.80
+
+command: |
+  vllm serve local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --revision 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd \
+    --host {host} \
+    --port {port} \
+    --served-model-name qwen3.8-flash-next \
+    --tensor-parallel-size {tensor_parallel} \
+    --pipeline-parallel-size {pipeline_parallel} \
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --max-model-len {max_model_len} \
+    --max-num-seqs {max_num_seqs} \
+    --enable-prefix-caching \
+    --no-enable-flashinfer-autotune \
+    --kv-cache-dtype fp8 \
+    --attention-config.indexer_kv_dtype fp8 \
+    --enable-auto-tool-choice \
+    --tool-call-parser qwen3_coder \
+    --reasoning-parser qwen3 \
+    --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
+    --speculative-config '{{"method":"mtp","num_speculative_tokens":3}}'
