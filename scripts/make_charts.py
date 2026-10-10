@@ -74,9 +74,9 @@ THEMES = {
                  setup={"1x": "#3987e5", "2x": "#d95926", "dp2": "#199e70"}),
 }
 T = THEMES["light"]
-SETUPS = {"1x": dict(name="One Spark", short="1x", marker="o"),
-          "2x": dict(name="Two Sparks, TP=2", short="TP=2", marker="s"),
-          "dp2": dict(name="Two Sparks, DP=2", short="DP=2", marker="D")}
+SETUPS = {"1x": dict(name="1x Spark", short="1x", marker="o"),
+          "2x": dict(name="2x Spark TP=2", short="TP=2", marker="s"),
+          "dp2": dict(name="2x Spark DP=2", short="DP=2", marker="D")}
 # Versions are per repo (one-Spark v2.1.0 is not two-Spark v2.1.0), so a release is always written with its setup.
 PREFIX = {"1x": "one-Spark ", "2x": "two-Spark ", "dp2": "DP=2 on one-Spark "}
 W = 7.2   # inches; set per image by render(): 7.2 for a full-width chart shown at 640 px, 5.0 for a half-width
@@ -297,7 +297,7 @@ def labels(ax, items, side="right", gap=15):
                     annotation_clip=False, bbox=dict(boxstyle="round,pad=0.15", facecolor=T["bg"], edgecolor="none"))
 
 
-def conc_axis(ax, ticks, label="Requests at the same time"):
+def conc_axis(ax, ticks, label="Concurrency (cN)"):
     ax.set_xscale("log", base=2)
     ax.set_xticks(ticks, [str(t) for t in ticks])
     ax.minorticks_off()
@@ -382,51 +382,66 @@ def hero_tiles(rows):
     return tiles[:4], dict(code=code, one=one, many=many, tc=tc, ctx=ctx)
 
 
+def short_stat(r):
+    """n and statistic in spec-sheet form: 'mean of 2 boots x 4 runs, sd between boots' -> '2 boots × 4 runs, mean'."""
+    st = r["stat"]
+    if m := re.search(r"(\d+) prompts", st):
+        return f"{m[1]} prompts, {st.split()[0]}"
+    if m := re.search(r"(\d+) boots x (\d+) runs", st):
+        return f"{m[1]} boots × {m[2]} runs, mean"
+    runs_ = re.search(r"(\d+) runs", st)
+    boots = "1 boot" if "one boot" in st else ""
+    return ", ".join(x for x in ((f"{runs_[1]} runs" if runs_ else ""), boots, "mean" if "mean" in st else "") if x) \
+        or st
+
+
 def numbers(rows):
-    """The headline numbers as README text (renders large on GitHub, in search snippets and on phones), with the run
-    behind each one in small print. Newest shipped value per pick(); an older release is named."""
+    """Headline numbers as README text (large on GitHub, in search snippets and on phones), a one-line key, and the
+    runs behind them in a collapsed table. Newest shipped value per pick(); an older release is named."""
     _, d = hero_tiles(rows)
     code, one, many, tc, ctx = d["code"], d["one"], d["many"], d["tc"], d["ctx"]
-    rel = lambda r: f" · release {r['release']}" if old(r) else ""  # noqa: E731
-    cells = []
+    rel = lambda r: f" · {r['release']}" if old(r) else ""  # noqa: E731
+    chat = "ISL/OSL 2048/512"
+    dflt = "T=1.0, top-p 0.95, top-k 20, thinking on"
+    cells, rows_ = [], []
     if code:
         hi = next((r for r in rows if r["setup"] == REPO and r["metric"] == "coding_probe_max" and r["conc"] == 1
                    and r["sampling"] == code["sampling"] and r["release"] == code["release"]), None)
-        cells.append((f"{code['value']:.0f} tok/s", "coding, one chat",
-                      "median of 36 prompts, T=0, thinking off" + (f"; fastest prompt {hi['value']:.1f}" if hi else "")
+        cells.append((f"{code['value']:.0f} tok/s", "TG, coding c1",
+                      "median of 36 prompts · T=0, thinking off" + (f" · max {hi['value']:.1f}" if hi else "")
                       + rel(code)))
-    cells.append((f"{many['value']:.0f} tok/s", f"{many['conc']} chats at once, combined",
-                  "512-token replies, default settings" + rel(many)))
-    cells.append((f"{one['value']:.0f} tok/s", "one chat, default settings", "temperature 1.0, thinking on" + rel(one)))
+        rows_.append(("TG, coding c1", f"{code['value']:.1f} tok/s median" + (f", max {hi['value']:.1f}" if hi
+                                                                               else ""),
+                      "36 prompts (Python, C++, Rust, Go), OSL ≤768", "T=0, thinking off", short_stat(code), code))
+        cd = coding_one(rows, REPO, "server defaults, thinking on")
+        if cd:
+            rows_.append(("TG, coding c1, defaults", f"{cd['value']:.1f} tok/s median",
+                          "36 prompts, OSL ≤768", "server defaults, thinking on", short_stat(cd), cd))
+    cells.append((f"{many['value']:.0f} tok/s", f"TG, aggregate c{many['conc']}", f"{chat} · defaults"
+                  + rel(many)))
+    rows_.append((f"TG, aggregate c{many['conc']}", f"{many['value']:.1f} ± {many['sd']:.1f} tok/s"
+                  if many["sd"] else f"{many['value']:.1f} tok/s", f"llama-benchy task mode, {chat}", dflt,
+                  short_stat(many), many))
+    cells.append((f"{one['value']:.0f} tok/s", "TG c1, defaults", f"{chat} · T=1.0, thinking on" + rel(one)))
+    rows_.append(("TG c1", f"{one['value']:.1f} ± {one['sd']:.1f} tok/s" if one["sd"] else
+                  f"{one['value']:.1f} tok/s", f"llama-benchy task mode, {chat}", dflt, short_stat(one), one))
     if tc:
-        cells.append((f"{tc['value']:.0f}/100", "tool calls when required", "TC-45, 5 trials" + rel(tc)))
+        cells.append((f"{tc['value']:.0f}/100", "TC-45", f"tool calls · {round(tc['value'] / 20)} of 5 trials" + rel(tc)))
+        rows_.append(("TC-45", f"{tc['value']:.0f}/100", "tool call required by the request", "–",
+                      "5 trials", tc))
     td = "\n".join(f'    <td align="center"><h2>{n}</h2><b>{lab}</b><br><sub>{sub}</sub></td>' for n, lab, sub in cells)
     seqs = recipe_value("max_num_seqs")
-    line = " · ".join(x for x in (f"<b>{ctx:,}-token context</b>" if ctx else "",
-                                  f"<b>{seqs} requests at once</b>" if seqs else "",
-                                  "<b>OpenAI-compatible API</b>", "<b>quality-gated releases</b>") if x)
-    return (f'<table align="center">\n  <tr>\n{td}\n  </tr>\n</table>\n\n<p align="center">{line}</p>\n\n'
-            + f"<sub>{CAPTIONS['hero'][1]}</sub>")
-
-
-def hero_caption(rows):
-    _, d = hero_tiles(rows)
-    code, one, many, tc = d["code"], d["one"], d["many"], d["tc"]
-    parts = ["tok/s = tokens per second; a token is about 3/4 of a word."]
-    if code:
-        dflt = coding_one(rows, REPO, "server defaults, thinking on")
-        parts.append(f"Coding: median decode speed of 36 coding prompts (Python, C++, Rust, Go) sent one at a time, "
-                     f"temperature 0, thinking off, up to 768 tokens out, release {code['release']}, {code['date']}"
-                     + (f"; at the server defaults the same prompts give {dflt['value']:.0f} tok/s" if dflt else "")
-                     + ".")
-    parts.append(f"Chat: each chat sends a 2,048-token prompt and gets 512 tokens back at the server defaults "
-                 f"(temperature 1.0, thinking on), release {one['release']}, {one['date']}, {one['stat']}"
-                 + (f"; {many['conc']} chats: release {many['release']}, {many['date']}, {many['stat']}"
-                    if (many['release'], many['date'], many['campaign']) != (one['release'], one['date'], one['campaign'])
-                    else "") + ".")
-    if tc:
-        parts.append(f"Tool calls: TC-45, 5 trials, release {tc['release']}, {tc['date']}.")
-    caption("hero", [" ".join(parts) + f" Method: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)."], "")
+    spec = " · ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
+                                  "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
+    key = ("TG tok/s. " + (f"Coding: median, n=36, T=0, thinking off, OSL ≤768, {code['release']}. " if code else "")
+           + f"Chat: {chat}, server defaults (T=1.0, thinking on), {one['release']}.")
+    tab = ["| Metric | Value | Workload | Sampling | n | Release (date) | Source |", "|---|--:|---|---|---|---|---|"]
+    tab += [f"| {m} | {v} | {w} | {sm} | {n} | {r['release']} ({r['date']}) | "
+            f"[{'BENCHMARKS' if r['source'].endswith('.md') else 'results'}]({src_link(r)}) |"
+            for m, v, w, sm, n, r in rows_]
+    return (f'<table align="center">\n  <tr>\n{td}\n  </tr>\n</table>\n\n<p align="center"><sub>{spec}</sub></p>\n\n'
+            f"<sub>{key}</sub>\n\n<details>\n<summary><sub>Measurement details</sub></summary>\n\n"
+            + "\n".join(tab) + "\n\nMethod and full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).\n\n</details>")
 
 
 # ---------- charts ----------
@@ -437,7 +452,7 @@ def legend_setups(sets):
 
 
 def short_runs(lines):
-    """'One Spark v2.1.0 · Two Sparks, TP=2 v2.0.0' from {setup: [rows]}."""
+    """'1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0' from {setup: [rows]}."""
     return " · ".join(f"{SETUPS[s]['name']} {'/'.join(sorted({r['release'] for r in rs}, key=vkey, reverse=True))}"
                       for s, rs in lines.items())
 
@@ -469,27 +484,26 @@ def chart_conc(rows, metric, title, subtitle):
     labels(ax, [it for it in lab if it[0] != 1])
     labels(ax, [it for it in lab if it[0] == 1], side="left")
     cap = recipe_value("max_num_seqs", "1x")
-    footer(fig, h, "Error bars: ±1 sd." + (f" One Spark runs {cap} at once." if cap and "1x" in sets else ""))
+    footer(fig, h, "Error bars: ±1 sd." + (f" 1x: max_num_seqs {cap}." if cap and "1x" in sets else ""))
     missing = [SETUPS[s]["name"] for s in SETUPS if s not in sets]
-    lines = ["llama-benchy task mode: each chat sends a 2,048-token coding prompt and gets up to 512 tokens back, "
-             "temperature 1.0, top-p 0.95, top-k 20, thinking on. All chats together = every token written per "
-             "second, including time spent reading prompts; each chat = the speed one reply streams at once it has "
-             "started."] + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else []) \
+    lines = ["llama-benchy task mode (agent coding turn), ISL/OSL 2048/512, T=1.0, top-p 0.95, top-k 20, thinking on, "
+             "prefix caching. Aggregate = all output tokens / wall time, PP included; per request = TG rate "
+             "of one stream after its first token."] + notes + ([f"{', '.join(missing)}: not measured on this test yet."] if missing else []) \
         + [f"Versions are numbered per setup. Data: {DATA_LINK}, with the source file of every point."]
     return fig, lines, short_runs(used)
 
 
 def chart_throughput(rows):
-    fig, lines, short = chart_conc(rows, "tg_total", "How fast with more people at once?",
-                                   "Decode tok/s, all chats together, default settings")
-    caption("throughput", lines, f"{short}; llama-benchy, 2,048 in, 512 out.")
+    fig, lines, short = chart_conc(rows, "tg_total", "TG throughput vs concurrency",
+                                   "TG tok/s aggregate, c1-c16, ISL/OSL 2048/512, defaults")
+    caption("throughput", lines, f"{short}; llama-benchy task mode.")
     return fig
 
 
 def chart_perchat(rows):
-    fig, lines, short = chart_conc(rows, "tg_req", "How fast is each reply?",
-                                   "Decode tok/s of one chat, default settings")
-    caption("perchat", lines, f"{short}; llama-benchy, 2,048 in, 512 out.")
+    fig, lines, short = chart_conc(rows, "tg_req", "Per-request TG vs concurrency",
+                                   "TG tok/s per request, c1-c16, ISL/OSL 2048/512, defaults")
+    caption("perchat", lines, f"{short}; llama-benchy task mode.")
     return fig
 
 
@@ -518,32 +532,33 @@ def chart_prompt(rows, metrics, title, subtitle, fmt, ylabel_note):
     ax.set_xticks(ticks, [ktok(t) for t in ticks])
     ax.minorticks_off()
     ax.set_xlim(min(xs_all) / 1.3, max(xs_all) * 1.35)
-    ax.set_xlabel("Prompt length, tokens")
+    ax.set_xlabel("ISL, tokens (uncached)")
     labels(ax, lab)
     labels(ax, far, side="left")   # older points beyond the line's end sit at the right edge: label to their left
     footer(fig, h, ylabel_note)
     xmax = max(ends.values())
-    lines = ["One request with a prompt the server has not seen before. Each point is the mean of the samples of one "
-             "run (1 to 4 per prompt length; the CSV lists each)."] + notes \
+    lines = ["c1, cold prefix (no cache hit). Each point: mean of 1 to 4 samples of one run (n per point in the CSV)."] + notes \
         + [f"{SETUPS[s]['name']}: not measured above {ktok(k)} yet." for s, k in ends.items() if k < xmax] \
         + [f"Data: {DATA_LINK}, with the source file of every point."]
     return fig, lines, short_runs(used)
 
 
 def chart_latency(rows):
-    fig, lines, short = chart_prompt(rows, ["ttft_s", "ttft_benchy_s"], "How long until the answer starts?",
-                                     "Seconds to the first token, prompt not cached",
+    ms = ["ttft_s", "ttft_benchy_s"]   # the title names the ISL range the lines actually draw
+    xs = sorted({x for st in has(rows, ms) for part in main_line(rows, st, ms, "prompt_tokens", conc=1) for x in part})
+    fig, lines, short = chart_prompt(rows, ["ttft_s", "ttft_benchy_s"], "TTFT vs prompt length",
+                                     "TTFT s, c1, cold prefix" + (f", {ktok(xs[0])}-{ktok(xs[-1])}" if xs else ""),
                                      lambda v: f"{v:.0f} s" if v >= 10 else f"{v:.1f} s",
-                                     "A token is about 3/4 of a word.")
-    caption("latency", lines, f"{short}; one request.")
+                                     "Error bars: ±1 sd where the run has several samples.")
+    caption("latency", lines, f"{short}; c1, cold prefix.")
     return fig
 
 
 def chart_prefill(rows):
-    fig, lines, short = chart_prompt(rows, ["pp", "pp_benchy"], "How fast does it read a long prompt?",
-                                     "Prompt tokens read per second, prompt not cached", lambda v: f"{v:,.0f}",
+    fig, lines, short = chart_prompt(rows, ["pp", "pp_benchy"], "PP vs ISL",
+                                     "PP tok/s, c1, cold prefix", lambda v: f"{v:,.0f}",
                                      "Error bars: ±1 sd where the run has several samples.")
-    caption("prefill", lines, f"{short}; one request.")
+    caption("prefill", lines, f"{short}; c1, cold prefix.")
     return fig
 
 
@@ -553,10 +568,11 @@ def chart_depth(rows):
     concs = sorted({r["conc"] for r in rows if r["metric"] == m and r["setup"] == REPO})
     h = 3.9
     ramp = {c: tint(color(REPO), f) for c, f in zip(concs, np.linspace(0.45, 1, len(concs)))}
-    fig, (ax,) = figure(h, "Does a long context slow it down?",
-                        f"{SETUPS[REPO]['name']}: decode tok/s, all requests together",
-                        legend=[(f"{c} request{'s' if c > 1 else ''}", dict(color=ramp[c], marker="o"))
-                                for c in concs])
+    depths = sorted({r["depth_tokens"] for r in rows if r["metric"] == m and r["setup"] == REPO})
+    fig, (ax,) = figure(h, "TG at context depth",
+                        f"{SETUPS[REPO]['name']}: TG tok/s aggregate at " + "/".join(ktok(x) if x else "0" for x in depths)
+                        + " cached",
+                        legend=[(f"c{c}", dict(color=ramp[c], marker="o")) for c in concs])
     notes, lab, ymax, xs = [], [], 0, set()
     for c in concs:
         main, extra = main_line(rows, REPO, m, "depth_tokens", conc=c)
@@ -574,28 +590,28 @@ def chart_depth(rows):
     ax.set_xticks(xs, [ktok(d) if d else "0" for d in xs])
     ax.set_xlim(-0.06 * xs[-1], xs[-1] * 1.12)
     ax.set_ylim(0, ymax * 1.2)
-    ax.set_xlabel("Context already in the prompt, tokens")
+    ax.set_xlabel("Context depth, tokens (cached)")
     used = {REPO: [r for r in rows if r["metric"] == m and r["setup"] == REPO]}
     labels(ax, lab)
-    footer(fig, h, "Each point: 30 s of decode, context cached.")
+    footer(fig, h, "Server default sampling.")
     r0 = next(r for r in rows if r["metric"] == m and r["setup"] == REPO)
     caption("depth", [f"{SETUPS[REPO]['name']}: release {'; '.join(notes)}"
                       + (f" (older release; shipped {SHIPPED[REPO]} not measured on this test yet)" if old(r0) else "")
-                      + ". Server default sampling. This harness's 30 s steady-state window reads 10-30% above the "
-                      "512-token runs of the concurrency chart, so compare points within this chart.",
+                      + ". Server default sampling, 30 s steady-state TG window; it reads 10-30% above the OSL-512 runs "
+                      "of the concurrency chart, so compare points within this chart.",
                       f"Data: {DATA_LINK}, with the source file of every point."],
-            f"{short_runs(used)}; 30 s sustained decode.")
+            f"{short_runs(used)}; llm-inference-bench, 30 s sustained TG.")
     return fig
 
 
 SETUP_ROWS = [  # (title, metric(s), filter, unit, better, decimals)
-    ("Coding, one chat, T=0 (median of 36 prompts)", ["coding_probe_median"],
+    ("TG, coding c1 (median, n=36, T=0)", ["coding_probe_median"],
      dict(conc=1, sampling="T=0, thinking off"), "tok/s", "higher", 0),
-    ("Chat, one at a time", ["tg_total"], dict(conc=1, depth_tokens=None), "tok/s", "higher", 0),
-    ("8 chats at once, combined", ["tg_total"], dict(conc=8, depth_tokens=None), "tok/s", "higher", 0),
-    ("First token on a 16K prompt", ["ttft_s", "ttft_benchy_s"], dict(conc=1, prompt_tokens=16384), "s",
+    ("TG c1, defaults", ["tg_total"], dict(conc=1, depth_tokens=None), "tok/s", "higher", 0),
+    ("TG, aggregate c8, defaults", ["tg_total"], dict(conc=8, depth_tokens=None), "tok/s", "higher", 0),
+    ("TTFT, ISL 16K, cold prefix", ["ttft_s", "ttft_benchy_s"], dict(conc=1, prompt_tokens=16384), "s",
      "lower", 1),
-    ("262K-token chats the KV cache holds", ["kv_conc_262k"], {}, "", "higher", 1),
+    ("KV cache: concurrent 262K-token requests", ["kv_conc_262k"], {}, "", "higher", 1),
 ]
 
 
@@ -620,7 +636,7 @@ def chart_setups(rows):
             panels.append((title, metric, eq, unit, better, dec, vals))
     bar, gap, head = 0.27, 0.55, 0.7   # gap = space above a row's bars, its title included
     h = head + sum(gap + bar * len(p[-1]) for p in panels) + 0.55
-    fig, _ = figure(h, "One Spark or two?", "Shipped releases where measured; this repo's setup in full colour",
+    fig, _ = figure(h, "1x vs 2x TP=2 vs 2x DP=2", "shipped release per setup; this repo in full colour",
                     panels=0)
     lw = 1.75   # inches for the setup names
     y = 1 - head / h
@@ -656,12 +672,11 @@ def chart_setups(rows):
         ax.set_xlim(0, vmax * 1.35)
         ax.set_ylim(-0.5, len(vals) - 0.5)
         y -= (gap + hh) / h
-    footer(fig, h, "Coding: whisker = slowest to fastest of the 36 prompts. In brackets: an older release than "
-           "the shipped one.")
+    footer(fig, h, "Coding whisker: min-max of 36 prompts. Bracket: older release than shipped.")
     caption("setups", [f"{t}: " + "; ".join(v) + (f"; not measured: {', '.join(missing[t])}" if missing[t] else "")
                        + "." for t, v in notes.items()]
-            + ["Chat rows: llama-benchy task mode at the server defaults (2,048-token prompt, 512 out). 262K-token "
-               "chats: vLLM's own count at boot (DP=2: two replicas, one pool each).",
+            + ["TG c1/c8: llama-benchy task mode, ISL/OSL 2048/512, server defaults. KV row: vLLM's 'Maximum "
+               "concurrency for 262,144 tokens per request' at boot (DP=2: two replicas, one pool each).",
                f"Data: {DATA_LINK}, with the source file of every point."],
             "Shipped release of each setup where measured; the bracket names an older release.")
     return fig
@@ -674,8 +689,8 @@ def chart_agents(rows):
              "long-8": "8 sessions × 2 turns", "long-12": "12 sessions × 2 turns", "long-16": "16 sessions × 2 turns"}
     sets = has(rows, "agent_wall_s")
     h = 1.25 + 0.48 * len(wl) + 0.85
-    fig, (ax,) = figure(h, "Many agents at once on two Sparks: TP=2 or DP=2?",
-                        "Wall time for the whole workload, seconds, shorter is better",
+    fig, (ax,) = figure(h, "Agent replay: TP=2 vs DP=2",
+                        "wall time s, lower is better; T=0.6, thinking off, tools on",
                         legend=[(SETUPS[s]["name"], dict(color=color(s))) for s in sets])
     fig.subplots_adjust(left=2.25 / W)
     ax.grid(axis="y", visible=False)
@@ -694,16 +709,16 @@ def chart_agents(rows):
             ax.barh(y, r["value"], hb * 0.82, color=color(s), lw=0)
             ax.text(r["value"] + vmax * 0.012, y, f"{r['value']:.0f}", va="center", fontsize=11, color=T["ink"])
             notes.setdefault(s, f"{SETUPS[s]['name']}: {label(r)}, {r['date']}, {r['harness']}")
-    ax.set_yticks(range(len(wl)), [f"{names[k]}\n{'~32K' if k.startswith('agent') else '~128K'}-token start"
+    ax.set_yticks(range(len(wl)), [f"{names[k]}\n{'~32K' if k.startswith('agent') else '~128K'}-token initial context"
                                    for k in wl], fontsize=11, color=T["ink"])
     ax.invert_yaxis()
     ax.set_xlim(0, vmax * 1.12)
     pt = [r["value"] for r in rows if r["metric"] == "agent_prompt_tokens"]
     ot = [r["value"] for r in rows if r["metric"] == "agent_output_tokens"]
-    footer(fig, h, f"Prompt work dominates: {min(pt) / 1e6:.1f}M to {max(pt) / 1e6:.1f}M prompt tokens against "
-           f"{min(ot):,.0f} to {max(ot):,.0f} output tokens per workload.")
-    caption("agents", ["All sessions start together; every turn resends the conversation with tools on, temperature "
-                       "0.6, thinking off."] + list(notes.values())
+    footer(fig, h, f"PP-bound: {min(pt) / 1e6:.1f}M-{max(pt) / 1e6:.1f}M prompt tokens vs "
+           f"{min(ot):,.0f}-{max(ot):,.0f} output tokens per workload.")
+    caption("agents", ["All sessions start at once; each turn resends the full conversation (prefix cache on), tools "
+                       "on, T=0.6, thinking off."] + list(notes.values())
             + [f"Data: {DATA_LINK}, with the source file of every point."],
             "Agent replay, one boot per layout: " + "; ".join(v.split(": ", 1)[1].split(",")[0] + " ("
                                                               + SETUPS[k]["short"] + ")" for k, v in notes.items())
@@ -736,10 +751,10 @@ def chart_history(rows):
     h = 5.0
     shade = {1: 0.5, 8: 1.0}
     mix = lambda f: tint(color(REPO), f)  # noqa: E731
-    fig, (top, bot) = figure(h, "What did each release change?",
-                             f"{SETUPS[REPO]['name']}, every shipped release, oldest to newest",
-                             legend=[("8 chats, combined", dict(color=mix(1.0), marker="o")),
-                                     ("one chat", dict(color=mix(0.5), marker="o"))], panels=2, hspace=0.45)
+    fig, (top, bot) = figure(h, "Release history",
+                             f"{SETUPS[REPO]['name']}: TG tok/s and hardmode score per release",
+                             legend=[("TG aggregate c8", dict(color=mix(1.0), marker="o")),
+                                     ("TG c1", dict(color=mix(0.5), marker="o"))], panels=2, hspace=0.45)
     x = {v: i for i, v in enumerate(rels)}
     lab, ymax = [], 0
     for c in (8, 1):
@@ -759,9 +774,9 @@ def chart_history(rows):
     xh = [v for v in rels if any(v in speed[c] and "xhigh" in speed[c][v]["sampling"] for c in speed)]
     if xh:   # measured at a different thinking effort: shade those releases and say so
         top.axvspan(x[xh[0]] - 0.4, x[xh[-1]] + 0.4, color=T["grid"], alpha=0.6, lw=0, zorder=0)
-        top.text(x[xh[0]] - 0.3, ymax * 1.12, "measured at xhigh thinking effort", fontsize=10.5, color=T["muted"],
+        top.text(x[xh[0]] - 0.3, ymax * 1.12, "reasoning_effort xhigh", fontsize=10.5, color=T["muted"],
                  va="center")
-    panel_title(top, "Decode tokens per second, default settings")
+    panel_title(top, "TG, tok/s")
     labels(top, lab)
     bot.set_ylim(80, 101)
     bot.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:.0f}"))
@@ -772,10 +787,10 @@ def chart_history(rows):
         bot.plot([x[v]] * len(ns), ns, "D", color=color(REPO), ms=8, mec=T["ring"], mew=1.6, zorder=4)
         bot.annotate(" / ".join(f"{n:.0f}" for n in ns), (x[v], max(ns)), xytext=(0, 9), textcoords="offset points",
                      ha="center", fontsize=11, color=T["ink"])
-    panel_title(bot, "Hard multi-step tool use, score out of 100")
+    panel_title(bot, "Hardmode (88 multi-step tool-use scenarios), /100")
     bot.set_xticks(range(len(rels)), [v if v.startswith("v") else f"{v}\npre-1.0" for v in rels])
     bot.set_xlim(-0.5, len(rels) - 0.5)
-    footer(fig, h, "Releases from v1.0.0 on passed the full quality gate."
+    footer(fig, h, "v1.0.0 on: full quality gate passed."
            + (" Two marks: two gate boots." if any(len(nums(r)) > 1 for r in hard.values()) else "")
            + " Error bars: ±1 sd.")
     groups = []   # consecutive releases measured the same way share one line
@@ -788,19 +803,18 @@ def chart_history(rows):
             groups[-1][0].append(f"{v} {r['date']}")
         else:
             groups.append(([f"{v} {r['date']}"], how))
-    notes = ["Speed runs: " + "; ".join(", ".join(g) + f" ({how})" for g, how in groups) + ".",
-             "Hard tool use: the promotion gate of each release (b0: the gate on the pinned checkpoint), "
+    notes = ["TG runs: " + "; ".join(", ".join(g) + f" ({how})" for g, how in groups) + ".",
+             "Hardmode: promotion gate of each release (b0: gate on the pinned checkpoint), "
              + ", ".join(f"{v} {r['date']}" for v, r in sorted(hard.items(), key=lambda i: vkey(i[0])))
              + "".join(f"; {v}: score not in the data" for v in rels if v not in hard) + "."]
-    caption("history", ["Speed: llama-benchy task mode, 2,048-token prompt, 512 out, temperature 1.0, thinking on, "
-                        "from each release's own promotion run, so day-to-day drift of the Sparks is in these numbers; "
-                        "the paired A/B of every release is in [VERSIONS.md](VERSIONS.md)."]
-            + ([f"Shaded ({xh[0]} to {xh[-1]}): measured at the chat template's xhigh thinking effort; later releases at "
-                "the recipe default, medium. Longer thinking changes the replies, so speeds on the two sides of the "
-                "shade are not a like-for-like comparison."] if xh else [])
+    caption("history", ["TG: llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on, from each release's own "
+                        "promotion run (unpaired across releases, so day-to-day drift is included; paired A/B per "
+                        "release in [VERSIONS.md](VERSIONS.md))."]
+            + ([f"Shaded ({xh[0]} to {xh[-1]}): chat template default reasoning_effort xhigh; later releases at the "
+                "recipe default, medium. Different reasoning lengths, so not like-for-like across the shade."]
+               if xh else [])
             + notes + [f"Data: {DATA_LINK}, with the source file of every point."],
-            "Each release's own promotion run and gate" + (f"; shaded releases ran at xhigh thinking effort"
-                                                          if xh else "") + ".")
+            "Each release's own promotion run and gate" + ("; shaded: reasoning_effort xhigh" if xh else "") + ".")
     return fig
 
 
@@ -832,23 +846,24 @@ def matrix(rows):
     concs = sorted({r["conc"] for r in rows if r["setup"] == s and r["metric"] == "tg_total"
                     and r["depth_tokens"] is None and r["conc"]})
     if concs:
-        out += ["| Requests at once | All together, tok/s | Each, tok/s | Release, run |", "|--:|--:|--:|---|"]
+        out += ["| Concurrency | TG tok/s, aggregate | TG tok/s, per request | Release, run |",
+                "|--:|--:|--:|---|"]
         for c in concs:
             t, e = best("tg_total", conc=c, depth_tokens=None), best("tg_req", conc=c, depth_tokens=None)
             out.append(f"| {c} | {fmt_cell(t)} | {fmt_cell(e)} | [{t['release']}, {t['date']}]({src_link(t)}) |")
-        out += ["", "llama-benchy task mode: 2,048-token prompt, 512 tokens out, temperature 1.0, thinking on; "
-                "mean ± sd as given per run in the CSV.", ""]
+        out += ["", "llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd per run.", ""]
     sizes = sorted({r["prompt_tokens"] for r in rows if r["setup"] == s and r["conc"] == 1
                     and r["metric"] in ("ttft_s", "ttft_benchy_s", "pp", "pp_benchy") and r["prompt_tokens"]})
     if sizes:
-        out += ["| Prompt, tokens | Prompt reading, tok/s | First token, s | Release, run |", "|--:|--:|--:|---|"]
+        out += ["| ISL | PP tok/s | TTFT s | Release, run |",
+                "|--:|--:|--:|---|"]
         for p in sizes:
             pp = best(["pp", "pp_benchy"], conc=1, prompt_tokens=p)
             tt = best(["ttft_s", "ttft_benchy_s"], conc=1, prompt_tokens=p)
             ref = tt or pp
             out.append(f"| {ktok(p)} | {fmt_cell(pp, 0)} | {fmt_cell(tt, 1)} | "
                        f"[{ref['release']}, {ref['date']}, {ref['harness']}]({src_link(ref)}) |")
-        out += ["", "One request, prompt not cached."]
+        out += ["", "c1, cold prefix."]
     return "\n".join(out)
 
 
@@ -878,42 +893,42 @@ def table(rows):
         out.append(f"| {name} | " + " | ".join(f(s) for s in SETUPS) + " |")
 
     cap1 = recipe_value("max_num_seqs", "1x")
-    row("Decode tok/s, 1 request", lambda s: join(cell(s, ["tg_total"], conc=1, depth_tokens=None)))
+    row("TG c1, tok/s", lambda s: join(cell(s, ["tg_total"], conc=1, depth_tokens=None)))
     for c in (4, 8, 16):
         def f(s, c=c):
             if s == "1x" and cap1 and c > cap1:
-                return f"over the cap (max_num_seqs {cap1})"
+                return f"> max_num_seqs {cap1}"
             return join(cell(s, ["tg_req"], conc=c, depth_tokens=None), cell(s, ["tg_total"], conc=c, depth_tokens=None))
-        row(f"Decode tok/s, {c} requests: each / total", f)
-    row("Coding, 36 prompts one at a time: median (max) decode tok/s, T=0 / server defaults",
+        row(f"TG c{c}, tok/s: per request / aggregate", f)
+    row("TG, coding c1 (36 prompts), tok/s median (max): T=0 / defaults",
         lambda s: join(*((lambda a, b: a and f"{a} {b or ''}".strip())(
             cell(s, ["coding_probe_median"], "{:.0f}", conc=1, sampling=m),
             cell(s, ["coding_probe_max"], "({:.0f})", conc=1, sampling=m))
             for m in ("T=0, thinking off", "server defaults, thinking on"))))
-    row("Copy-heavy (MTP accepts nearly every draft) total tok/s at 1 / 4 / 8 requests, max of 3 rounds",
+    row("Copy-heavy (MTP acceptance near 1), aggregate tok/s c1 / c4 / c8, max of 3 rounds",
         lambda s: join(*(cell(s, ["copy_total_max"], "{:.0f}", conc=c) for c in (1, 4, 8))))
     sizes = (2048, 16384, 65536, 131072)
-    row("Prefill tok/s at 2K / 16K / 64K / 128K prompt, 1 request",
+    row("PP tok/s, ISL 2K / 16K / 64K / 128K, c1",
         lambda s: join(*(cell(s, ["pp", "pp_benchy"], "{:,.0f}", conc=1, prompt_tokens=p) for p in sizes)))
-    row("Time to first token at 2K / 16K / 64K / 128K, uncached, s",
+    row("TTFT s, ISL 2K / 16K / 64K / 128K, cold prefix",
         lambda s: join(*(cell(s, ["ttft_s", "ttft_benchy_s"], "{:.1f}", conc=1, prompt_tokens=p) for p in sizes)))
-    row("Decode, mean ms per token at 1 / 8 requests (MTP emits several tokens per step)",
+    row("ITL p50, ms, c1 / c8 (MTP emits several tokens per step)",
         lambda s: join(cell(s, ["itl_p50_ms"], "{:.0f}", conc=1, depth_tokens=0),
                        cell(s, ["itl_p50_ms"], "{:.0f}", conc=8, depth_tokens=0)))
-    row("Gap between streamed chunks p50 at 1 / 8 requests, ms",
+    row("Stream chunk gap p50, ms, c1 / c8",
         lambda s: join(cell(s, ["chunk_gap_p50_ms"], "{:.0f}", conc=1, depth_tokens=0),
                        cell(s, ["chunk_gap_p50_ms"], "{:.0f}", conc=8, depth_tokens=0)))
-    row("Decode tok/s total at 0 → 64K context, 1 request / 4 requests",
+    row("TG aggregate tok/s, depth 0 → 64K, c1 / c4",
         lambda s: join(*(join(cell(s, ["decode_depth_total"], conc=c, depth_tokens=0),
                               cell(s, ["decode_depth_total"], conc=c, depth_tokens=65536), sep=" → ")
                          for c in (1, 4))) if cell(s, ["decode_depth_total"], conc=1, depth_tokens=0)
         else "not measured")
-    row("Max context per request", lambda s: f"{recipe_value('max_model_len', '1x') or 262144:,} (recipe)")
-    row("KV pool, tokens", lambda s: join(cell(s, ["kv_tokens"], "{:,.0f}")))
-    row("Requests of 262,144 tokens the pool holds (vLLM's count)", lambda s: join(cell(s, ["kv_conc_262k"], "{:.2f}")))
-    row("Requests that fit the KV pool at 16K / 64K / 128K",
+    row("max_model_len", lambda s: f"{recipe_value('max_model_len', '1x') or 262144:,} (recipe)")
+    row("KV cache, tokens", lambda s: join(cell(s, ["kv_tokens"], "{:,.0f}")))
+    row("Concurrent 262K requests in KV (vLLM count)", lambda s: join(cell(s, ["kv_conc_262k"], "{:.2f}")))
+    row("Requests that fit KV at 16K / 64K / 128K",
         lambda s: join(*(cell(s, ["sessions_fit"], "{:.1f}", prompt_tokens=p) for p in (16384, 65536, 131072))))
-    row("Quality gate: hardmode / TC-45 / retrieval to ~245K / stragglers",
+    row("Gate: hardmode / TC-45 / fidelity to ~245K / stragglers",
         lambda s: join(cell(s, ["gate_hardmode"], "{:.0f}"), cell(s, ["gate_tc45"], "{:.0f}"),
                        cell(s, ["gate_retrieval"], "{}"), cell(s, ["gate_stragglers"], "{}")))
     out += ["", "Releases and runs behind the numbers:", ""]
@@ -933,19 +948,19 @@ def quality(rows):
     seqs = recipe_value("max_num_seqs")
     hi = re.search(r"c(\d+)-c(\d+)", v("stragglers"))
     retr = v("retrieval")
-    out = ["| Check | Result | What it checks |", "|---|---|---|",
-           f"| Tool calls (TC-45) | **{v('tc45')}/100** | A request that requires a tool call gets one; 5 trials |",
-           f"| Hard tool use | **{v('hardmode')}/100** | 88 multi-step tool-use scenarios; pass mark 88 |",
-           f"| Long-context retrieval | **{retr.split(' (')[0]}**"
+    out = ["| Check | Result | Criterion |", "|---|---|---|",
+           f"| TC-45 | **{v('tc45')}/100** | tool call emitted when the request requires one, 5 trials |",
+           f"| Hardmode | **{v('hardmode')}/100** | 88 multi-step tool-use scenarios, pass ≥ 88 |",
+           f"| Fidelity | **{retr.split(' (')[0]}**"
            + (f" ({retr.split(' (', 1)[1]}" if " (" in retr else "")
-           + " | 20 facts hidden in prompts of 8K to ~245K tokens, each returned through a tool call |",
-           f"| Stalled requests | **{v('stragglers').split(',')[0]}** | No request falls behind the others when "
-           + (f"{hi[1]} to {hi[2]} are sent at once" if hi else "many are sent at once")
-           + (f" (it runs {seqs} at a time and queues the rest)" if hi and seqs and seqs < int(hi[2]) else "")
+           + " | 20 needles retrieved via tool calls, ISL 8K to ~245K |",
+           f"| Stragglers | **{v('stragglers').split(',')[0]}** | no stalled request at "
+           + (f"c{hi[1]}-c{hi[2]}" if hi else "high concurrency")
+           + (f" (max_num_seqs {seqs}, rest queued)" if hi and seqs and seqs < int(hi[2]) else "")
            + " |"]
     rel = sorted({(g[m]["release"], g[m]["date"]) for m in g})
     return "\n".join(out) + "\n\nGate run: " + "; ".join(f"release {r}, {d}" for r, d in rel) \
-        + ". Every release passes this gate before it ships."
+        + ". Every release passes this gate before promotion."
 
 
 def badges(rows):
@@ -1010,24 +1025,22 @@ if __name__ == "__main__":
     who = {"1x": "one DGX Spark", "2x": "two DGX Sparks"}[REPO]
     IMAGES["hero"] = f"Qwen3.8 Flash Next on {who}: Qwen emblem, gold NVIDIA hardware and violet token trails."
     DISPLAY["hero"] = 840
-    hero_caption(rows)
     half = dict(w=5.0, px=420)
-    render("throughput", chart_throughput, rows, "Line chart of decode tokens per second, all chats together, against 1 "
-           "to 16 requests at the same time, for each setup. Values are labelled at the line ends.", **half)
-    render("perchat", chart_perchat, rows, "Line chart of decode tokens per second of each chat against 1 to 16 "
-           "requests at the same time, for each setup. Values are labelled at the line ends.", **half)
-    render("latency", chart_latency, rows, "Line chart of seconds until the first token against prompt length, "
-           "prompt not cached, for each setup. Values are labelled at the line ends.", **half)
-    render("prefill", chart_prefill, rows, "Line chart of prompt tokens read per second against prompt length, prompt "
-           "not cached, for each setup. Values are labelled at the line ends.", **half)
-    render("depth", chart_depth, rows, "Line chart of decode tokens per second with 0 to 64K tokens of context "
-           "already in the prompt, at 1, 4 and 8 requests. Values are labelled at the line ends.", **half)
-    render("setups", chart_setups, rows, "Bar charts comparing one Spark, two Sparks at TP=2 and two Sparks at DP=2 on "
-           "coding speed, chat speed, 8 chats combined, first token on a 16K prompt and long chats that fit the KV "
-           "cache. Values are labelled on the bars.")
+    render("throughput", chart_throughput, rows, "TG aggregate tok/s vs concurrency c1-c16 per setup, ISL/OSL "
+           "2048/512, server defaults. End values labelled.", **half)
+    render("perchat", chart_perchat, rows, "TG per-request tok/s vs concurrency c1-c16 per setup, ISL/OSL "
+           "2048/512, server defaults. End values labelled.", **half)
+    render("latency", chart_latency, rows, "TTFT in seconds vs ISL, c1, cold prefix, per setup. End values "
+           "labelled.", **half)
+    render("prefill", chart_prefill, rows, "PP tok/s vs ISL, c1, cold prefix, per setup. End values labelled.",
+           **half)
+    render("depth", chart_depth, rows, "TG aggregate tok/s at context depth 0, 16K and 64K, c1/c4/c8. End values "
+           "labelled.", **half)
+    render("setups", chart_setups, rows, "1x vs 2x TP=2 vs 2x DP=2: TG coding c1, TG c1, TG aggregate c8, "
+           "TTFT at ISL 16K, concurrent 262K requests in KV. Values labelled on the bars.")
     if has(rows, "agent_wall_s"):
-        render("agents", chart_agents, rows, "Bar chart of wall time for six agent workloads on two Sparks at TP=2 "
-               "and at DP=2. Values are labelled on the bars.")
-    render("history", chart_history, rows, "Decode speed at one chat and at 8 chats, and the hard tool-use score, for "
-           "every release of this setup. Values are labelled on the chart.")
+        render("agents", chart_agents, rows, "Agent replay wall time in seconds, TP=2 vs DP=2, six workloads. Values "
+               "labelled on the bars.")
+    render("history", chart_history, rows, "Release history: TG aggregate c8 and TG c1 tok/s, and hardmode "
+           "score, per shipped release. Values labelled.")
     write_blocks(rows)
