@@ -7,9 +7,18 @@ excludes prefill and time-to-first-token.
 Repeats each prompt class, because run-to-run variance on these boxes is large
 and a single sample is noise.
 """
-import json, statistics, sys, time, urllib.request
+import json, os, statistics, sys, time, urllib.request
 
-URL = "http://192.168.100.62:8000/v1/chat/completions"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from spark_env import spark  # noqa: E402
+
+if sys.argv[1:2] in (["-h"], ["--help"]):
+    print("usage: decode_probe.py [MODEL] [REPEATS] [--dry-run]\n"
+          "Server: $DECODE_PROBE_BASE, else http://$SPARK_HEAD_IP:8000 (env or ~/.config/spark-pair.env).")
+    sys.exit(0)
+DRY = "--dry-run" in sys.argv
+sys.argv = [a for a in sys.argv if a != "--dry-run"]
+URL = (os.environ.get("DECODE_PROBE_BASE") or f"http://{spark('SPARK_HEAD_IP')}:8000") + "/v1/chat/completions"
 MODEL = sys.argv[1] if len(sys.argv) > 1 else "qwen3.8-flash-next"
 REPEATS = int(sys.argv[2]) if len(sys.argv) > 2 else 3
 MAX_TOK = 512
@@ -59,6 +68,9 @@ def run(prompt):
     return (completion - 1) / (t_last - t_first)
 
 
+if DRY:
+    print(f"dry run: {URL} model={MODEL} repeats={REPEATS} prompts={','.join(PROMPTS)}")
+    sys.exit(0)
 print("warming up", flush=True)
 run(PROMPTS["code"])
 

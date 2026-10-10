@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # MTP sampling arm: default-temp prose grid (0,16384 x c1,4,10), temp0 decode checks,
 # and the task-shaped grid from the llama-benchy fork.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 ARM="${1:?arm label}"
@@ -9,7 +11,7 @@ OUT="$REPO/results/arms/$ARM"; mkdir -p "$OUT"
 BENCHY="$REPO/results/benchy"; mkdir -p "$BENCHY"
 TOK=$(ls -d "$HOME"/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/*/ | head -1)
 M=qwen3.8-flash-next
-HEAD=192.168.100.62
+HEAD=${SPARK_HEAD_IP}
 
 echo "== $ARM start $(date -u +%FT%TZ)"
 

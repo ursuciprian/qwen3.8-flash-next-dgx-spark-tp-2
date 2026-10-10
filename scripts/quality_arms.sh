@@ -3,6 +3,7 @@
 # Arms: A0 (eugr-agents baseline), A1 (BF16 KV), R0 (RadixArk ckpt, fp8 KV, w/ boot fallbacks),
 # R1 (RadixArk ckpt, BF16 KV, w/ boot fallbacks), N1 (nvidia ckpt, BF16 KV — only if R0+R1 both fail).
 # Runs detached (setsid nohup) on dgx-01 so it survives ssh/agent teardown.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
 export PATH="$HOME/.local/bin:$PATH"
 Q=~/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2
 OUT=$Q/results/quality-arms
@@ -103,8 +104,7 @@ battery() {
     say "$arm: fidelity T1.0 done | $(tail -4 "$OUT/$arm/fid-t10.log" | tr '\n' ' ' | cut -c1-300)"
   fi
   say "$arm: decode probe (code/structured/counting/prose x3)"
-  sed "s#http://192.168.100.62:8000#$BASE#" $Q/scripts/decode_probe.py > /tmp/decode_probe_qa.py
-  python3 /tmp/decode_probe_qa.py "$M" 3 > "$OUT/$arm/decode-lanes.log" 2>&1
+  DECODE_PROBE_BASE=$BASE python3 $Q/scripts/decode_probe.py "$M" 3 > "$OUT/$arm/decode-lanes.log" 2>&1
   cat "$OUT/$arm/decode-lanes.log" | tail -10 | cut -c1-200 | tee -a "$L"
   say "$arm: tool-eval hardmode (T1.0, thinking medium, 32 turns)"
   ( cd "$OUT/$arm" && tool-eval-bench run --hardmode --seed 42 --parallel 1 --max-turns 32 \

@@ -29,10 +29,12 @@
 #                                    they are checked and never regenerated)
 # Output: $RES (results/refit-p2-<date>), $RES/refit-p2.txt, ~/GEN-AI/refit-p2/STATE; data in $D (~250 GB).
 # Stop: kill -TERM <job pid in refit-p2.log>, never pkill -f.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -u
 export PATH="$HOME/.local/bin:$PATH"
 P=$HOME/GEN-AI/refit-p2; G=$HOME/GEN-AI; R=$G/qwen3.8-flash-next-dgx-spark-tp-2
-H1=192.168.100.62; H2=192.168.100.53
+H1=${SPARK_HEAD_IP}; H2=${SPARK_WORKER_IP}
 BASE=ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-20261005-21e0b201-5dad364d-warm
 IMG=spark-vllm-b12x:mtpcap-21e0b201-$(cut -c1-8 "$P/COMMIT")
 SNAPREL=hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/f400000000000000000000000000000000000003

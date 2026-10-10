@@ -31,11 +31,13 @@
 #                                                     CPU tests incl. a tiny train step, k56 inputs)
 # Output: $RES (results/refit-p3-<DAY>), $RES/refit-p3.txt, ~/GEN-AI/refit-p3/STATE. Runs in ~/GEN-AI/refit-p3/runs.
 # Stop: kill -TERM <job pid in refit-p3.log>, never pkill -f.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -u
 export PATH="$HOME/.local/bin:$PATH"
 P=$HOME/GEN-AI/refit-p3; P2=$HOME/GEN-AI/refit-p2; G=$HOME/GEN-AI; R=$G/qwen3.8-flash-next-dgx-spark-tp-2
 K=$G/k56; TD=$R/scripts/thunderdome.sh
-H1=192.168.100.62; H2=192.168.100.53
+H1=${SPARK_HEAD_IP}; H2=${SPARK_WORKER_IP}
 DAY=${DAY:-20261006}   # refit-p2 data day
 D=$HOME/.cache/huggingface/mtp-refit/p2-$DAY; CD=/cache/huggingface/mtp-refit/p2-$DAY
 RES2=$R/results/refit-p2-$DAY; RES=${RES:-$R/results/refit-p3-$DAY}

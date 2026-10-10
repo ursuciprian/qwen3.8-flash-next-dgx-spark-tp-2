@@ -13,12 +13,13 @@ level (repeat externally if a less noisy number is needed).
 Usage: python3 straggler_probe.py [c ...]   (default: 5 6 7 8 12 16)
 """
 import json
+import os
 import sys
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-BASE = "http://localhost:8000"
+BASE = os.environ.get("STRAGGLER_BASE", "http://localhost:8000")   # e.g. http://$SPARK_WORKER_IP:8000
 MODEL = "qwen3.8-flash-next"
 MAX_TOK = 320
 PROMPT = "Count from 1 to 400, one number per line, nothing else."
@@ -102,6 +103,9 @@ def run_level(c):
 
 
 def main():
+    if "--dry-run" in sys.argv:
+        print(f"dry run: {BASE} levels {[int(x) for x in sys.argv[1:] if x != '--dry-run'] or [5, 6, 7, 8, 12, 16]}")
+        return
     levels = [int(x) for x in sys.argv[1:]] or [5, 6, 7, 8, 12, 16]
     for c in levels:
         run_level(c)

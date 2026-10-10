@@ -5,10 +5,12 @@
 #   TONY tonyd2wild's 40-prompt category harness, C1/2/4/6, cold prefill ladder, counting ceiling
 #   T2  tool-eval-bench --short (SeraphimSerapis), thinking off
 # Results under results/qwen-ladder/<NN-name>-*. One line per lane in ladder.log.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 export PATH="$HOME/.local/bin:$PATH"
 R="$HOME/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2"; cd "$R" || exit 1
 OUT="${LADDER_OUT:-$R/results/qwen-ladder}"; mkdir -p "$OUT"; LOG="$OUT/ladder.log"
-BASE=http://192.168.100.62:8000; WORKER=192.168.100.53
+BASE=http://${SPARK_HEAD_IP}:8000; WORKER=${SPARK_WORKER_IP}
 LANES="${LANES:-T1 TONY T2}"
 say() { echo "=== $(date +%T) $*" | tee -a "$LOG"; }
 spec() { curl -s -m 6 "$BASE/metrics" | grep -E '^(vllm|sglang):spec_decode_num_(accepted_tokens|drafts)_total' | awk '{s[$1]+=$2} END{for(k in s) print k, s[k]}'; }

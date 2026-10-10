@@ -7,10 +7,12 @@
 # turns prefix caching on fails the gate, the remaining arms are flipped back to
 # --no-enable-prefix-caching (in place, logged) so the other axes still get measured.
 #   scripts/vllm_ladder.sh fn-vllm-tony-speed-pc fn-vllm-tony-speed-pc-idx fn-vllm-imp-k2 ...
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spark_env.sh"
+spark_need SPARK_HEAD_IP SPARK_WORKER_IP
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HEAD=${HEAD_IP:-192.168.100.62}; WORKER=${WORKER_IP:-192.168.100.53}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
+HEAD=${HEAD_IP:-${SPARK_HEAD_IP}}; WORKER=${WORKER_IP:-${SPARK_WORKER_IP}}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
 DEPTHS=${DEPTHS:-"0 2048 4096 8192 16384 32768"}; CONC=${CONC:-"1 2 5"}
 CORPUS=${CORPUS:-$REPO/codex-optimization/campaigns/20260907T154810Z/a1-c1/corpus.txt}
 TOK=$(ls -d "$HOME"/.cache/huggingface/hub/models--nvidia--Qwen3.8-Flash-Next-NVFP4/snapshots/fc694b54*/ | head -1)
