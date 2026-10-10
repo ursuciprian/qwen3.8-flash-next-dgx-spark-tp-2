@@ -10,7 +10,7 @@
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HEAD=${HEAD_IP:-192.168.100.62}; WORKER=${WORKER_IP:-192.168.100.53}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
+HEAD=${HEAD_IP:-<cx7-ip-a>}; WORKER=${WORKER_IP:-<cx7-ip-b>}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
 DEPTHS=${DEPTHS:-"0 2048 4096 8192 16384 32768"}; CONC=${CONC:-"1 2 5"}
 CORPUS=${CORPUS:-$REPO/codex-optimization/campaigns/20260907T154810Z/a1-c1/corpus.txt}
 TOK=$(ls -d "$HOME"/.cache/huggingface/hub/models--nvidia--Qwen3.8-Flash-Next-NVFP4/snapshots/fc694b54*/ | head -1)

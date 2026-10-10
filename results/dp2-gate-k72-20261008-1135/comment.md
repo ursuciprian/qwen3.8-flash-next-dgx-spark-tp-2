@@ -32,8 +32,8 @@ KV pools from the boot logs:
 ```
 2x TP=2 (dgx-01 rank): Available KV cache memory: 30.34 GiB
 2x TP=2 (dgx-01 rank): GPU KV cache size: 3,650,419 tokens, Maximum concurrency for 262,144 tokens per request: 13.93x
-1x v3e on 192.168.100.62: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
-1x v3e on 192.168.100.53: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+1x v3e on <cx7-ip-a>: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+1x v3e on <cx7-ip-b>: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
 ```
 
 Columns: prefix hit = cache hit tokens / queried tokens, summed over replicas; preemptions = `vllm:num_preemptions_total` delta; KV max = highest `vllm:kv_cache_usage_perc` sample (every 5 s) per replica; sessions per replica = distinct conversations the router sent to each replica; decode tok/s per request = completion tokens / time after the first token.

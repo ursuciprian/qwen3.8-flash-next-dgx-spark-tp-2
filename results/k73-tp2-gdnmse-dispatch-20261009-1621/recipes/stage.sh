@@ -14,7 +14,7 @@
 #            swaps in the warm image after the bake)
 #   tests    CPU pytest of the large-M tests (incl. fake TP=2) inside P1 (--network none, no GPU, 4 GiB cap)
 set -eu
-K=$HOME/GEN-AI/backlog/k73; G=$HOME/GEN-AI; H2=192.168.100.53
+K=$HOME/GEN-AI/backlog/k73; G=$HOME/GEN-AI; H2=<cx7-ip-b>
 BASE=ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm
 P1=spark-vllm-b12x:k73-gdnmse-tp2-21e0b201-d21d7ade
 REV=16c9bd54788d12390838a65ce4a4ecda97fa5f1d

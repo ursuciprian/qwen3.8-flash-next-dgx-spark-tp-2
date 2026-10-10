@@ -94,7 +94,7 @@ env:
   # OURS: fabric retarget. They pin ONE HCA (rocep1s0f0); we have two active and every
   # recipe here uses both. Kept as ours for arm 1 so it boots; "one HCA" is a later arm.
   NCCL_IB_HCA: rocep1s0f1,roceP2p1s0f1
-  NCCL_IB_ADDR_RANGE: 192.168.100.0/24
+  NCCL_IB_ADDR_RANGE: <cx7-subnet>/24
   NCCL_SOCKET_IFNAME: enp1s0f1np1
   GLOO_SOCKET_IFNAME: enp1s0f1np1
   TP_SOCKET_IFNAME: enp1s0f1np1

@@ -11,7 +11,7 @@ set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 LABEL="${1:?label}"; BOOK="${2:?book url}"
 DEPTHS="${DEPTHS:-0 2048 4096 8192 16384 32768}"; CONC="${CONC:-1 2 5}"
-HEAD="${HEAD_IP:-192.168.100.62}"; REPO="$(cd "$(dirname "$0")/.." && pwd)"
+HEAD="${HEAD_IP:-<cx7-ip-a>}"; REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TOK=$(ls -d "$HOME"/.cache/huggingface/hub/models--RadixArk--Qwen3.8-Flash-Next-NVFP4/snapshots/*/ | head -1)
 OUT="$REPO/results/corpus"; mkdir -p "$OUT"
 M=$(curl -s -m 6 "http://$HEAD:8000/v1/models" | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"][0]["id"])') || { echo "no server"; exit 1; }

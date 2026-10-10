@@ -6,12 +6,12 @@
 # else is logged for the morning. Log: results/arms/watchdog.log
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; cd "$REPO"
-WORKER=${WORKER_IP:-192.168.100.53}; LOG=results/arms/watchdog.log; low=0; unhealthy_since=""
+WORKER=${WORKER_IP:-<cx7-ip-b>}; LOG=results/arms/watchdog.log; low=0; unhealthy_since=""
 echo "$(date +%F_%T) watchdog start" >> "$LOG"
 while true; do
   a=$(free -g | awk '/^Mem:/{print $7}'); b=$(ssh -o ConnectTimeout=8 -o BatchMode=yes "$WORKER" "free -g | awk '/^Mem:/{print \$7}'" 2>/dev/null || echo "?")
   psi=$(awk '/^some/{for(i=1;i<=NF;i++) if($i ~ /^avg60=/){split($i,x,"="); print x[2]}}' /proc/pressure/memory)
-  c=$(docker ps -q | wc -l); h=$(curl -s -m 3 -o /dev/null -w '%{http_code}' http://192.168.100.62:8000/health 2>/dev/null)
+  c=$(docker ps -q | wc -l); h=$(curl -s -m 3 -o /dev/null -w '%{http_code}' http://<cx7-ip-a>:8000/health 2>/dev/null)
   up=$(docker ps --format '{{.Status}}' | head -1)
   lad=$(pgrep -f "scripts/(ab_ladder|vllm_ladder|vllm_probe_only).sh" | wc -l); wait=$(pgrep -f "until grep" | wc -l)
   line="$(date +%T) availG head=$a worker=$b psi60=$psi containers=$c health=$h up='$up' ladder_procs=$lad waiters=$wait"

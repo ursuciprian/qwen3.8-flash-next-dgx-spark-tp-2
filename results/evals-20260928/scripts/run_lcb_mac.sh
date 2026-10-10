@@ -2,7 +2,7 @@
 # usage: run_lcb.sh <build> [extra args]   env: MAXTOK START END CONC   (runs on the Mac; dataset needs RAM)
 set -u
 B=$1; shift
-API=${API:-http://192.168.68.62:8000}
+API=${API:-http://<head-ip>:8000}
 R=$HOME/work/GEN-AI/evals-lcb/results/$B; mkdir -p $R; cd $HOME/work/GEN-AI/evals-lcb/lcb; rm -rf output/Qwen3.8-Flash-Next-NVFP4-local
 snap(){ curl -s -m 10 $API/metrics | grep -E "^vllm:(generation_tokens_total|prompt_tokens_total|request_success_total)" > $R/metrics_$1.txt; }
 CMD=(venv/bin/python -m lcb_runner.runner.main --model qwen3.8-flash-next --scenario codegeneration

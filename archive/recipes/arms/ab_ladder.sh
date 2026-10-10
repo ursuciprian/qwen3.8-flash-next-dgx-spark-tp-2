@@ -5,7 +5,7 @@
 set -uo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HEAD=${HEAD_IP:-192.168.100.62}; WORKER=${WORKER_IP:-192.168.100.53}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
+HEAD=${HEAD_IP:-<cx7-ip-a>}; WORKER=${WORKER_IP:-<cx7-ip-b>}; CLUSTER=${CLUSTER:-dgx-cluster-cx7}
 DEPTHS=${DEPTHS:-"0 16384"}; CONC=${CONC:-"1 2 5 10"}
 # Boot gate. Decode drift between two fresh boots of the SAME recipe measured
 # 10.6% median / 25% worst on 2026-09-06, and the FlashInfer autotuner is known
