@@ -11,7 +11,7 @@
 Per-kernel decode-step timing for `recipes/eugr/eugr-agents-serve-local16-la.yaml`
 at c1 and c8, captured 2026-09-19 with the `vllm-decode-profiler` mod (a
 rank-local `torch.profiler` wrapper, no cross-rank RPC). Both nodes: dgx-01
-(rank0, TP0) and worker 192.168.100.53 (rank1, TP1).
+(rank0, TP0) and worker <cx7-ip-b> (rank1, TP1).
 
 ## Prior blocker (kept for context, now bypassed)
 

@@ -25,8 +25,8 @@ stragglers per replica:
 
 2x TP=2 (dgx-01 rank): Available KV cache memory: 30.34 GiB
 2x TP=2 (dgx-01 rank): GPU KV cache size: 3,650,419 tokens, Maximum concurrency for 262,144 tokens per request: 13.93x
-1x v3e on 192.168.100.62: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
-1x v3e on 192.168.100.53: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+1x v3e on <cx7-ip-a>: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
+1x v3e on <cx7-ip-b>: GPU KV cache size: 993,754 tokens, Maximum concurrency for 262,144 tokens per request: 3.79x
 
 | workload | setup | turns done | output tok/s total | TTFT first turn mean / max (s) | TTFT follow-up mean / p90 (s) | decode tok/s per request | prefix hit | preemptions | KV max per replica | sessions per replica | min MemAvailable dgx-01 / dgx-02 (GiB) |
 |---|---|---:|---:|---|---|---:|---:|---:|---|---|---|

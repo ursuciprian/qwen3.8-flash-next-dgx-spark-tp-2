@@ -7,13 +7,13 @@ Boot: `eugr-agents-serve-local16-la-b12x0f3a8cb.yaml`, image
 ## Confirmed: genuine hang, not slow tuning
 
 - `nvidia-smi`: both GPUs 0% util, ~9.6W (idle power draw) on both dgx-01
-  and 192.168.100.53, sampled well after the "waiting for ranks" ticker
+  and <cx7-ip-b>, sampled well after the "waiting for ranks" ticker
   froze.
 - rank0 (dgx-01) log: `b12x waiting for ranks: 0/837 ready, 0 measured,
   0 cached, 0 compilations, 3:42` -- printed on a 10s cadence up to 3:42,
   then never printed again (checked repeatedly over 10+ minutes of wall
   time).
-- rank1 (192.168.100.53) log (`/tmp/sparkrun_serve.log` inside the
+- rank1 (<cx7-ip-b>) log (`/tmp/sparkrun_serve.log` inside the
   container -- `docker logs` only shows the CUDA container preamble, 15
   lines, the app's stdout isn't captured there for this headless worker):
   ends at "Padding mamba page size..." / the OMP_NUM_THREADS warning, i.e.

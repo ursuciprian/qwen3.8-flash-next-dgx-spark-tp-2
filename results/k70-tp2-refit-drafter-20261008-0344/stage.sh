@@ -12,7 +12,7 @@
 #             model_revision, `vllm serve {model}` without --revision), container IMG. No VLLM_CACHE_ROOT:
 #             sparkrun keys the runtime cache dir by the model path (a new dir for f4..70; bake fills it)
 set -eu
-K=$HOME/GEN-AI/backlog/k70; G=$HOME/GEN-AI; H2=192.168.100.53
+K=$HOME/GEN-AI/backlog/k70; G=$HOME/GEN-AI; H2=<cx7-ip-b>
 B14=ghcr.io/ursuciprian/spark-vllm-b12x:b1.4-20261001-b7fbaf96-a7e649d8-warm
 IMG=spark-vllm-b12x:k70-b14-refit-run1-c92ac62d
 SN=$HOME/.cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots

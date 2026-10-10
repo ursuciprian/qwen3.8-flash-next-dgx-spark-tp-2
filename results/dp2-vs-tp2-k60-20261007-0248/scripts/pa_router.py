@@ -7,7 +7,7 @@ replica that already holds its prefix cache. The system prompt and tools are lef
 and keying on them would send every session to one replica.
 ponytail: static hash, no load or health awareness; add least-loaded fallback if one replica saturates.
 
-  pa_router.py --port 8100 --backends http://192.168.100.62:8000,http://192.168.100.53:8000
+  pa_router.py --port 8100 --backends http://<cx7-ip-a>:8000,http://<cx7-ip-b>:8000
   GET /router/stats -> {"requests": [n0, n1], "sessions": [s0, s1]}; GET /health -> 200 when every replica is healthy.
   pa_router.py --selftest
 """

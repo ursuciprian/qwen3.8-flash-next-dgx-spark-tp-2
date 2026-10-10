@@ -372,7 +372,8 @@ def capped(r):
 
 def numbers(rows):
     """Headline numbers as README text. TG cells give the server-defaults value first and the T=0 coding value second,
-    both as aggregate output tok/s, from the same run where possible; then the hardmode gate score and TG per GPU watt.
+    both as aggregate output tok/s, from the same run where possible; then the hardmode gate score and, when the
+    shipped release has one, TTFT at ISL 16K. GPU power and TG per GPU watt are in the line under the table.
     Values are means (sd between boots where the run has several boots), never maxima. Newest shipped value per pick();
     an older release is named. The details table lists every number with its boots, sd, workload and source."""
     ctx = recipe_value("max_model_len")
@@ -399,9 +400,8 @@ def numbers(rows):
                                                                                   if c8 else ""))]
     if hm:
         cells.append((f"{hm['value']:.0f}/100", "Hardmode", f"pass ≥ 88, T=0, thinking on{rel(hm)}"))
-    if tpw[8] and w[8]:
-        cells.append((f"{tpw[8]['value']:.1f} tok/s/W", "TG per GPU watt, c8",
-                      f"defaults, {w[8]['value']:.0f} W GPU only<br>(nvidia-smi, not wall)"))
+    if ttft and not old(ttft):   # only a TTFT of the shipped release; an older one stays in the details table
+        cells.append((f"{ttft['value']:.1f} s", "TTFT, ISL 16K", "c1, cold prefix"))
     rows_ = []
 
     def add(name, r, val, work, samp):
@@ -428,14 +428,14 @@ def numbers(rows):
     add("GPU power, idle", idle, f"{idle['value']:.1f} W" if idle else "", "server up, no requests, 120 s", "–")
     for k in (1, 8):
         add(f"GPU power, TG c{k} defaults", w[k], f"{w[k]['value']:.1f} W" if w[k] else "",
-            "nvidia-smi power.draw, GPU only (not wall), mean over the cell", dflt)
+            "power.draw, GPU only (nvidia-smi), not wall power, mean over the cell", dflt)
         add(f"TG per GPU watt, c{k} defaults", tpw[k], f"{tpw[k]['value']:.2f} tok/s/W" if tpw[k] else "",
             "TG aggregate / GPU W", dflt)
     td = "\n".join(f'    <td align="center"><h2>{n}</h2><b>{lab}</b><br><sub>{sub}</sub></td>' for n, lab, sub in cells)
     seqs = recipe_value("max_num_seqs")
     spec = ", ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
                                  "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
-    power = (f"GPU power (nvidia-smi, GPU only, not wall): idle {idle['value']:.1f} W, c1 {w[1]['value']:.1f} W, "
+    power = (f"GPU power, GPU only (nvidia-smi), not wall power: idle {idle['value']:.1f} W, c1 {w[1]['value']:.1f} W, "
              f"c8 {w[8]['value']:.1f} W; TG per GPU watt {tpw[1]['value']:.2f} (c1) and {tpw[8]['value']:.2f} (c8) "
              "tok/s/W at server defaults." if idle and w[1] and w[8] and tpw[1] and tpw[8] else "")
     key = (f"TG cells: server defaults ({chat}, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second, "
