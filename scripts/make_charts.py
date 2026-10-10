@@ -3,7 +3,8 @@
 # requires-python = ">=3.10"
 # dependencies = ["matplotlib>=3.8"]
 # ///
-"""Render the README hero, charts and generated blocks from docs/data/capability.csv.
+"""Render README charts and generated blocks from docs/data/capability.csv.
+The hero.png banner is separately authored artwork and is never regenerated here.
 
     uv run scripts/make_charts.py            # or: pip install matplotlib && python3 scripts/make_charts.py
     uv run scripts/make_charts.py --selftest
@@ -337,6 +338,8 @@ def caption(name, lines, short):
 
 
 def picture(name):
+    if name == "hero":
+        return f'<img src="docs/img/hero.png" alt="{IMAGES[name]}" width="{DISPLAY[name]}">'
     return (f'<picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/{name}-dark.svg">'
             f'<img src="docs/img/{name}-light.svg" alt="{IMAGES[name]}" width="{DISPLAY[name]}"></picture>')
 
@@ -377,50 +380,6 @@ def hero_tiles(rows):
     if tc:
         tiles.append(("Tool calls when required", f"{tc['value']:.0f}", "/100", "quality gate" + rel(tc)))
     return tiles[:4], dict(code=code, one=one, many=many, tc=tc, ctx=ctx)
-
-
-def hero(rows):
-    """A typographic masthead with the serving topology; measurements stay in the README."""
-    w, h = 12, 3.8
-    dark = T is THEMES["dark"]
-    bg, ink = ("#111714", "#f1f5f0") if dark else ("#f5f7f2", "#17251d")
-    muted, rule = ("#a0afa3", "#35453b") if dark else ("#536558", "#c9d3c9")
-    accent = "#b6ed83" if dark else "#426f2a"
-    fig = plt.figure(figsize=(w, h), facecolor=bg)
-    ax = fig.add_axes((0, 0, 1, 1))
-    ax.set(xlim=(0, w), ylim=(0, h))
-    ax.axis("off")
-    ax.add_patch(FancyBboxPatch((0, 0), w, h, boxstyle="square,pad=0",
-                              facecolor=bg, edgecolor="none"))
-    ax.plot([0.55, 0.83], [3.28, 3.28], color=accent, lw=4, solid_capstyle="butt")
-    ax.text(1.0, 3.28, "LOCAL INFERENCE", fontsize=12, fontweight="semibold",
-            color=muted, va="center")
-    ax.text(11.45, 3.28, "01 / SINGLE SPARK" if REPO == "1x" else "02 / DUAL SPARK",
-            fontsize=12, color=muted, ha="right", va="center")
-    ax.text(0.55, 2.27, "Qwen3.8", fontsize=48, fontweight="semibold", color=ink)
-    ax.text(0.55, 1.39, "Flash Next", fontsize=48, fontweight="semibold", color=ink)
-    ax.text(0.59, 0.96, "One NVIDIA DGX Spark" if REPO == "1x" else "Two NVIDIA DGX Sparks · TP=2",
-            fontsize=15, color=muted)
-    # Each outlined module represents one Spark; the pair shares a tensor-parallel link.
-    centers = [9.40] if REPO == "1x" else [8.50, 10.30]
-    y, size = 1.55, 1.28
-    if REPO == "2x":
-        ax.plot([centers[0] + size / 2, centers[1] - size / 2],
-                [y + size / 2] * 2, color=accent, lw=2)
-    for i, x in enumerate(centers, 1):
-        ax.add_patch(FancyBboxPatch((x - size / 2, y), size, size,
-                                  boxstyle="round,pad=0,rounding_size=0.10",
-                                  facecolor=bg, edgecolor=rule, lw=1.5))
-        for yy in np.linspace(y + 0.22, y + 0.39, 4):
-            ax.plot([x - 0.38, x + 0.38], [yy, yy], color=rule, lw=1)
-        ax.text(x, y + 0.72, "DGX", fontsize=16, fontweight="semibold", color=ink,
-                ha="center", va="center")
-        ax.plot(x + 0.43, y + 1.06, "o", color=accent, markersize=4)
-        ax.text(x, y - 0.24, f"SPARK {i:02}", fontsize=10, color=muted, ha="center")
-    ax.plot([0.55, 11.45], [0.66, 0.66], color=rule, lw=0.8)
-    ax.text(0.59, 0.30, "vLLM  /  NVFP4  /  MTP", fontsize=12, color=muted)
-    ax.text(11.45, 0.30, f"RELEASE {SHIPPED[REPO]}", fontsize=12, color=muted, ha="right")
-    return fig
 
 
 def numbers(rows):
@@ -1012,7 +971,7 @@ def write_blocks(rows):
     text = new = readme.read_text()
     blocks = {"numbers": lambda: numbers(rows), "badges": lambda: badges(rows), "matrix": lambda: matrix(rows),
               "capability-table": lambda: table(rows), "quality": lambda: quality(rows)}
-    blocks["hero"] = lambda: '<p align="center">' + picture("hero") + "</p>"
+    blocks["hero"] = lambda: '<h1 align="center">' + picture("hero") + "</h1>"
     for name, imgs in FIGURES.items():
         if all(n in IMAGES for n in imgs):
             blocks[name] = (lambda imgs=imgs: figure_block(*imgs))
@@ -1049,8 +1008,8 @@ if __name__ == "__main__":
         raise SystemExit
     rows = load()
     who = {"1x": "one DGX Spark", "2x": "two DGX Sparks"}[REPO]
-    render("hero", hero, rows, f"Qwen3.8-Flash-Next on {who}, release {SHIPPED[REPO]}: vLLM, NVFP4, MTP "
-           "speculative decoding, OpenAI API.", w=12, px=840)
+    IMAGES["hero"] = f"Qwen3.8 Flash Next on {who}: Qwen emblem, gold NVIDIA hardware and violet token trails."
+    DISPLAY["hero"] = 840
     hero_caption(rows)
     half = dict(w=5.0, px=420)
     render("throughput", chart_throughput, rows, "Line chart of decode tokens per second, all chats together, against 1 "

@@ -1,4 +1,6 @@
-<h1 align="center">Qwen3.8-Flash-Next on two DGX Sparks</h1>
+<!-- hero:start (scripts/make_charts.py writes this block) -->
+<h1 align="center"><img src="docs/img/hero.png" alt="Qwen3.8 Flash Next on two DGX Sparks: Qwen emblem, gold NVIDIA hardware and violet token trails." width="840"></h1>
+<!-- hero:end -->
 
 <p align="center">A sparkrun recipe that serves Qwen3.8-Flash-Next on two NVIDIA DGX Sparks as one private,<br>OpenAI-compatible server for chat, coding and agents. Two commands to start.</p>
 
@@ -25,10 +27,6 @@
   <img alt="license: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-555555?style=flat-square">
 </p>
 <!-- badges:end -->
-
-<!-- hero:start (scripts/make_charts.py writes this block) -->
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/hero-dark.svg"><img src="docs/img/hero-light.svg" alt="Qwen3.8-Flash-Next on two DGX Sparks, release v2.0.0: vLLM, NVFP4, MTP speculative decoding, OpenAI API." width="840"></picture></p>
-<!-- hero:end -->
 
 ## Quick start
 
@@ -290,7 +288,7 @@ Full gate tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 Where the shipped release has no measurement yet, the table shows the newest release that has one; a full grid of the
 shipped releases is queued ([#128](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/128)).
 Decode rows are the total over all requests unless marked "each"; sampling is the server default (temperature 1.0,
-thinking on) unless the run says otherwise. The hero, charts and tables are written by
+thinking on) unless the run says otherwise. The charts and tables are written by
 `uv run scripts/make_charts.py` from [`docs/data/capability.csv`](docs/data/capability.csv), where every point lists
 its raw file. Full grids for every build: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
