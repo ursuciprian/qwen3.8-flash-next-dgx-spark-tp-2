@@ -7,14 +7,14 @@
 <!-- numbers:start (scripts/make_charts.py writes this block) -->
 <table align="center">
   <tr>
-    <td align="center"><h2>89 · 119 tok/s</h2><b>TG c1</b><br><sub>defaults (ISL/OSL 2048/512) · T=0, thinking off (coding, median of 36)</sub></td>
-    <td align="center"><h2>172 · 319 tok/s</h2><b>TG aggregate c8</b><br><sub>defaults (ISL/OSL 2048/512) · T=0, thinking off (coding)</sub></td>
+    <td align="center"><h2>89 / 119 tok/s</h2><b>TG c1</b><br><sub>defaults (ISL/OSL 2048/512)<br>/ T=0, thinking off (coding, median of 36)</sub></td>
+    <td align="center"><h2>172 / 319 tok/s</h2><b>TG aggregate c8</b><br><sub>defaults (ISL/OSL 2048/512)<br>/ T=0, thinking off (coding)</sub></td>
     <td align="center"><h2>5.6 s</h2><b>TTFT, ISL 16K</b><br><sub>c1, cold prefix</sub></td>
     <td align="center"><h2>90/100</h2><b>Hardmode</b><br><sub>pass ≥ 88, T=0, thinking on</sub></td>
   </tr>
 </table>
 
-<p align="center"><sub>262K context · max_num_seqs 16 · MTP ×4 · OpenAI-compatible API · quality-gated releases</sub></p>
+<p align="center"><sub>262K context, max_num_seqs 16, MTP ×4, OpenAI-compatible API, quality-gated releases</sub></p>
 
 <sub>TG cells: server defaults (ISL/OSL 2048/512, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second. Means and medians only. Release v2.0.0.</sub>
 
@@ -152,7 +152,7 @@ requests hit the prefix cache and run PP only on the new tokens.
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/latency-dark.svg"><img src="docs/img/latency-light.svg" alt="TTFT in seconds vs ISL, c1, cold prefix, per setup. End values labelled." width="420"></picture>
 </p>
 
-<sub>Left: 1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0 · 2x Spark DP=2 v2.1.0; llama-benchy task mode. Right: 1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0/v1.4.0; c1, cold prefix.</sub>
+<sub>Left: 1x Spark v2.1.0, 2x Spark TP=2 v2.0.0, 2x Spark DP=2 v2.1.0; llama-benchy task mode. Right: 1x Spark v2.1.0, 2x Spark TP=2 v2.0.0/v1.4.0; c1, cold prefix.</sub>
 
 <details>
 <summary><sub>Runs, method and raw data</sub></summary>
@@ -168,7 +168,7 @@ requests hit the prefix cache and run PP only on the new tokens.
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/depth-dark.svg"><img src="docs/img/depth-light.svg" alt="TG aggregate tok/s at context depth 0, 16K and 64K, c1/c4/c8. End values labelled." width="420"></picture>
 </p>
 
-<sub>Left: 1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0; c1, cold prefix. Right: 2x Spark TP=2 v2.0.0; llama-benchy, ISL/OSL 2048/512 at depth.</sub>
+<sub>Left: 1x Spark v2.1.0, 2x Spark TP=2 v2.0.0; c1, cold prefix. Right: 2x Spark TP=2 v2.0.0; llama-benchy, ISL/OSL 2048/512 at depth.</sub>
 
 <details>
 <summary><sub>Runs, method and raw data</sub></summary>
@@ -186,7 +186,7 @@ requests hit the prefix cache and run PP only on the new tokens.
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/perchat-dark.svg"><img src="docs/img/perchat-light.svg" alt="TG per-request tok/s vs concurrency c1-c16 per setup, ISL/OSL 2048/512, server defaults. End values labelled." width="420"></picture>
 </p>
 
-<sub>1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0 · 2x Spark DP=2 v2.1.0; llama-benchy task mode.</sub>
+<sub>1x Spark v2.1.0, 2x Spark TP=2 v2.0.0, 2x Spark DP=2 v2.1.0; llama-benchy task mode.</sub>
 
 <details>
 <summary><sub>Runs, method and raw data</sub></summary>

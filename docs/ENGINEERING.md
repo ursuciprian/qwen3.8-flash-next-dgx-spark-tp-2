@@ -4,8 +4,8 @@ Profiling, rejected arms, known-issue detail and build provenance, moved out of
 the [README](../README.md) so it stays short. Every measurement and verdict:
 [results/README.md](../results/README.md).
 
-Contents: [Profile](#profile-rank-local-torchprofiler-resultsprofilingreadmemd) ·
-[Rejected arms](#rejected-arms) · [Known issues / fixes](#known-issues--fixes) ·
+Contents: [Profile](#profile-rank-local-torchprofiler-resultsprofilingreadmemd),
+[Rejected arms](#rejected-arms), [Known issues / fixes](#known-issues--fixes),
 [Build provenance](#build-provenance)
 
 ## Profile (rank-local `torch.profiler`, `results/profiling/README.md`)
