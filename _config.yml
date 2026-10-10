@@ -8,6 +8,7 @@ relative_links:
   collections: false
 include:
   - README.md
-# Eval prompts and references quote GitHub Actions/Helm templates ({{ ... }}), which Liquid would try to render.
+# results/ holds raw run data: Liquid-looking eval prompts ({{ ... }}) and pooled-run symlinks that point at
+# paths on the Sparks, which break the Jekyll build. GitHub renders results/ from the repo tree instead.
 exclude:
-  - results/evals-20260928/devops
+  - results
