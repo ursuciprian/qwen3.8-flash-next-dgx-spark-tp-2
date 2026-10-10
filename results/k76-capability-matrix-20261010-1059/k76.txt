@@ -1,0 +1,544 @@
+k76 capability matrix 2026-10-10: shipped 1x (one per Spark), DP=2 (the two 1x behind tools/dp2/pa_router.py), 2x TP=2.
+Sampling: server defaults from the recipe (see the sampling column), thinking on; T=0 diagnostic rows in capability-t0.csv.
+Harness: llama-benchy 0.4.1.dev4+g0d4de4271, llm-inference-bench 0.7.6. TTFT percentiles: llama-benchy per-request e2e TTFT pooled over 3 runs. ITL percentiles: llm-inference-bench, one 30 s sustained decode window per cell.
+
+[1x-dgx01] v2.1.0 (alias v3e), recipe /home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml @ bb204904, image tp1-v3e-hf-20261008-21e0b201-5dad364d-warm ids dgx01 1abb56f657d5, digest comment -
+     model ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE@16c9bd54, vLLM v20260926.dev28+g884b4ff68.d20261002, b12x 21e0b201 (tag), KV 993754, max_num_seqs 8, AOT loaded, b12x plans measured 0, drafter mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+[1x-dgx02] v2.1.0 (alias v3e), recipe /home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml @ bb204904, image tp1-v3e-hf-20261008-21e0b201-5dad364d-warm ids dgx02 1abb56f657d5, digest comment -
+     model ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE@16c9bd54, vLLM v20260926.dev28+g884b4ff68.d20261002, b12x 21e0b201 (tag), KV 993754, max_num_seqs 8, AOT loaded, b12x plans measured 0, drafter mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+[dp2] v2.1.0 (alias v3e), recipe /home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml @ bb204904, image tp1-v3e-hf-20261008-21e0b201-5dad364d-warm ids , digest comment -
+     router tools/dp2/pa_router.py @ 4fe31f02df5e81e87f6f3b9b5c2d5f211700df7c (https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2), dgx-01:8100 -> http://192.168.100.62:8000,http://192.168.100.53:8000
+[2x] - (alias k73-20261009-21e0b201-d21d7ade-warm), recipe /home/nvidia/.cache/sparkrun/registries/_url_e47b9e8b5e91/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml @ 4fe31f02, image k73-20261009-21e0b201-d21d7ade-warm ids dgx01 54184feed47a, dgx02 54184feed47a, digest comment sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4
+     model ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE@16c9bd54, vLLM v20260926.dev28+g884b4ff68.d20261002, b12x 21e0b201 (tag), KV 3525633, max_num_seqs 16, AOT loaded, b12x plans measured 0, drafter mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+
+Phases (name, start, end epoch s, min MemAvailable GiB dgx-01, dgx-02):
+  preflight 1791619192 1791619200 10.94 14.36
+  boot-1x 1791619200 1791619419 10.93 14.35
+  1x 1791619419 1791626649 12.88 13.72
+  dp2 1791626649 1791627920 13.53 13.69
+  boot-2x 1791627920 1791628195 11.17 13.86
+  2x 1791628195 1791634020 10.54 13.97
+
+setup workload         metric                     c  prompt   depth      value       sd  stat | sampling
+1x    coding-36        coding_probe_max           1                      73.73           max of 36 prompts x 2 Sparks x 3 runs, 198/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_max           8                     33.353           max of 36 prompts x 2 Sparks x 3 runs, 203/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_max           1                     87.042           max of 36 prompts x 2 Sparks x 3 runs, 74/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_max           8                     40.891           max of 36 prompts x 2 Sparks x 3 runs, 72/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_median        1                      60.87    0.722  median of 36 prompts, mean of 2 Sparks x 3 runs, 198/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_median_max    1                     61.521           max of 2 Sparks x 3 runs of the median, 198/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_median        8                     21.418     0.16  median of 36 prompts, mean of 2 Sparks x 3 runs, 203/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_median_max    8                     21.648           max of 2 Sparks x 3 runs of the median, 203/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_median        1                     77.002    0.439  median of 36 prompts, mean of 2 Sparks x 3 runs, 74/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_median_max    1                     77.469           max of 2 Sparks x 3 runs of the median, 74/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_median        8                     26.048     0.17  median of 36 prompts, mean of 2 Sparks x 3 runs, 72/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_median_max    8                     26.192           max of 2 Sparks x 3 runs of the median, 72/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_min           1                     49.894           min of 36 prompts x 2 Sparks x 3 runs, 198/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_min           8                     16.908           min of 36 prompts x 2 Sparks x 3 runs, 203/216 requests hit max_tokens | server defaults, thinking on
+1x    coding-36        coding_probe_min           1                     55.416           min of 36 prompts x 2 Sparks x 3 runs, 74/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_probe_min           8                     19.422           min of 36 prompts x 2 Sparks x 3 runs, 72/216 requests hit max_tokens | T=0, thinking off
+1x    coding-36        coding_total               1                     59.644    0.439  mean ± sd of 2 Sparks x 3 runs, one boot each | server defaults, thinking on
+1x    coding-36        coding_total_max           1                     60.128           max of 2 Sparks x 3 runs | server defaults, thinking on
+1x    coding-36        coding_total               8                     159.48    0.666  mean ± sd of 2 Sparks x 3 runs, one boot each | server defaults, thinking on
+1x    coding-36        coding_total_max           8                    160.095           max of 2 Sparks x 3 runs | server defaults, thinking on
+1x    coding-36        coding_total               1                     73.584    0.281  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking off
+1x    coding-36        coding_total_max           1                     74.094           max of 2 Sparks x 3 runs | T=0, thinking off
+1x    coding-36        coding_total               8                    188.102    0.864  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking off
+1x    coding-36        coding_total_max           8                    188.856           max of 2 Sparks x 3 runs | T=0, thinking off
+1x    copy-heavy       copy_total                 1                     80.791    0.405  window tok/s (all streams decoding), mean ± sd of 2 Sparks x 3 runs, one boot each | low reasoning effort
+1x    copy-heavy       copy_total_max             1                     81.296           max of 2 Sparks x 3 runs | low reasoning effort
+1x    copy-heavy       copy_total                 4                    183.505     6.13  window tok/s (all streams decoding), mean ± sd of 2 Sparks x 3 runs, one boot each | low reasoning effort
+1x    copy-heavy       copy_total_max             4                    192.993           max of 2 Sparks x 3 runs | low reasoning effort
+1x    copy-heavy       copy_total                 8                    274.121    5.466  window tok/s (all streams decoding), mean ± sd of 2 Sparks x 3 runs, one boot each | low reasoning effort
+1x    copy-heavy       copy_total_max             8                    282.812           max of 2 Sparks x 3 runs | low reasoning effort
+1x    chat             decode_depth_req           1    2048       0     56.896    4.132  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       1    2048       0     60.157           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           1    2048   16384     55.978    1.504  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       1    2048   16384     57.885           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           1    2048   65536     55.594    3.175  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       1    2048   65536     59.957           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           1    2048  131072     54.822    3.648  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       1    2048  131072     60.128           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           2    2048       0      42.95    3.491  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       2    2048       0     49.444           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           4    2048       0     32.412    2.002  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       4    2048       0      34.25           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           4    2048   16384     30.733    1.813  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       4    2048   16384     32.684           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           4    2048   65536     29.918    1.071  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       4    2048   65536     31.015           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           4    2048  131072     30.183    1.184  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       4    2048  131072     31.502           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           8    2048       0     21.989    0.528  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       8    2048       0      23.04           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req           8    2048   16384     20.989    0.597  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_req_max       8    2048   16384      21.83           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         1    2048       0     56.896    4.132  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     1    2048       0     60.157           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         1    2048   16384     55.978    1.504  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     1    2048   16384     57.885           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         1    2048   65536     55.594    3.175  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     1    2048   65536     59.957           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         1    2048  131072     54.822    3.648  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     1    2048  131072     60.128           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         2    2048       0     76.182   10.544  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     2    2048       0     95.699           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         4    2048       0    111.449    7.622  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     4    2048       0    121.757           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         4    2048   16384    102.965    6.013  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     4    2048   16384    111.172           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         4    2048   65536     98.411    4.088  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     4    2048   65536    102.238           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         4    2048  131072    101.528    4.077  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     4    2048  131072    107.129           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         8    2048       0      132.9    7.112  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     8    2048       0    139.986           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total         8    2048   16384    116.692    6.293  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             decode_depth_total_max     8    2048   16384    127.945           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 1               0     18.838           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 1           16384     18.601           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 1           65536     19.482           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 4               0     35.367           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 4           16384     32.829           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 4           65536     34.362           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 8               0     46.695           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 8           16384      42.63           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p50_ms                 8           65536     46.614           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 1               0     18.838           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 1           16384     18.601           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 1           65536     19.482           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 4               0     36.868           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 4           16384     34.437           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 4           65536     37.039           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 8               0     49.588           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 8           16384     49.793           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p90_ms                 8           65536     49.831           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 1               0     18.838           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 1           16384     18.601           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 1           65536     19.482           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 4               0      36.94           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 4           16384     34.822           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 4           65536     38.026           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 8               0      51.38           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 8           16384     50.329           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    sustained-decode itl_p99_ms                 8           65536     50.758           mean of 2 Sparks, one 30 s sustained decode window each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1     512           1098.734   58.089  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1     512           1184.588           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1    2048           1759.655   10.688  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1    2048           1778.259           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1    8192           1923.424   38.062  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1    8192           1984.231           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1   16384           1865.746  322.165  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1   16384           2150.439           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1   32768            2027.94   57.436  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1   32768           2094.859           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1   65536           1992.513   38.608  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1   65536           2035.885           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp                         1  131072           1812.354   92.367  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      pp_max                     1  131072           1853.319           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg128_total                1    2048             54.935    6.407  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg128_total_max            1    2048             66.456           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req                     1    2048             56.896    4.132  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req_max                 1    2048             60.157           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req                     2    2048              42.95    3.491  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req_max                 2    2048             49.444           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req                     4    2048             32.412    2.002  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req_max                 4    2048              34.25           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req                     8    2048             21.989    0.528  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req_max                 8    2048              23.04           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total                   1    2048             56.896    4.132  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total_max               1    2048             60.157           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total                   2    2048             76.182   10.544  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total_max               2    2048             95.699           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total                   4    2048            111.449    7.622  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total_max               4    2048            121.757           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total                   8    2048              132.9    7.112  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_total_max               8    2048            139.986           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 1    2048       0      1.098           p50 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 1    2048   16384      1.937           p50 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 1    2048   65536      2.719           p50 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 1    2048  131072      2.694           p50 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 2    2048       0      1.907           p50 of 12 requests (2 Sparks x 3 runs x c2), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 4    2048       0      3.456           p50 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 4    2048   16384       6.62           p50 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 4    2048   65536       9.37           p50 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 4    2048  131072       9.11           p50 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 8    2048       0      6.688           p50 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p50_s                 8    2048   16384     12.465           p50 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 1    2048       0      1.147           p90 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 1    2048   16384      1.942           p90 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 1    2048   65536      2.733           p90 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 1    2048  131072      2.731           p90 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 2    2048       0      2.102           p90 of 12 requests (2 Sparks x 3 runs x c2), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 4    2048       0      3.874           p90 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 4    2048   16384      6.724           p90 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 4    2048   65536      9.551           p90 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 4    2048  131072      9.199           p90 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 8    2048       0       7.41           p90 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p90_s                 8    2048   16384     13.533           p90 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 1    2048       0      1.184           p99 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 1    2048   16384      1.943           p99 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 1    2048   65536      2.736           p99 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 1    2048  131072      2.741           p99 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 2    2048       0      2.117           p99 of 12 requests (2 Sparks x 3 runs x c2), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 4    2048       0      3.888           p99 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 4    2048   16384      6.794           p99 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 4    2048   65536      9.581           p99 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 4    2048  131072      9.218           p99 of 24 requests (2 Sparks x 3 runs x c4), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 8    2048       0      7.703           p99 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             ttft_p99_s                 8    2048   16384     13.706           p99 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1     512              0.515    0.028  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1     512              0.556           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1    2048              1.195    0.008  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1    2048              1.204           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1    8192              4.288    0.086  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1    8192              4.356           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1   16384              9.092    1.963  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1   16384             12.873           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1   32768             16.196    0.465  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1   32768             16.949           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1   65536              32.93    0.642  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1   65536             33.776           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s                     1  131072             72.522     4.03  mean ± sd of 2 Sparks x 3 runs, one boot each | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    long-prompt      ttft_s_max                 1  131072             80.743           max of 2 Sparks x 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+1x                     kv_tokens                                        993754           vLLM serve log, same on both Sparks | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   coding-36        coding_probe_max           8                     49.313           max of 36 prompts x 3 runs, 101/108 requests hit max_tokens | server defaults, thinking on
+dp2   coding-36        coding_probe_max           8                     55.824           max of 36 prompts x 3 runs, 41/108 requests hit max_tokens | T=0, thinking off
+dp2   coding-36        coding_probe_median        8                      31.88    0.349  median of 36 prompts, mean of 3 runs, 101/108 requests hit max_tokens | server defaults, thinking on
+dp2   coding-36        coding_probe_median_max    8                     32.146           max of 3 runs of the median, 101/108 requests hit max_tokens | server defaults, thinking on
+dp2   coding-36        coding_probe_median        8                     38.977    0.513  median of 36 prompts, mean of 3 runs, 41/108 requests hit max_tokens | T=0, thinking off
+dp2   coding-36        coding_probe_median_max    8                     39.407           max of 3 runs of the median, 41/108 requests hit max_tokens | T=0, thinking off
+dp2   coding-36        coding_probe_min           8                     26.251           min of 36 prompts x 3 runs, 101/108 requests hit max_tokens | server defaults, thinking on
+dp2   coding-36        coding_probe_min           8                     28.703           min of 36 prompts x 3 runs, 41/108 requests hit max_tokens | T=0, thinking off
+dp2   coding-36        coding_total               8                    235.856    1.525  mean ± sd of 3 runs, one boot | server defaults, thinking on
+dp2   coding-36        coding_total_max           8                    237.249           max of 3 runs | server defaults, thinking on
+dp2   coding-36        coding_total               8                    273.388    1.768  mean ± sd of 3 runs, one boot | T=0, thinking off
+dp2   coding-36        coding_total_max           8                    274.429           max of 3 runs | T=0, thinking off
+dp2   chat             decode_depth_req           1    2048       0     57.464    4.022  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req_max       1    2048       0     61.561           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req           2    2048       0     56.551    2.238  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req_max       2    2048       0     58.706           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req           4    2048       0     43.447     1.09  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req_max       4    2048       0      44.66           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req           8    2048       0     32.507    2.008  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req_max       8    2048       0      34.78           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req          16    2048       0      21.68    0.392  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_req_max      16    2048       0     22.116           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total         1    2048       0     57.464    4.022  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total_max     1    2048       0     61.561           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total         2    2048       0    111.593     4.02  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total_max     2    2048       0    114.787           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total         4    2048       0    137.486   13.871  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total_max     4    2048       0    152.732           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total         8    2048       0    203.551   21.884  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total_max     8    2048       0    223.418           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total        16    2048       0     240.91   18.096  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             decode_depth_total_max    16    2048       0    261.792           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p50_ms                 1               0     19.069           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p50_ms                 4               0     33.462           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p50_ms                 8               0     48.369           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p50_ms                16               0     52.315           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p90_ms                 1               0     19.069           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p90_ms                 4               0     37.178           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p90_ms                 8               0     50.006           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p90_ms                16               0     56.235           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p99_ms                 1               0     19.069           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p99_ms                 4               0     38.108           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p99_ms                 8               0      50.98           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   sustained-decode itl_p99_ms                16               0      56.57           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg128_total                1    2048             51.748    3.127  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg128_total_max            1    2048             54.469           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req                     1    2048             57.464    4.022  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req_max                 1    2048             61.561           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req                     2    2048             56.551    2.238  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req_max                 2    2048             58.706           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req                     4    2048             43.447     1.09  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req_max                 4    2048              44.66           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req                     8    2048             32.507    2.008  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req_max                 8    2048              34.78           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req                    16    2048              21.68    0.392  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_req_max                16    2048             22.116           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total                   1    2048             57.464    4.022  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total_max               1    2048             61.561           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total                   2    2048            111.593     4.02  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total_max               2    2048            114.787           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total                   4    2048            137.486   13.871  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total_max               4    2048            152.732           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total                   8    2048            203.551   21.884  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total_max               8    2048            223.418           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total                  16    2048             240.91   18.096  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             tg_total_max              16    2048            261.792           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p50_s                 1    2048       0      1.221           p50 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p50_s                 2    2048       0      1.138           p50 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p50_s                 4    2048       0      2.224           p50 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p50_s                 8    2048       0      4.097           p50 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p50_s                16    2048       0      7.448           p50 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p90_s                 1    2048       0      1.434           p90 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p90_s                 2    2048       0       1.31           p90 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p90_s                 4    2048       0       2.77           p90 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p90_s                 8    2048       0      4.702           p90 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p90_s                16    2048       0      8.427           p90 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p99_s                 1    2048       0      1.482           p99 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p99_s                 2    2048       0      1.431           p99 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p99_s                 4    2048       0      2.785           p99 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p99_s                 8    2048       0      4.761           p99 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2   chat             ttft_p99_s                16    2048       0       8.95           p99 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+dp2                    kv_tokens                                       1987508           2 replicas x 993,754 | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    coding-36        coding_probe_max           1                    111.485           max of 36 prompts x 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_max           8                     53.266           max of 36 prompts x 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_max           1                    132.273           max of 36 prompts x 3 runs, 38/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_max           8                     66.283           max of 36 prompts x 3 runs, 36/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_median        1                     91.959    0.285  median of 36 prompts, mean of 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_median_max    1                     92.283           max of 3 runs of the median, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_median        8                      36.03    0.364  median of 36 prompts, mean of 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_median_max    8                     36.255           max of 3 runs of the median, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_median        1                    118.716    0.372  median of 36 prompts, mean of 3 runs, 38/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_median_max    1                    119.052           max of 3 runs of the median, 38/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_median        8                      43.87    0.488  median of 36 prompts, mean of 3 runs, 36/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_median_max    8                     44.431           max of 3 runs of the median, 36/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_min           1                     73.374           min of 36 prompts x 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_min           8                     29.466           min of 36 prompts x 3 runs, 100/108 requests hit max_tokens | server defaults, thinking on
+2x    coding-36        coding_probe_min           1                     80.916           min of 36 prompts x 3 runs, 38/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_probe_min           8                     35.285           min of 36 prompts x 3 runs, 36/108 requests hit max_tokens | T=0, thinking off
+2x    coding-36        coding_total               1                     90.574    1.163  mean ± sd of 3 runs, one boot | server defaults, thinking on
+2x    coding-36        coding_total_max           1                     91.858           max of 3 runs | server defaults, thinking on
+2x    coding-36        coding_total               8                     269.43    1.351  mean ± sd of 3 runs, one boot | server defaults, thinking on
+2x    coding-36        coding_total_max           8                    270.373           max of 3 runs | server defaults, thinking on
+2x    coding-36        coding_total               1                    112.162    0.603  mean ± sd of 3 runs, one boot | T=0, thinking off
+2x    coding-36        coding_total_max           1                    112.752           max of 3 runs | T=0, thinking off
+2x    coding-36        coding_total               8                    318.677    2.673  mean ± sd of 3 runs, one boot | T=0, thinking off
+2x    coding-36        coding_total_max           8                    321.666           max of 3 runs | T=0, thinking off
+2x    copy-heavy       copy_total                 1                    120.504     5.17  window tok/s (all streams decoding), mean ± sd of 3 runs, one boot | low reasoning effort
+2x    copy-heavy       copy_total_max             1                    123.561           max of 3 runs | low reasoning effort
+2x    copy-heavy       copy_total                 4                    303.503    5.227  window tok/s (all streams decoding), mean ± sd of 3 runs, one boot | low reasoning effort
+2x    copy-heavy       copy_total_max             4                    308.508           max of 3 runs | low reasoning effort
+2x    copy-heavy       copy_total                 8                    453.396   10.098  window tok/s (all streams decoding), mean ± sd of 3 runs, one boot | low reasoning effort
+2x    copy-heavy       copy_total_max             8                    464.492           max of 3 runs | low reasoning effort
+2x    chat             decode_depth_req           1    2048       0     88.697    2.562  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       1    2048       0     91.489           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           1    2048   16384     83.536    1.909  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       1    2048   16384     84.915           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           1    2048   65536     82.762    7.409  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       1    2048   65536     91.312           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           1    2048  131072     81.149    2.062  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       1    2048  131072     83.472           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           2    2048       0     62.408    5.288  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       2    2048       0     67.826           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           4    2048       0     48.631    1.533  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       4    2048       0     49.615           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           4    2048   16384     45.945    1.296  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       4    2048   16384     47.411           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           4    2048   65536     43.355    1.035  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       4    2048   65536     44.079           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           4    2048  131072     41.099     1.13  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       4    2048  131072     41.858           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           8    2048       0     33.236    0.977  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       8    2048       0     34.265           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req           8    2048   16384     29.112    0.563  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max       8    2048   16384     29.755           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req          16    2048       0     22.142    0.362  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max      16    2048       0     22.532           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req          16    2048   16384     17.408    0.091  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_req_max      16    2048   16384     17.504           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         1    2048       0     88.697    2.562  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     1    2048       0     91.489           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         1    2048   16384     83.536    1.909  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     1    2048   16384     84.915           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         1    2048   65536     82.762    7.409  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     1    2048   65536     91.312           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         1    2048  131072     81.149    2.062  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     1    2048  131072     83.472           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         2    2048       0    114.891    7.938  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     2    2048       0    121.849           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         4    2048       0    156.645    4.558  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     4    2048       0    161.785           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         4    2048   16384    125.037   19.679  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     4    2048   16384     140.58           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         4    2048   65536     104.34    8.827  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     4    2048   65536    114.528           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         4    2048  131072      95.12    4.228  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     4    2048  131072     99.805           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         8    2048       0    172.213   16.348  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     8    2048       0    188.206           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total         8    2048   16384    141.495    7.136  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max     8    2048   16384    148.136           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total        16    2048       0    231.294     4.91  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max    16    2048       0    236.895           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total        16    2048   16384     155.87    6.782  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             decode_depth_total_max    16    2048   16384    161.787           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 1               0     13.322           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 1           16384     13.781           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 1           65536     13.116           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 4               0     21.028           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 4           16384     23.284           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 4           65536     22.467           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 8               0     31.294           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 8           16384      31.78           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                 8           65536     32.001           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                16               0     41.207           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                16           16384     44.277           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p50_ms                16           65536      45.41           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 1               0     13.322           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 1           16384     13.781           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 1           65536     13.116           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 4               0     21.114           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 4           16384     24.665           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 4           65536     23.633           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 8               0     32.518           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 8           16384     34.447           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                 8           65536     35.111           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                16               0     44.387           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                16           16384     47.826           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p90_ms                16           65536      48.02           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 1               0     13.322           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 1           16384     13.781           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 1           65536     13.116           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 4               0     21.142           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 4           16384     24.961           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 4           65536     23.644           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 8               0     32.555           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 8           16384     35.067           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                 8           65536     35.456           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                16               0     45.572           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                16           16384     56.215           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    sustained-decode itl_p99_ms                16           65536     49.351           one 30 s sustained decode window, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1     512           1718.143   19.387  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1     512           1740.121           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1    2048           2808.784   41.293  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1    2048           2832.667           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1    8192           2865.137   14.141  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1    8192           2874.684           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1   16384           2913.052    6.858  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1   16384           2920.564           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1   32768           2810.426    5.145  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1   32768           2816.119           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1   65536            2650.52    1.576  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1   65536            2652.34           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp                         1  131072           2362.391    2.545  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      pp_max                     1  131072           2364.664           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg128_total                1    2048             76.666    3.158  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg128_total_max            1    2048              80.04           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req                     1    2048             88.697    2.562  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req_max                 1    2048             91.489           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req                     2    2048             62.408    5.288  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req_max                 2    2048             67.826           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req                     4    2048             48.631    1.533  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req_max                 4    2048             49.615           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req                     8    2048             33.236    0.977  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req_max                 8    2048             34.265           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req                    16    2048             22.142    0.362  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_req_max                16    2048             22.532           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total                   1    2048             88.697    2.562  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total_max               1    2048             91.489           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total                   2    2048            114.891    7.938  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total_max               2    2048            121.849           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total                   4    2048            156.645    4.558  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total_max               4    2048            161.785           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total                   8    2048            172.213   16.348  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total_max               8    2048            188.206           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total                  16    2048            231.294     4.91  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             tg_total_max              16    2048            236.895           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 1    2048       0      0.741           p50 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 1    2048   16384      1.684           p50 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 1    2048   65536      2.355           p50 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 1    2048  131072      2.827           p50 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 2    2048       0      1.326           p50 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 4    2048       0      1.902           p50 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 4    2048   16384      5.532           p50 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 4    2048   65536      7.462           p50 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 4    2048  131072       8.94           p50 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 8    2048       0      3.688           p50 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                 8    2048   16384      8.913           p50 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                16    2048       0      6.722           p50 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p50_s                16    2048   16384     13.644           p50 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 1    2048       0      0.742           p90 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 1    2048   16384      1.749           p90 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 1    2048   65536      2.374           p90 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 1    2048  131072      2.858           p90 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 2    2048       0      1.424           p90 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 4    2048       0      2.827           p90 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 4    2048   16384      6.209           p90 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 4    2048   65536       8.48           p90 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 4    2048  131072      9.946           p90 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 8    2048       0      5.319           p90 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                 8    2048   16384     11.927           p90 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                16    2048       0     10.813           p90 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p90_s                16    2048   16384     23.738           p90 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 1    2048       0      0.743           p99 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 1    2048   16384      1.763           p99 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 1    2048   65536      2.378           p99 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 1    2048  131072      2.865           p99 of 3 requests (3 runs x c1), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 2    2048       0      1.512           p99 of 6 requests (3 runs x c2), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 4    2048       0      2.846           p99 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 4    2048   16384      6.216           p99 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 4    2048   65536      8.481           p99 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 4    2048  131072      9.953           p99 of 12 requests (3 runs x c4), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 8    2048       0      5.593           p99 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                 8    2048   16384     12.147           p99 of 24 requests (3 runs x c8), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                16    2048       0     10.815           p99 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    chat             ttft_p99_s                16    2048   16384     24.459           p99 of 48 requests (3 runs x c16), one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1     512              0.328    0.004  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1     512              0.331           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1    2048              0.749    0.011  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1    2048              0.762           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1    8192              2.879    0.015  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1    8192              2.896           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1   16384              5.644    0.012  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1   16384              5.655           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1   32768             11.679    0.019  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1   32768             11.696           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1   65536              24.75    0.014  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1   65536             24.759           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s                     1  131072             55.508    0.066  mean ± sd of 3 runs, one boot | T=1.0 top-p 0.95 top-k 20, thinking on
+2x    long-prompt      ttft_s_max                 1  131072              55.58           max of 3 runs | T=1.0 top-p 0.95 top-k 20, thinking on
+2x                     kv_tokens                                       3525633           vLLM serve log, rank 0 | T=1.0 top-p 0.95 top-k 20, thinking on
+1x    chat             tg_req T=0                 1    2048             63.435    7.215  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking on
+1x    chat             tg_req_max T=0             1    2048             74.239           max of 2 Sparks x 3 runs | T=0, thinking on
+1x    chat             tg_req T=0                 8    2048             23.143    0.157  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking on
+1x    chat             tg_req_max T=0             8    2048             23.334           max of 2 Sparks x 3 runs | T=0, thinking on
+1x    chat             tg_total T=0               1    2048             63.435    7.215  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking on
+1x    chat             tg_total_max T=0           1    2048             74.239           max of 2 Sparks x 3 runs | T=0, thinking on
+1x    chat             tg_total T=0               8    2048            143.358    9.725  mean ± sd of 2 Sparks x 3 runs, one boot each | T=0, thinking on
+1x    chat             tg_total_max T=0           8    2048            156.079           max of 2 Sparks x 3 runs | T=0, thinking on
+1x    chat             ttft_p50_s T=0             1    2048       0        1.1           p50 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=0, thinking on
+1x    chat             ttft_p50_s T=0             8    2048       0      6.721           p50 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=0, thinking on
+1x    chat             ttft_p90_s T=0             1    2048       0      1.102           p90 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=0, thinking on
+1x    chat             ttft_p90_s T=0             8    2048       0      7.435           p90 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=0, thinking on
+1x    chat             ttft_p99_s T=0             1    2048       0      1.102           p99 of 6 requests (2 Sparks x 3 runs x c1), one boot each | T=0, thinking on
+1x    chat             ttft_p99_s T=0             8    2048       0      7.641           p99 of 48 requests (2 Sparks x 3 runs x c8), one boot each | T=0, thinking on
+dp2   chat             tg_req T=0                 1    2048             61.073    2.084  mean ± sd of 3 runs, one boot | T=0, thinking on
+dp2   chat             tg_req_max T=0             1    2048             63.474           max of 3 runs | T=0, thinking on
+dp2   chat             tg_req T=0                 8    2048             33.913    0.921  mean ± sd of 3 runs, one boot | T=0, thinking on
+dp2   chat             tg_req_max T=0             8    2048             34.933           max of 3 runs | T=0, thinking on
+dp2   chat             tg_total T=0               1    2048             61.073    2.084  mean ± sd of 3 runs, one boot | T=0, thinking on
+dp2   chat             tg_total_max T=0           1    2048             63.474           max of 3 runs | T=0, thinking on
+dp2   chat             tg_total T=0               8    2048              218.1    5.721  mean ± sd of 3 runs, one boot | T=0, thinking on
+dp2   chat             tg_total_max T=0           8    2048            224.698           max of 3 runs | T=0, thinking on
+dp2   chat             ttft_p50_s T=0             1    2048       0      1.115           p50 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+dp2   chat             ttft_p50_s T=0             8    2048       0      3.787           p50 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+dp2   chat             ttft_p90_s T=0             1    2048       0      1.126           p90 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+dp2   chat             ttft_p90_s T=0             8    2048       0      4.446           p90 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+dp2   chat             ttft_p99_s T=0             1    2048       0      1.129           p99 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+dp2   chat             ttft_p99_s T=0             8    2048       0      4.526           p99 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+2x    chat             tg_req T=0                 1    2048            105.275   10.683  mean ± sd of 3 runs, one boot | T=0, thinking on
+2x    chat             tg_req_max T=0             1    2048             111.69           max of 3 runs | T=0, thinking on
+2x    chat             tg_req T=0                 8    2048             35.208    0.345  mean ± sd of 3 runs, one boot | T=0, thinking on
+2x    chat             tg_req_max T=0             8    2048             35.605           max of 3 runs | T=0, thinking on
+2x    chat             tg_total T=0               1    2048            105.275   10.683  mean ± sd of 3 runs, one boot | T=0, thinking on
+2x    chat             tg_total_max T=0           1    2048             111.69           max of 3 runs | T=0, thinking on
+2x    chat             tg_total T=0               8    2048            199.621   23.714  mean ± sd of 3 runs, one boot | T=0, thinking on
+2x    chat             tg_total_max T=0           8    2048            226.946           max of 3 runs | T=0, thinking on
+2x    chat             ttft_p50_s T=0             1    2048       0      0.742           p50 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+2x    chat             ttft_p50_s T=0             8    2048       0      3.632           p50 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+2x    chat             ttft_p90_s T=0             1    2048       0      0.753           p90 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+2x    chat             ttft_p90_s T=0             8    2048       0      5.422           p90 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+2x    chat             ttft_p99_s T=0             1    2048       0      0.756           p99 of 3 requests (3 runs x c1), one boot | T=0, thinking on
+2x    chat             ttft_p99_s T=0             8    2048       0      5.632           p99 of 24 requests (3 runs x c8), one boot | T=0, thinking on
+
+Not planned:
+  1x: no c16 (max_num_seqs 8); 128K only c1/c4 (the 14 GiB pool holds ~7.5 requests at 128K, 1x results/tp1-v3c-20261005/kv-capacity.txt); 16K c2, 64K c2/c8 and 128K c2 trimmed for runtime.
+  2x: 16K c2, 64K c2/c8/c16 and 128K c2/c8/c16 trimmed for runtime.
+  dp2: no depth > 0 cells: the router keys a conversation on its first user message, and llama-benchy's context-load turn sends the fixed user message '.', so the cached context and the measured turn land on different replicas (the cell would measure prefill, not decode at depth). No pp sweep: one request through the router reaches one 1x replica, the same path as the 1x rows (also why the coding corpus skips c1 on dp2). ITL at depth 0 only. No copy-heavy cell: bench_copy_streams.py reads /metrics, which the router does not serve.
+  coding-36: c1 and c8 only (c4 dropped for runtime). tg128: depth 0, c1 only. ITL (llm-inference-bench): depth 0/16K/64K, one 30 s window per cell.
+
+Planned but not measured:
+  none

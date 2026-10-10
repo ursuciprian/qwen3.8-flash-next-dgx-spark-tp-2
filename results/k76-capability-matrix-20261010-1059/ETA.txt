@@ -1,0 +1,64 @@
+k76 runtime estimate (2026-10-09, rev 3: + coding-36 at c1/c8 (dp2 c8) and copy-heavy, grid trimmed). Total ~4 h 27 min (267 min).
+Timeouts in k76.py PLAN are ~3x per group; coding cells 3,600 s, copy 1,800 s.
+
+Inputs (measured earlier, labelled):
+  prefill, cold, c1: 1x ~1,950 tok/s (v3e 2K 1,782 [tp1-v3e-hf-20261008]; 64K 2,066, 128K 1,880 [lib-bench, v3d]);
+                     2x ~2,700 tok/s (b1.6 2K 2,833 [k71]; b1.4 64K 2,664 [lib-bench])
+  decode tg512 per request, depth 0: 1x c1 57, c2 45, c4 32, c8 22.6 [tp1-v3e-hf-20261008]
+                                     2x c1 74, c2 55, c4 46, c8 33, c16 20 [k71 b1.6, b1.4 A/B]
+  coding-36 at c1 [k55, 1x v3d / 2x b1.4]: T=0 thinking off 1x 72.9 tok/s, median 641.5 tokens out; 2x 106.2, 577.5;
+                     server defaults 1x 59.7, 768 tokens (33/36 hit max); 2x 87.5, 768
+  coding c8 aggregate vs c1 taken from tg512: 1x 3.2x (8 x 22.6 vs 57), 2x 3.57x (8 x 33 vs 74);
+                     dp2 c8 = 2 replicas at c4 (2 x 2.25 = 4.5x)
+  copy-heavy [k58 copy-streams.json, 1x]: 1 stream ~20 s per round; assumed 4 streams ~33 s, 8 ~50 s (1x), 2x 15/25/35 s
+  boots: 1x warm ~5 min [k72], 2x 221 s + pong ~5 min [b1.6 check boot]; stop ~2 min; llm-inference-bench 9 cells
+  ~10 min [lib-bench-20261005]; every llama-benchy request writes the full 512 tokens (thinking on)
+
+Per run (P = prefill tok/s, r_c = decode tok/s per request at c):
+  depth 0:  c x 2048 / P + 512 / r_c                     (3 runs + 1 warm-up run)
+  depth D:  c x (D + 2048) / P + 2 x 512 / r_c           (context-load turn + measured turn; 3 runs, no warm-up run)
+  pp sweep: 256,512 tokens / P + 7 x 0.6 s               (3 runs, no warm-up run)
+  coding pass (36 prompts): c1 = 36 x tokens / tok/s per mode; c8 = c1 / aggregate factor; 3 passes per cell
+
+1x, one boot per Spark, both Sparks at once (wall = one Spark):
+  pp sweep            256,512/1950 = 131.5 + 4.2 = 136 s x 3                                  =  409 s
+  d0 tg512 c1/2/4/8   (1.05+9.0)+(2.1+11.4)+(4.2+16.0)+(8.4+22.7) = 74.8 s x 4                =  299 s
+  d0 tg128 c1         (1.05+2.2) x 4                                                           =   13 s
+  16K c1/4/8          (9.5+18.0)+(37.8+32.0)+(75.6+45.3) = 218.2 s x 3                         =  655 s
+  64K c1/4            (34.7+18.0)+(138.6+32.0) = 223.3 s x 3                                   =  670 s
+  128K c1/4           (68.3+18.0)+(273.1+32.0) = 391.4 s x 3                                   = 1174 s
+  T=0 tg512 c1/c8     (10.1+31.1) x 4                                                          =  164 s
+  ITL lib 0/16K/64K x c1/4/8                                                                   =  600 s
+  benchy start-up, 7 invocations x 20 s                                                        =  140 s
+  coding c1           36x641.5/72.9 = 316.8 + 36x768/59.7 = 463.1 -> 779.9 s per pass
+         c8           779.9/3.2 = 243.7; (779.9+243.7) x 3 + 4 warm-ups x 10 s               = 3111 s
+  copy 1/4/8          3 x (20+33+50) + 9 settles x 5 + warm-up 20                              =  374 s
+  1x total            4124 grid + 3111 coding + 374 copy                                       = 7609 s = 126.8 min
+DP=2 (router; c per replica = c/2):
+  d0 tg512 c1/2/4/8/16 = 1x c1/c1/c2/c4/c8: 10.1+10.1+13.5+20.2+31.1 = 85.0 s x 4              =  340 s
+  d0 tg128 c1         3.3 x 4                                                                  =   13 s
+  T=0 c1/c8           (10.1+20.2) x 4                                                          =  121 s
+  ITL lib depth 0 c1/4/8/16: 4 x 45 s                                                          =  180 s
+  start-up 3 x 20 s                                                                            =   60 s
+  coding c8           779.9/4.5 = 173.3 s x 3 + 2 x 10 s                                       =  540 s
+  DP=2 total          714 grid + 540 coding                                                    = 1254 s = 20.9 min
+2x TP=2:
+  pp sweep            256,512/2700 = 95.0 + 4.2 = 99 s x 3                                     =  297 s
+  d0 tg512 c1..16     (0.76+6.9)+(1.5+9.3)+(3.0+11.1)+(6.1+15.5)+(12.1+25.6) = 91.9 s x 4     =  368 s
+  d0 tg128 c1         2.5 x 4                                                                  =   10 s
+  16K c1/4/8/16       20.6+49.6+85.6+160.4 = 316.2 s x 3                                       =  949 s
+  64K c1/4            (25.0+13.8)+(100.1+22.3) = 161.2 s x 3                                   =  484 s
+  128K c1/4           (49.3+13.8)+(197.2+22.3) = 282.6 s x 3                                   =  848 s
+  T=0 c1/c8           (7.7+21.6) x 4                                                           =  117 s
+  ITL lib 0/16K/64K x c1/4/8/16 (12 cells)                                                     =  720 s
+  start-up 7 x 20 s                                                                            =  140 s
+  coding c1           36x577.5/106.2 = 195.8 + 36x768/87.5 = 316.0 -> 511.8 s per pass
+         c8           511.8/3.57 = 143.4; (511.8+143.4) x 3 + 40 s                          = 2006 s
+  copy 1/4/8          3 x (15+25+35) + 45 + 15                                                 =  285 s
+  2x total            3933 grid + 2006 coding + 285 copy                                       = 6224 s = 103.7 min
+Transitions: stop 2x 2 + boot 1x x2 5 + stop 1x/router 2 + boot 2x 5 + report 2                 =   16 min
+Total: 126.8 + 20.9 + 103.7 + 16 = 267.4 min = 4 h 27 min (rev 1 was 200 min: +67 min).
+  grid trims vs rev 1 (tg128 c2+, 16K c2, 64K c8): 1x -20.0 min (109+125+967 s), dp2 -2.0, 2x -15.7 (152+97+694 s)
+  added: coding 51.9 + 9.0 + 33.4 = 94.3 min, copy 6.2 + 4.8 = 11.0 min; 105.3 - 37.7 = +67.6 min
+Largest uncertainties: decode at 64K/128K depth (taken equal to depth 0), the coding c8 factors (taken from tg512),
+copy at 4/8 streams. The 2x stays up at the end (no restore boot).

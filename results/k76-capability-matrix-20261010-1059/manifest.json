@@ -1,0 +1,196 @@
+{
+  "job": "k76",
+  "date": "2026-10-10",
+  "results": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k76-capability-matrix-20261010-1059",
+  "setups": {
+    "1x-dgx01": {
+      "recipe": {
+        "recipe_file": "/home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml",
+        "registry_commit": "bb204904163a984d6d75ec5d8ed88be34893e044",
+        "registry_commit_date": "2026-10-10 09:37:44 +0300",
+        "name": "qwen3.8-flash-next-1x-dgx-spark",
+        "release_line": "# Release: v2.1.0 (old name v3e)",
+        "release": "v2.1.0",
+        "alias": "v3e",
+        "image": "ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "image_tag": "tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "recipe_digest_comment": "",
+        "digest_comments": [],
+        "b12x_commit_from_tag": "21e0b201",
+        "vllm_commit_from_tag": "5dad364d",
+        "model": "ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE",
+        "model_revision": "16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "max_num_seqs": 8,
+        "tensor_parallel": 1,
+        "sampling": "T=1.0 top-p 0.95 top-k 20, thinking on",
+        "generation_config": "/home/nvidia/.cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d/generation_config.json",
+        "reasoning_effort_default": "medium"
+      },
+      "serve": {
+        "kv_tokens": 993754,
+        "vllm_version": "v20260926.dev28+g884b4ff68.d20261002",
+        "vllm_commit": "884b4ff68",
+        "served_model_path": "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "drafter": "mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "snapshot_paths": [
+          "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+          "[/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d]"
+        ],
+        "overlay": [],
+        "aot": "AOT loaded",
+        "b12x_measured_plans": 0,
+        "max_num_seqs_log": 8
+      },
+      "images": {
+        "dgx01": {
+          "id": "sha256:1abb56f657d55a4d1c935a7a2b938ccd26edab7d19d892a06efb122d67afc870",
+          "repo_digests": [
+            "ghcr.io/ursuciprian/spark-vllm-b12x@sha256:5a9aa728ed6d2b984a40b16dbb51b572de0a1b988899147aca6ef43819e6eac9"
+          ]
+        }
+      }
+    },
+    "1x-dgx02": {
+      "recipe": {
+        "recipe_file": "/home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml",
+        "registry_commit": "bb204904163a984d6d75ec5d8ed88be34893e044",
+        "registry_commit_date": "2026-10-10 09:37:44 +0300",
+        "name": "qwen3.8-flash-next-1x-dgx-spark",
+        "release_line": "# Release: v2.1.0 (old name v3e)",
+        "release": "v2.1.0",
+        "alias": "v3e",
+        "image": "ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "image_tag": "tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "recipe_digest_comment": "",
+        "digest_comments": [],
+        "b12x_commit_from_tag": "21e0b201",
+        "vllm_commit_from_tag": "5dad364d",
+        "model": "ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE",
+        "model_revision": "16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "max_num_seqs": 8,
+        "tensor_parallel": 1,
+        "sampling": "T=1.0 top-p 0.95 top-k 20, thinking on",
+        "generation_config": "/home/nvidia/.cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d/generation_config.json",
+        "reasoning_effort_default": "medium"
+      },
+      "serve": {
+        "kv_tokens": 993754,
+        "vllm_version": "v20260926.dev28+g884b4ff68.d20261002",
+        "vllm_commit": "884b4ff68",
+        "served_model_path": "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "drafter": "mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "snapshot_paths": [
+          "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+          "[/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d]"
+        ],
+        "overlay": [],
+        "aot": "AOT loaded",
+        "b12x_measured_plans": 0,
+        "max_num_seqs_log": 8
+      },
+      "images": {
+        "dgx02": {
+          "id": "sha256:1abb56f657d55a4d1c935a7a2b938ccd26edab7d19d892a06efb122d67afc870",
+          "repo_digests": [
+            "ghcr.io/ursuciprian/spark-vllm-b12x@sha256:5a9aa728ed6d2b984a40b16dbb51b572de0a1b988899147aca6ef43819e6eac9"
+          ]
+        }
+      }
+    },
+    "dp2": {
+      "recipe": {
+        "recipe_file": "/home/nvidia/.cache/sparkrun/registries/qwen38-flashnext-1x/recipes/qwen3.8-flash-next/qwen3.8-flash-next-1x-dgx-spark.yaml",
+        "registry_commit": "bb204904163a984d6d75ec5d8ed88be34893e044",
+        "registry_commit_date": "2026-10-10 09:37:44 +0300",
+        "name": "qwen3.8-flash-next-1x-dgx-spark",
+        "release_line": "# Release: v2.1.0 (old name v3e)",
+        "release": "v2.1.0",
+        "alias": "v3e",
+        "image": "ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "image_tag": "tp1-v3e-hf-20261008-21e0b201-5dad364d-warm",
+        "recipe_digest_comment": "",
+        "digest_comments": [],
+        "b12x_commit_from_tag": "21e0b201",
+        "vllm_commit_from_tag": "5dad364d",
+        "model": "ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE",
+        "model_revision": "16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "max_num_seqs": 8,
+        "tensor_parallel": 1,
+        "sampling": "T=1.0 top-p 0.95 top-k 20, thinking on",
+        "generation_config": "/home/nvidia/.cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d/generation_config.json",
+        "reasoning_effort_default": "medium"
+      },
+      "serve": {},
+      "images": {},
+      "router": "tools/dp2/pa_router.py @ 4fe31f02df5e81e87f6f3b9b5c2d5f211700df7c (https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2), dgx-01:8100 -> http://192.168.100.62:8000,http://192.168.100.53:8000"
+    },
+    "2x": {
+      "recipe": {
+        "recipe_file": "/home/nvidia/.cache/sparkrun/registries/_url_e47b9e8b5e91/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml",
+        "registry_commit": "4fe31f02df5e81e87f6f3b9b5c2d5f211700df7c",
+        "registry_commit_date": "2026-10-10 03:20:14 +0300",
+        "name": "qwen3.8-flash-next-2x-dgx-spark",
+        "release_line": "# Release: v2.0.0 (k73-2x-gdnmse-dispatch)",
+        "release": "",
+        "alias": "k73-20261009-21e0b201-d21d7ade-warm",
+        "image": "ghcr.io/ursuciprian/spark-vllm-b12x:k73-20261009-21e0b201-d21d7ade-warm",
+        "image_tag": "k73-20261009-21e0b201-d21d7ade-warm",
+        "recipe_digest_comment": "sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4",
+        "digest_comments": [
+          "this tag: sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd",
+          "the b1.6 tag: sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4"
+        ],
+        "b12x_commit_from_tag": "21e0b201",
+        "vllm_commit_from_tag": "d21d7ade",
+        "model": "ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE",
+        "model_revision": "16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "max_num_seqs": 16,
+        "tensor_parallel": 2,
+        "sampling": "T=1.0 top-p 0.95 top-k 20, thinking on",
+        "generation_config": "/home/nvidia/.cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d/generation_config.json",
+        "reasoning_effort_default": "xhigh"
+      },
+      "serve": {
+        "kv_tokens": 3525633,
+        "vllm_version": "v20260926.dev28+g884b4ff68.d20261002",
+        "vllm_commit": "884b4ff68",
+        "served_model_path": "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "drafter": "mtp from /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+        "snapshot_paths": [
+          "/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d",
+          "[/cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d]"
+        ],
+        "overlay": [],
+        "aot": "AOT loaded",
+        "b12x_measured_plans": 0,
+        "max_num_seqs_log": 16
+      },
+      "images": {
+        "dgx01": {
+          "id": "sha256:54184feed47ae601ec6c5823ec7a1046447f47dd87c255a4ed1000c7550f6bfa",
+          "repo_digests": [
+            "ghcr.io/ursuciprian/spark-vllm-b12x@sha256:8abb60eeeb79ca13680341c17d87975801da1218c06df2505856b23da7ed1821"
+          ]
+        },
+        "dgx02": {
+          "id": "sha256:54184feed47ae601ec6c5823ec7a1046447f47dd87c255a4ed1000c7550f6bfa",
+          "repo_digests": [
+            "ghcr.io/ursuciprian/spark-vllm-b12x@sha256:8abb60eeeb79ca13680341c17d87975801da1218c06df2505856b23da7ed1821"
+          ]
+        }
+      }
+    }
+  },
+  "phases": [
+    "preflight 1791619192 1791619200 10.94 14.36",
+    "boot-1x 1791619200 1791619419 10.93 14.35",
+    "1x 1791619419 1791626649 12.88 13.72",
+    "dp2 1791626649 1791627920 13.53 13.69",
+    "boot-2x 1791627920 1791628195 11.17 13.86",
+    "2x 1791628195 1791634020 10.54 13.97"
+  ],
+  "harness": {
+    "benchy": "0.4.1.dev4+g0d4de4271",
+    "lib": "0.7.6"
+  }
+}
