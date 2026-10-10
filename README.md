@@ -27,7 +27,7 @@
 <!-- badges:end -->
 
 <!-- hero:start (scripts/make_charts.py writes this block) -->
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/hero-dark.svg"><img src="docs/img/hero-light.svg" alt="Qwen3.8-Flash-Next on two DGX Sparks, release v2.0.0: vLLM, NVFP4, MTP speculative decoding, OpenAI API." width="640"></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/hero-dark.svg"><img src="docs/img/hero-light.svg" alt="Qwen3.8-Flash-Next on two DGX Sparks, release v2.0.0: vLLM, NVFP4, MTP speculative decoding, OpenAI API." width="840"></picture></p>
 <!-- hero:end -->
 
 ## Quick start
