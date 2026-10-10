@@ -120,9 +120,9 @@ def run(prompt, extra):
                 finish = ch[0]["finish_reason"]
             dl = (ch[0].get("delta") or {}) if ch else {}
             rc = dl.get("reasoning_content") or dl.get("reasoning")
-            text.append(dl.get("content") or ""); reasoning.append(rc or "")
             if dl.get("content") or rc:
                 now = time.perf_counter()
+                text.append(dl.get("content") or ""); reasoning.append(rc or "")
                 t_first = t_first or now
                 t_last = now
                 ncontent += bool(dl.get("content")); nreason += bool(rc)

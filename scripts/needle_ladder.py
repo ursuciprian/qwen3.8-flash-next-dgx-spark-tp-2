@@ -62,7 +62,7 @@ def ask(base, model, prompt, question, timeout):
                                  {"Content-Type": "application/json"})
     t = time.time()
     r = json.load(urllib.request.urlopen(req, timeout=timeout))
-    note(prompt_tokens=r["usage"]["prompt_tokens"], completion_tokens=r["usage"]["completion_tokens"])
+    note(prompt_tokens=r["usage"]["prompt_tokens"], completion_tokens=r["usage"].get("completion_tokens"))
     return r["choices"][0]["message"]["content"], r["usage"]["prompt_tokens"], time.time() - t
 
 

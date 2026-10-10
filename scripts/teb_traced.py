@@ -18,9 +18,10 @@ try:
     import tool_eval_bench  # noqa: F401
 except ImportError:
     exe = shutil.which("tool-eval-bench")
-    py = open(exe).readline()[2:].strip() if exe else ""
-    if not py or os.path.realpath(py) == os.path.realpath(sys.executable):
+    py = os.path.join(os.path.dirname(exe), "python") if exe else ""  # uv tool / pipx venv layout
+    if not os.path.exists(py) or os.environ.get("TEB_TRACED_REEXEC"):
         sys.exit("tool-eval-bench not found")
+    os.environ["TEB_TRACED_REEXEC"] = "1"
     os.execv(py, [py, os.path.abspath(__file__), *sys.argv[1:]])
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -29,10 +30,17 @@ from tool_eval_bench.cli.bench import main  # noqa: E402
 
 
 def benchmark_name(argv):
-    name = "teb-hardmode" if "--hardmode" in argv else "teb"
-    if "--scenarios" in argv:
-        name += "-" + argv[argv.index("--scenarios") + 1].replace(",", "+")
-    return name
+    name = "teb-hardmode" if any(a.startswith("--hardmode") for a in argv) else "teb"
+    scen = []
+    for i, a in enumerate(argv):
+        if a.startswith("--scenarios="):
+            scen += a.split("=", 1)[1].split(",")
+        elif a == "--scenarios":
+            for b in argv[i + 1:]:
+                if b.startswith("-"):
+                    break
+                scen += b.split(",")
+    return name + "".join("-" + s for s in scen if s)
 
 
 if mlflow_trace.mlflow:

@@ -63,9 +63,9 @@ def run(prompt):
                 prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
             ch = obj.get("choices") or []
             d = (ch[0].get("delta") or {}) if ch else {}
-            text.append(d.get("content") or "")
             if d.get("content") or d.get("reasoning_content") or d.get("reasoning"):
                 now = time.perf_counter()
+                text.append(d.get("content") or "")
                 if t_first is None:
                     t_first = now
                 t_last = now
