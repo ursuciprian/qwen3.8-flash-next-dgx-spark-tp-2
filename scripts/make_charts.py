@@ -386,7 +386,11 @@ def short_stat(r):
     """n and statistic in spec-sheet form: 'mean of 2 boots x 4 runs, sd between boots' -> '2 boots × 4 runs, mean'."""
     st = r["stat"]
     if m := re.search(r"(\d+) prompts", st):
-        return f"{m[1]} prompts, {st.split()[0]}"
+        k = re.search(r"mean of (\d+ Sparks x )?(\d+) runs", st)
+        return f"{m[1]} prompts, {st.split()[0]}" + (f"; mean of {(k[1] or '').replace(' x ', ' × ')}{k[2]} runs"
+                                                       if k else "")
+    if m := re.search(r"(\d+) Sparks x (\d+) runs", st):
+        return f"{m[1]} Sparks × {m[2]} runs, mean"
     if m := re.search(r"(\d+) boots x (\d+) runs", st):
         return f"{m[1]} boots × {m[2]} runs, mean"
     runs_ = re.search(r"(\d+) runs", st)
@@ -417,8 +421,20 @@ def numbers(rows):
         if cd:
             rows_.append(("TG, coding c1, defaults", f"{cd['value']:.1f} tok/s median",
                           "36 prompts, OSL ≤768", "server defaults, thinking on", short_stat(cd), cd))
-    cells.append((f"{many['value']:.0f} tok/s", f"TG, aggregate c{many['conc']}", f"{chat} · defaults"
-                  + rel(many)))
+    # The aggregate cell uses the coding workload of cell 1 (T=0) at the highest concurrency measured for the
+    # shipped release, so c1 and cN compare like for like; without such a run it falls back to the chat grid.
+    ct = [r for r in rows if r["setup"] == REPO and r["metric"] == "coding_total" and r["sampling"] == "T=0, thinking off"
+          and (r["conc"] or 0) > 1 and not old(r)]
+    agg = max(ct, key=lambda r: (r["conc"], r["date"])) if ct else None
+    if agg:
+        cells.append((f"{agg['value']:.0f} tok/s", f"TG, coding aggregate c{agg['conc']}",
+                      "36 prompts · T=0, thinking off"))
+        rows_.append((f"TG, coding aggregate c{agg['conc']}", f"{agg['value']:.1f} ± {agg['sd']:.1f} tok/s"
+                      if agg["sd"] else f"{agg['value']:.1f} tok/s",
+                      f"36 prompts (Python, C++, Rust, Go), OSL ≤768, c{agg['conc']}", "T=0, thinking off",
+                      short_stat(agg), agg))
+    else:
+        cells.append((f"{many['value']:.0f} tok/s", f"TG, aggregate c{many['conc']}", f"{chat} · defaults" + rel(many)))
     rows_.append((f"TG, aggregate c{many['conc']}", f"{many['value']:.1f} ± {many['sd']:.1f} tok/s"
                   if many["sd"] else f"{many['value']:.1f} tok/s", f"llama-benchy task mode, {chat}", dflt,
                   short_stat(many), many))
@@ -822,6 +838,7 @@ def chart_history(rows):
 
 def src_link(r):
     repo, path = r["source"].split(":", 1)
+    path = re.sub(r"/[^/]*\{[^}]*\}.*$", "/x", path)   # '1x-dgx0{1,2}/f.json' (two files): link their parent folder
     d = path if path.endswith(".md") else str(Path(path).parent) + "/"
     if repo == REPO:
         return d
