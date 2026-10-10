@@ -399,58 +399,70 @@ def short_stat(r):
         or st
 
 
+def capped(r):
+    """'100/108 requests hit max_tokens' in a coding row's stat -> (100, 108), else None."""
+    m = re.search(r"(\d+)/(\d+) requests hit max_tokens", r["stat"])
+    return (int(m[1]), int(m[2])) if m else None
+
+
+def fmt_val(r, dec=1, unit="tok/s"):
+    return f"{r['value']:.{dec}f}" + (f" ± {r['sd']:.{dec}f}" if r["sd"] else "") + f" {unit}"
+
+
 def numbers(rows):
-    """Headline numbers as README text (large on GitHub, in search snippets and on phones), a one-line key, and the
-    runs behind them in a collapsed table. Newest shipped value per pick(); an older release is named."""
+    """Headline numbers as README text: each TG cell gives the server-defaults number first and the T=0 coding number
+    beside it; then TTFT and the hardmode gate score. A one-line key and the runs behind every number in a collapsed
+    table. Values are means or medians, never maxima. Newest shipped value per pick(); an older release is named."""
     _, d = hero_tiles(rows)
-    code, one, many, tc, ctx = d["code"], d["one"], d["many"], d["tc"], d["ctx"]
-    rel = lambda r: f" · {r['release']}" if old(r) else ""  # noqa: E731
+    code, ctx = d["code"], d["ctx"]
+    rel = lambda r: f" · {r['release']}" if r and old(r) else ""  # noqa: E731
     chat = "ISL/OSL 2048/512"
     dflt = "T=1.0, top-p 0.95, top-k 20, thinking on"
+    t0 = "T=0, thinking off"
+    one = pick(rows, REPO, "tg_total", conc=1, depth_tokens=None)
+    agg_c = 8 if pick(rows, REPO, "tg_total", conc=8, depth_tokens=None) else max(
+        r["conc"] for r in rows if r["setup"] == REPO and r["metric"] == "tg_total" and r["depth_tokens"] is None)
+    agg = pick(rows, REPO, "tg_total", conc=agg_c, depth_tokens=None)
+    agg0 = pick(rows, REPO, "coding_total", conc=agg_c, sampling=t0)
+    cd = coding_one(rows, REPO, "server defaults, thinking on")
+    ttft = pick(rows, REPO, ["ttft_s", "ttft_benchy_s"], conc=1, prompt_tokens=16384)
+    hm = pick(rows, REPO, "gate_hardmode")
     cells, rows_ = [], []
+    cells.append((f"{one['value']:.0f} · {code['value']:.0f} tok/s" if code else f"{one['value']:.0f} tok/s", "TG c1",
+                  f"defaults ({chat}){rel(one)}" + (f" · {t0} (coding, median of 36){rel(code)}" if code else "")))
+    cells.append((f"{agg['value']:.0f} · {agg0['value']:.0f} tok/s" if agg0 else f"{agg['value']:.0f} tok/s",
+                  f"TG aggregate c{agg_c}", f"defaults ({chat}){rel(agg)}" + (f" · {t0} (coding){rel(agg0)}"
+                                                                               if agg0 else "")))
+    if ttft:
+        cells.append((f"{ttft['value']:.1f} s", "TTFT, ISL 16K", f"c1, cold prefix{rel(ttft)}"))
+    if hm:
+        cells.append((f"{hm['value']:.0f}/100", "Hardmode", f"pass ≥ 88, T=0, thinking on{rel(hm)}"))
+    rows_.append(("TG c1, defaults", fmt_val(one), f"llama-benchy task mode, {chat}", dflt, short_stat(one), one))
     if code:
-        hi = next((r for r in rows if r["setup"] == REPO and r["metric"] == "coding_probe_max" and r["conc"] == 1
-                   and r["sampling"] == code["sampling"] and r["release"] == code["release"]), None)
-        cells.append((f"{code['value']:.0f} tok/s", "TG, coding c1",
-                      "median of 36 prompts · T=0, thinking off" + (f" · max {hi['value']:.1f}" if hi else "")
-                      + rel(code)))
-        rows_.append(("TG, coding c1", f"{code['value']:.1f} tok/s median" + (f", max {hi['value']:.1f}" if hi
-                                                                               else ""),
-                      "36 prompts (Python, C++, Rust, Go), OSL ≤768", "T=0, thinking off", short_stat(code), code))
-        cd = coding_one(rows, REPO, "server defaults, thinking on")
-        if cd:
-            rows_.append(("TG, coding c1, defaults", f"{cd['value']:.1f} tok/s median",
-                          "36 prompts, OSL ≤768", "server defaults, thinking on", short_stat(cd), cd))
-    # The aggregate cell uses the coding workload of cell 1 (T=0) at the highest concurrency measured for the
-    # shipped release, so c1 and cN compare like for like; without such a run it falls back to the chat grid.
-    ct = [r for r in rows if r["setup"] == REPO and r["metric"] == "coding_total" and r["sampling"] == "T=0, thinking off"
-          and (r["conc"] or 0) > 1 and not old(r)]
-    agg = max(ct, key=lambda r: (r["conc"], r["date"])) if ct else None
-    if agg:
-        cells.append((f"{agg['value']:.0f} tok/s", f"TG, coding aggregate c{agg['conc']}",
-                      "36 prompts · T=0, thinking off"))
-        rows_.append((f"TG, coding aggregate c{agg['conc']}", f"{agg['value']:.1f} ± {agg['sd']:.1f} tok/s"
-                      if agg["sd"] else f"{agg['value']:.1f} tok/s",
-                      f"36 prompts (Python, C++, Rust, Go), OSL ≤768, c{agg['conc']}", "T=0, thinking off",
-                      short_stat(agg), agg))
-    else:
-        cells.append((f"{many['value']:.0f} tok/s", f"TG, aggregate c{many['conc']}", f"{chat} · defaults" + rel(many)))
-    rows_.append((f"TG, aggregate c{many['conc']}", f"{many['value']:.1f} ± {many['sd']:.1f} tok/s"
-                  if many["sd"] else f"{many['value']:.1f} tok/s", f"llama-benchy task mode, {chat}", dflt,
-                  short_stat(many), many))
-    cells.append((f"{one['value']:.0f} tok/s", "TG c1, defaults", f"{chat} · T=1.0, thinking on" + rel(one)))
-    rows_.append(("TG c1", f"{one['value']:.1f} ± {one['sd']:.1f} tok/s" if one["sd"] else
-                  f"{one['value']:.1f} tok/s", f"llama-benchy task mode, {chat}", dflt, short_stat(one), one))
-    if tc:
-        cells.append((f"{tc['value']:.0f}/100", "TC-45", f"tool calls · {round(tc['value'] / 20)} of 5 trials" + rel(tc)))
-        rows_.append(("TC-45", f"{tc['value']:.0f}/100", "tool call required by the request", "–",
-                      "5 trials", tc))
+        rows_.append(("TG c1, coding", f"{code['value']:.1f} tok/s median", "36 prompts (Python, C++, Rust, Go), OSL ≤768",
+                      t0, short_stat(code), code))
+    if cd:
+        cap = capped(cd)
+        rows_.append(("TG c1, coding, defaults", f"{cd['value']:.1f} tok/s median", "36 prompts, OSL ≤768"
+                      + (f"; {cap[0]}/{cap[1]} requests hit the 768-token cap inside thinking" if cap else ""),
+                      "server defaults, thinking on", short_stat(cd), cd))
+    rows_.append((f"TG aggregate c{agg_c}, defaults", fmt_val(agg), f"llama-benchy task mode, {chat}", dflt,
+                  short_stat(agg), agg))
+    if agg0:
+        rows_.append((f"TG aggregate c{agg_c}, coding", fmt_val(agg0), f"36 prompts, OSL ≤768, c{agg_c}", t0,
+                      short_stat(agg0), agg0))
+    if ttft:
+        rows_.append(("TTFT, ISL 16K", fmt_val(ttft, 2, "s"), f"{ttft['harness']}, c1, cold prefix", "–",
+                      short_stat(ttft), ttft))
+    if hm:
+        rows_.append(("Hardmode", f"{hm['value']:.0f}/100", "88 multi-step tool-use scenarios; pass ≥ 88", "T=0, thinking on",
+                      "1 gate run", hm))
     td = "\n".join(f'    <td align="center"><h2>{n}</h2><b>{lab}</b><br><sub>{sub}</sub></td>' for n, lab, sub in cells)
     seqs = recipe_value("max_num_seqs")
     spec = " · ".join(x for x in (f"{ctx // 1000}K context" if ctx else "", f"max_num_seqs {seqs}" if seqs else "",
                                   "MTP ×4", "OpenAI-compatible API", "quality-gated releases") if x)
-    key = ("TG tok/s. " + (f"Coding: median, n=36, T=0, thinking off, OSL ≤768, {code['release']}. " if code else "")
-           + f"Chat: {chat}, server defaults (T=1.0, thinking on), {one['release']}.")
+    key = (f"TG cells: server defaults ({chat}, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second. "
+           f"Means and medians only. Release {one['release']}.")
     tab = ["| Metric | Value | Workload | Sampling | n | Release (date) | Source |", "|---|--:|---|---|---|---|---|"]
     tab += [f"| {m} | {v} | {w} | {sm} | {n} | {r['release']} ({r['date']}) | "
             f"[{'BENCHMARKS' if r['source'].endswith('.md') else 'results'}]({src_link(r)}) |"
@@ -581,10 +593,15 @@ def chart_prefill(rows):
 def chart_depth(rows):
     """Does a long context slow decoding down? This repo's setup, sustained decode at 0..N context."""
     m = "decode_depth_total"
-    concs = sorted({r["conc"] for r in rows if r["metric"] == m and r["setup"] == REPO})
+    # One run only: the newest harness that measured this setup at depth, so no line mixes harnesses.
+    mine = [r for r in rows if r["metric"] == m and r["setup"] == REPO and numeric(r)]
+    newest = max(mine, key=lambda r: (vkey(r["release"]), r["date"]))
+    mine = [r for r in mine if (r["release"], r["harness"]) == (newest["release"], newest["harness"])]
+    concs = sorted(c for c in {r["conc"] for r in mine} if sum(r["conc"] == c for r in mine) > 1)
+    rows = mine
     h = 3.9
     ramp = {c: tint(color(REPO), f) for c, f in zip(concs, np.linspace(0.45, 1, len(concs)))}
-    depths = sorted({r["depth_tokens"] for r in rows if r["metric"] == m and r["setup"] == REPO})
+    depths = sorted({r["depth_tokens"] for r in mine if r["conc"] in concs})
     fig, (ax,) = figure(h, "TG at context depth",
                         f"{SETUPS[REPO]['name']}: TG tok/s aggregate at " + "/".join(ktok(x) if x else "0" for x in depths)
                         + " cached",
@@ -607,16 +624,20 @@ def chart_depth(rows):
     ax.set_xlim(-0.06 * xs[-1], xs[-1] * 1.12)
     ax.set_ylim(0, ymax * 1.2)
     ax.set_xlabel("Context depth, tokens (cached)")
-    used = {REPO: [r for r in rows if r["metric"] == m and r["setup"] == REPO]}
+    used = {REPO: mine}
     labels(ax, lab)
     footer(fig, h, "Server default sampling.")
-    r0 = next(r for r in rows if r["metric"] == m and r["setup"] == REPO)
+    lib = newest["harness"].startswith("llm-inference-bench")
     caption("depth", [f"{SETUPS[REPO]['name']}: release {'; '.join(notes)}"
-                      + (f" (older release; shipped {SHIPPED[REPO]} not measured on this test yet)" if old(r0) else "")
-                      + ". Server default sampling, 30 s steady-state TG window; it reads 10-30% above the OSL-512 runs "
-                      "of the concurrency chart, so compare points within this chart.",
+                      + (f" (older release; shipped {SHIPPED[REPO]} not measured on this test yet)" if old(newest)
+                         else "") + ". Server default sampling. "
+                      + ("30 s steady-state TG window; it reads 10-30% above the OSL-512 runs of the concurrency "
+                         "chart, so compare points within this chart." if lib else
+                         "Each point: ISL/OSL 2048/512 on top of the cached context, same harness as the concurrency "
+                         "chart. Concurrency levels measured at one depth only are left out."),
                       f"Data: {DATA_LINK}, with the source file of every point."],
-            f"{short_runs(used)}; llm-inference-bench, 30 s sustained TG.")
+            f"{short_runs(used)}; {newest['harness'].split(' 0.')[0]}"
+            + (", 30 s sustained TG." if lib else ", ISL/OSL 2048/512 at depth."))
     return fig
 
 
@@ -860,16 +881,17 @@ def matrix(rows):
         return pick(rows, s, metrics, **eq)
 
     out = []
-    concs = sorted({r["conc"] for r in rows if r["setup"] == s and r["metric"] == "tg_total"
-                    and r["depth_tokens"] is None and r["conc"]})
+    ship = [r for r in rows if r["setup"] == s and r["release"] == SHIPPED[s]]   # no older-release rows mixed in
+    concs = sorted({r["conc"] for r in ship if r["metric"] == "tg_total" and r["depth_tokens"] is None and r["conc"]})
     if concs:
         out += ["| Concurrency | TG tok/s, aggregate | TG tok/s, per request | Release, run |",
                 "|--:|--:|--:|---|"]
         for c in concs:
             t, e = best("tg_total", conc=c, depth_tokens=None), best("tg_req", conc=c, depth_tokens=None)
             out.append(f"| {c} | {fmt_cell(t)} | {fmt_cell(e)} | [{t['release']}, {t['date']}]({src_link(t)}) |")
-        out += ["", "llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd per run.", ""]
-    sizes = sorted({r["prompt_tokens"] for r in rows if r["setup"] == s and r["conc"] == 1
+        out += ["", f"Release {SHIPPED[s]}. llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd, "
+                "where sd is between runs or between boots as the CSV `stat` column says for each run.", ""]
+    sizes = sorted({r["prompt_tokens"] for r in (ship or rows) if r["setup"] == s and r["conc"] == 1
                     and r["metric"] in ("ttft_s", "ttft_benchy_s", "pp", "pp_benchy") and r["prompt_tokens"]})
     if sizes:
         out += ["| ISL | PP tok/s | TTFT s | Release, run |",
@@ -917,13 +939,11 @@ def table(rows):
                 return f"> max_num_seqs {cap1}"
             return join(cell(s, ["tg_req"], conc=c, depth_tokens=None), cell(s, ["tg_total"], conc=c, depth_tokens=None))
         row(f"TG c{c}, tok/s: per request / aggregate", f)
-    row("TG, coding c1 (36 prompts), tok/s median (max): T=0 / defaults",
-        lambda s: join(*((lambda a, b: a and f"{a} {b or ''}".strip())(
-            cell(s, ["coding_probe_median"], "{:.0f}", conc=1, sampling=m),
-            cell(s, ["coding_probe_max"], "({:.0f})", conc=1, sampling=m))
-            for m in ("T=0, thinking off", "server defaults, thinking on"))))
-    row("Copy-heavy (MTP acceptance near 1), aggregate tok/s c1 / c4 / c8, max of 3 rounds",
-        lambda s: join(*(cell(s, ["copy_total_max"], "{:.0f}", conc=c) for c in (1, 4, 8))))
+    row("TG, coding c1 (36 prompts), tok/s median: T=0 / defaults",
+        lambda s: join(*(cell(s, ["coding_probe_median"], "{:.0f}", conc=1, sampling=m)
+                         for m in ("T=0, thinking off", "server defaults, thinking on"))))
+    row("Copy-heavy (MTP acceptance near 1), aggregate tok/s c1 / c4 / c8, mean",
+        lambda s: join(*(cell(s, ["copy_total"], "{:.1f}", conc=c) for c in (1, 4, 8))))
     sizes = (2048, 16384, 65536, 131072)
     row("PP tok/s, ISL 2K / 16K / 64K / 128K, c1",
         lambda s: join(*(cell(s, ["pp", "pp_benchy"], "{:,.0f}", conc=1, prompt_tokens=p) for p in sizes)))
@@ -966,8 +986,8 @@ def quality(rows):
     hi = re.search(r"c(\d+)-c(\d+)", v("stragglers"))
     retr = v("retrieval")
     out = ["| Check | Result | Criterion |", "|---|---|---|",
-           f"| TC-45 | **{v('tc45')}/100** | tool call emitted when the request requires one, 5 trials |",
-           f"| Hardmode | **{v('hardmode')}/100** | 88 multi-step tool-use scenarios, pass ≥ 88 |",
+           f"| Hardmode | **{v('hardmode')}/100** | score /100, pass ≥ 88 (88 scenarios), T=0, thinking on |",
+           f"| TC-45 | **{v('tc45')}/100** | regression test (1 scenario, 2 pts, 5 trials) |",
            f"| Fidelity | **{retr.split(' (')[0]}**"
            + (f" ({retr.split(' (', 1)[1]}" if " (" in retr else "")
            + " | 20 needles retrieved via tool calls, ISL 8K to ~245K |",

@@ -7,28 +7,29 @@
 <!-- numbers:start (scripts/make_charts.py writes this block) -->
 <table align="center">
   <tr>
-    <td align="center"><h2>119 tok/s</h2><b>TG, coding c1</b><br><sub>median of 36 prompts · T=0, thinking off · max 132.3</sub></td>
-    <td align="center"><h2>319 tok/s</h2><b>TG, coding aggregate c8</b><br><sub>36 prompts · T=0, thinking off</sub></td>
-    <td align="center"><h2>89 tok/s</h2><b>TG c1, defaults</b><br><sub>ISL/OSL 2048/512 · T=1.0, thinking on</sub></td>
-    <td align="center"><h2>100/100</h2><b>TC-45</b><br><sub>tool calls · 5 of 5 trials</sub></td>
+    <td align="center"><h2>89 · 119 tok/s</h2><b>TG c1</b><br><sub>defaults (ISL/OSL 2048/512) · T=0, thinking off (coding, median of 36)</sub></td>
+    <td align="center"><h2>172 · 319 tok/s</h2><b>TG aggregate c8</b><br><sub>defaults (ISL/OSL 2048/512) · T=0, thinking off (coding)</sub></td>
+    <td align="center"><h2>5.6 s</h2><b>TTFT, ISL 16K</b><br><sub>c1, cold prefix</sub></td>
+    <td align="center"><h2>90/100</h2><b>Hardmode</b><br><sub>pass ≥ 88, T=0, thinking on</sub></td>
   </tr>
 </table>
 
 <p align="center"><sub>262K context · max_num_seqs 16 · MTP ×4 · OpenAI-compatible API · quality-gated releases</sub></p>
 
-<sub>TG tok/s. Coding: median, n=36, T=0, thinking off, OSL ≤768, v2.0.0. Chat: ISL/OSL 2048/512, server defaults (T=1.0, thinking on), v2.0.0.</sub>
+<sub>TG cells: server defaults (ISL/OSL 2048/512, T=1.0, thinking on) first, T=0 coding (36 prompts, thinking off) second. Means and medians only. Release v2.0.0.</sub>
 
 <details>
 <summary><sub>Measurement details</sub></summary>
 
 | Metric | Value | Workload | Sampling | n | Release (date) | Source |
 |---|--:|---|---|---|---|---|
-| TG, coding c1 | 118.7 tok/s median, max 132.3 | 36 prompts (Python, C++, Rust, Go), OSL ≤768 | T=0, thinking off | 36 prompts, median; mean of 3 runs | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| TG, coding c1, defaults | 92.0 tok/s median | 36 prompts, OSL ≤768 | server defaults, thinking on | 36 prompts, median; mean of 3 runs | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| TG, coding aggregate c8 | 318.7 ± 2.7 tok/s | 36 prompts (Python, C++, Rust, Go), OSL ≤768, c8 | T=0, thinking off | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| TG, aggregate c16 | 231.3 ± 4.9 tok/s | llama-benchy task mode, ISL/OSL 2048/512 | T=1.0, top-p 0.95, top-k 20, thinking on | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| TG c1 | 88.7 ± 2.6 tok/s | llama-benchy task mode, ISL/OSL 2048/512 | T=1.0, top-p 0.95, top-k 20, thinking on | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| TC-45 | 100/100 | tool call required by the request | – | 5 trials | v2.0.0 (2026-10-09) | [BENCHMARKS](docs/BENCHMARKS.md) |
+| TG c1, defaults | 88.7 ± 2.6 tok/s | llama-benchy task mode, ISL/OSL 2048/512 | T=1.0, top-p 0.95, top-k 20, thinking on | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| TG c1, coding | 118.7 tok/s median | 36 prompts (Python, C++, Rust, Go), OSL ≤768 | T=0, thinking off | 36 prompts, median; mean of 3 runs | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| TG c1, coding, defaults | 92.0 tok/s median | 36 prompts, OSL ≤768; 100/108 requests hit the 768-token cap inside thinking | server defaults, thinking on | 36 prompts, median; mean of 3 runs | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| TG aggregate c8, defaults | 172.2 ± 16.3 tok/s | llama-benchy task mode, ISL/OSL 2048/512 | T=1.0, top-p 0.95, top-k 20, thinking on | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| TG aggregate c8, coding | 318.7 ± 2.7 tok/s | 36 prompts, OSL ≤768, c8 | T=0, thinking off | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| TTFT, ISL 16K | 5.64 ± 0.01 s | llama-benchy 0.4.1.dev4+g0d4de4271, c1, cold prefix | – | 3 runs, 1 boot, mean | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
+| Hardmode | 90/100 | 88 multi-step tool-use scenarios; pass ≥ 88 | T=0, thinking on | 1 gate run | v2.0.0 (2026-10-09) | [BENCHMARKS](docs/BENCHMARKS.md) |
 
 Method and full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
@@ -44,17 +45,31 @@ Method and full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 </p>
 <!-- badges:end -->
 
+> **TP=2 or DP=2?** On the same two Sparks, DP=2 (two 1x replicas behind a router) has higher aggregate TG at c8
+> (203.6 vs 172.2 tok/s) and c16 (240.9 vs 231.3 tok/s), and finished every agent-replay workload 29-37% sooner.
+> TP=2 (this recipe) is faster at c1-c4 and holds more long contexts: 13.46 concurrent 262K requests in one KV cache
+> against 2 × 3.79 for DP=2. k76, 2026-10-10, ISL/OSL 2048/512, server defaults; agent replay 2026-10-08.
+> Details: [1x vs 2x TP=2 vs 2x DP=2](#1x-vs-2x-tp2-vs-2x-dp2).
+
 ## Quick start
 
-Requirements: 2x DGX Spark with the ConnectX-7 ports cabled back to back, [sparkrun](https://github.com/eugr/sparkrun)
-≥ 0.3.6 with a two-node cluster defined.
+Requirements:
+
+- 2x DGX Spark with the ConnectX-7 ports cabled back to back, [sparkrun](https://github.com/eugr/sparkrun) ≥ 0.3.6
+  with a two-node cluster defined.
+- Kernel `6.17.0-1032-nvidia` on both nodes; `7.0.0-1019-nvidia` breaks NCCL (`ibv_reg_mr` fails past ~85 GB
+  GPU-resident).
+- `loginctl enable-linger nvidia` on both nodes (otherwise logind removes the shared-memory ring buffer).
+- ~140 GB free per node: 98 GiB checkpoint + 2.8 GB MXFP8 shard + 30.9 GB image.
 
 ```sh
 sparkrun registry add https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2
 sparkrun run qwen3.8-flash-next-2x-dgx-spark
 ```
 
-First run pulls checkpoint and image (~140 GB per node); warm boot ~3 min. `sparkrun run` returns before the
+First run downloads ~140 GB per node (time depends on the link; a 98 GB checkpoint download took 3 h 15 min at
+~8.6 MB/s on mine). Boot with model and image on disk: ~3 min (170 s on the v2.0.0 image check); a cold-page-cache boot
+was not timed on v2.0.0. `sparkrun run` returns before the
 engine is ready: poll `http://<head>:8000/health` (`<head>` = first node), then use `http://<head>:8000/v1`,
 model `qwen3.8-flash-next`:
 
@@ -153,12 +168,12 @@ requests hit the prefix cache and run PP only on the new tokens.
 <picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/depth-dark.svg"><img src="docs/img/depth-light.svg" alt="TG aggregate tok/s at context depth 0, 16K and 64K, c1/c4/c8. End values labelled." width="420"></picture>
 </p>
 
-<sub>Left: 1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0; c1, cold prefix. Right: 2x Spark TP=2 v2.0.0/v1.4.0; llm-inference-bench, 30 s sustained TG.</sub>
+<sub>Left: 1x Spark v2.1.0 · 2x Spark TP=2 v2.0.0; c1, cold prefix. Right: 2x Spark TP=2 v2.0.0; llama-benchy, ISL/OSL 2048/512 at depth.</sub>
 
 <details>
 <summary><sub>Runs, method and raw data</sub></summary>
 
-<sub>Left: c1, cold prefix (no cache hit). Each point: mean of 1 to 4 samples of one run (n per point in the CSV).<br>1x Spark: release v2.1.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271<br>2x Spark TP=2: release v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271<br>Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.<br><br>Right: 2x Spark TP=2: release v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271, mean ± sd of 3 runs, one boot; v1.4.0, 2026-10-05, llm-inference-bench 0.7.6, 30 s sustained TG, one boot (older release; shipped v2.0.0 not measured on this test yet). Server default sampling, 30 s steady-state TG window; it reads 10-30% above the OSL-512 runs of the concurrency chart, so compare points within this chart.<br>Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
+<sub>Left: c1, cold prefix (no cache hit). Each point: mean of 1 to 4 samples of one run (n per point in the CSV).<br>1x Spark: release v2.1.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271<br>2x Spark TP=2: release v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271<br>Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.<br><br>Right: 2x Spark TP=2: release v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271, mean ± sd of 3 runs, one boot. Server default sampling. Each point: ISL/OSL 2048/512 on top of the cached context, same harness as the concurrency chart. Concurrency levels measured at one depth only are left out.<br>Data: [docs/data/capability.csv](docs/data/capability.csv), with the source file of every point.</sub>
 
 </details>
 <!-- context:end -->
@@ -187,12 +202,10 @@ requests hit the prefix cache and run PP only on the new tokens.
 | 1 | 88.7 ± 2.6 | 88.7 ± 2.6 | [v2.0.0, 2026-10-10](results/k76-capability-matrix-20261010-1059/2x/) |
 | 2 | 114.9 ± 7.9 | 62.4 ± 5.3 | [v2.0.0, 2026-10-10](results/k76-capability-matrix-20261010-1059/2x/) |
 | 4 | 156.6 ± 4.6 | 48.6 ± 1.5 | [v2.0.0, 2026-10-10](results/k76-capability-matrix-20261010-1059/2x/) |
-| 5 | 160.6 ± 1.7 | 35.5 ± 0.3 | [v1.4.0, 2026-10-01](results/b1.4-20261001/) |
 | 8 | 172.2 ± 16.3 | 33.2 ± 1.0 | [v2.0.0, 2026-10-10](results/k76-capability-matrix-20261010-1059/2x/) |
-| 10 | 199.5 ± 0.4 | 24.2 ± 0.1 | [v1.4.0, 2026-10-01](results/b1.4-20261001/) |
 | 16 | 231.3 ± 4.9 | 22.1 ± 0.4 | [v2.0.0, 2026-10-10](results/k76-capability-matrix-20261010-1059/2x/) |
 
-llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd per run.
+Release v2.0.0. llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd, where sd is between runs or between boots as the CSV `stat` column says for each run.
 
 | ISL | PP tok/s | TTFT s | Release, run |
 |--:|--:|--:|---|
@@ -203,7 +216,6 @@ llama-benchy task mode, ISL/OSL 2048/512, T=1.0, thinking on; mean ± sd per run
 | 32K | 2,810 ± 5 | 11.7 ± 0.0 | [v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271](results/k76-capability-matrix-20261010-1059/2x/) |
 | 64K | 2,651 ± 2 | 24.8 ± 0.0 | [v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271](results/k76-capability-matrix-20261010-1059/2x/) |
 | 128K | 2,362 ± 3 | 55.5 ± 0.1 | [v2.0.0, 2026-10-10, llama-benchy 0.4.1.dev4+g0d4de4271](results/k76-capability-matrix-20261010-1059/2x/) |
-| 245K | – | 124.1 | [v1.4.0, 2026-10-07, fidelity_probe.py](results/longctx-concurrency-k59-20261007-0206/) |
 
 c1, cold prefix.
 <!-- matrix:end -->
@@ -252,8 +264,8 @@ c1, cold prefix.
 <!-- quality:start (scripts/make_charts.py writes this block) -->
 | Check | Result | Criterion |
 |---|---|---|
-| TC-45 | **100/100** | tool call emitted when the request requires one, 5 trials |
-| Hardmode | **90/100** | 88 multi-step tool-use scenarios, pass ≥ 88 |
+| Hardmode | **90/100** | score /100, pass ≥ 88 (88 scenarios), T=0, thinking on |
+| TC-45 | **100/100** | regression test (1 scenario, 2 pts, 5 trials) |
 | Fidelity | **20/20** | 20 needles retrieved via tool calls, ISL 8K to ~245K |
 | Stragglers | **none** | no stalled request at c8-c16 |
 
@@ -297,8 +309,9 @@ Full gate tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ### Every number and where it comes from
 
-Where the shipped release has no measurement yet, the table shows the newest release that has one; a full grid of the
-shipped releases is queued ([#128](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/128)).
+The shipped releases were measured as a full grid in k76 on 2026-10-10
+([#128](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/128)); where a cell has no k76 value,
+the table shows the newest release that has one.
 TG rows are aggregate unless marked "per request"; sampling is the server default (temperature 1.0,
 thinking on) unless the run says otherwise. The charts and tables are written by
 `uv run scripts/make_charts.py` from [`docs/data/capability.csv`](docs/data/capability.csv), where every point lists
@@ -311,8 +324,8 @@ its raw file. Full grids for every build: [docs/BENCHMARKS.md](docs/BENCHMARKS.m
 | TG c4, tok/s: per request / aggregate | 32.4 <sup>a</sup> / 111.4 <sup>a</sup> | 48.6 <sup>b</sup> / 156.6 <sup>b</sup> | 43.4 <sup>c</sup> / 137.5 <sup>c</sup> |
 | TG c8, tok/s: per request / aggregate | 22.0 <sup>a</sup> / 132.9 <sup>a</sup> | 33.2 <sup>b</sup> / 172.2 <sup>b</sup> | 32.5 <sup>c</sup> / 203.6 <sup>c</sup> |
 | TG c16, tok/s: per request / aggregate | > max_num_seqs 8 | 22.1 <sup>b</sup> / 231.3 <sup>b</sup> | 21.7 <sup>c</sup> / 240.9 <sup>c</sup> |
-| TG, coding c1 (36 prompts), tok/s median (max): T=0 / defaults | 77 <sup>d</sup> (87) <sup>d</sup> / 61 <sup>d</sup> (74) <sup>d</sup> | 119 <sup>e</sup> (132) <sup>e</sup> / 92 <sup>e</sup> (111) <sup>e</sup> | not measured |
-| Copy-heavy (MTP acceptance near 1), aggregate tok/s c1 / c4 / c8, max of 3 rounds | 81 <sup>f</sup> / 193 <sup>f</sup> / 283 <sup>f</sup> | 124 <sup>g</sup> / 309 <sup>g</sup> / 464 <sup>g</sup> | not measured |
+| TG, coding c1 (36 prompts), tok/s median: T=0 / defaults | 77 <sup>d</sup> / 61 <sup>d</sup> | 119 <sup>e</sup> / 92 <sup>e</sup> | not measured |
+| Copy-heavy (MTP acceptance near 1), aggregate tok/s c1 / c4 / c8, mean | 80.8 <sup>f</sup> / 183.5 <sup>f</sup> / 274.1 <sup>f</sup> | 120.5 <sup>g</sup> / 303.5 <sup>g</sup> / 453.4 <sup>g</sup> | not measured |
 | PP tok/s, ISL 2K / 16K / 64K / 128K, c1 | 1,760 <sup>a</sup> / 1,866 <sup>a</sup> / 1,993 <sup>a</sup> / 1,812 <sup>a</sup> | 2,809 <sup>b</sup> / 2,913 <sup>b</sup> / 2,651 <sup>b</sup> / 2,362 <sup>b</sup> | not measured |
 | TTFT s, ISL 2K / 16K / 64K / 128K, cold prefix | 1.2 <sup>a</sup> / 9.1 <sup>a</sup> / 32.9 <sup>a</sup> / 72.5 <sup>a</sup> | 0.7 <sup>b</sup> / 5.6 <sup>b</sup> / 24.8 <sup>b</sup> / 55.5 <sup>b</sup> | not measured |
 | ITL p50, ms, c1 / c8 (MTP emits several tokens per step) | 19 <sup>h</sup> / 47 <sup>h</sup> | 13 <sup>i</sup> / 31 <sup>i</sup> | 19 <sup>j</sup> / 48 <sup>j</sup> |
@@ -362,7 +375,7 @@ Releases and runs behind the numbers:
 | **Disk** | ~140 GB per node (98 GiB checkpoint + 2.8 GB MXFP8 shard of 7c4f1bc1 + ~31 GB image) |
 | **Kernel** | `6.17.0-1032-nvidia`. `7.0.0-1019-nvidia` breaks NCCL `ibv_reg_mr` past ~85 GB GPU-resident ([forum](https://forums.developer.nvidia.com/t/dgx-spark-regression-kernel-7-0-0-1019-nvidia-causes-nccl-roce-ibv-reg-mr-iova2-enomem-6-17-0-1032-works/383023)) |
 | **Host setting** | `loginctl enable-linger nvidia` on both nodes (otherwise logind `RemoveIPC` kills the shm ring buffer) |
-| **Boot** | ~3 min warm (170 s on the v2.0.0 image check); a cold boot was not timed on v2.0.0 (v1.5.0: ~9.5 min) |
+| **Boot** | ~3 min warm (170 s on the v2.0.0 image check); a cold-page-cache boot was not timed on v2.0.0 (v1.5.0: ~9.5 min) |
 | **Concurrency** | `max_num_seqs` 16, KV pool 3,527,297 tokens on the v2.0.0 check boot (vLLM sizes it at each boot; v1.x boots logged 3.57M to 3.76M, and the per-rank MXFP8 copies of v2.0.0 take about 4%) |
 
 Checkpoint: [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE)
@@ -381,13 +394,13 @@ from its shard 35, which the recipe downloads on the first boot. Image and video
   ([long contexts at once](docs/BENCHMARKS.md#long-contexts-at-once-on-2-b14-2026-10-07)).
 - v2.0.0 reads the MXFP8 PP weights from shard 35 of the 7c4f1bc1 snapshot in the HF cache by its full path.
   Deleting the HF cache means downloading that shard (2.8 GB) again on the next boot, which the recipe does by itself.
-- The v2.0.0 A/B measured 1, 4 and 8 requests against v1.5.0. 16 requests was checked on the shipped image only:
-  236.6 tok/s total against 242.8 on v1.4.0 (-2.6%, inside the 3% noise of that run); with 9-16 requests the GDN
-  layers run the same MXFP8 weights as v1.5.0.
+- The v2.0.0 A/B measured c1, c4 and c8 against v1.5.0; c16 was not part of the A/B. k76 measured the shipped
+  v2.0.0 at c16: 231.3 ± 4.9 tok/s aggregate (v1.4.0 A/B: 242.8). At c9-c16 the GDN layers run the same MXFP8 weights
+  as v1.5.0.
 - c1 TG varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting).
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every release.
-- Above 16 requests: a `max_num_seqs` 32 run (quality gate not run at that cap) reached 290.7 tok/s coding at 32
-  requests, max of 3 runs ([high concurrency](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05)).
+- Above 16 requests: a `max_num_seqs` 32 run (quality gate not run at that cap) reached 285.5 tok/s aggregate TG at c32
+  (llama-benchy task mode, mean of 3 runs, v1.4.0; [high concurrency](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05)).
 
 </details>
 
