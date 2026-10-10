@@ -1,10 +1,40 @@
-# Release: v1.5.0 (old name b1.6)
+# Release: v2.0.0 (k73-2x-gdnmse-dispatch)
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
 # 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
+# v2.0.0 (2026-10-09, k73-2x-gdnmse-dispatch, #123): v1.5.0 (old name b1.6) on the GDN-MSE checkpoint with an M-dispatch.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 = local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+#     @ 7c4f1bc1 with the GDN in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16
+#     base to weight-only NVFP4 (per-block MSE scale search) and drafter D1 (the 24 retrained mtp.* tensors that
+#     v1.5.0 spliced in through an overlay). Every other tensor is byte-identical to 7c4f1bc1. MAJOR: the main weights
+#     change, so outputs change. Qwen Community License 1.0.
+#   - VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS=41: those GDN layers also hold the MXFP8 weights of 7c4f1bc1 (shard 35, fetched
+#     before the server starts when it is not in the HF cache) and serve calls of 41+ rows (prefill) with them. Decode
+#     steps of up to 8 requests (8 x 5 = 40 rows) run NVFP4; with 9-16 requests a step has 45-80 rows and runs MXFP8
+#     like v1.5.0 (on the newer vLLM and b12x). At TP=2 each rank cuts its own slice of the MXFP8 tensors
+#     the same way as the NVFP4 weights of that layer. The GDN-MSE weights alone at TP=2 (b1.5, 2026-10-03) failed the
+#     128K fidelity gate (18/20, 20/20, 19/20) with every prefill on NVFP4; with the dispatch prefill runs MXFP8.
+#   - KV pool 3.52M tokens (v1.5.0 3.66M-3.76M) at the same gpu_memory_utilization: the MXFP8 copies take the difference.
+#   - Image: vLLM d21d7ade (ursuciprian/vllm feat/k73-mxfp8-large-m-tp = exp/v3d 5dad364d + per-rank MXFP8 copies for
+#     TP>1), b12x 21e0b201, b12x plan seed 6fdfaa4c (682 records: v1.5.0's 616 at their selections + 66 GDN plans of
+#     this path) and the torch AOT compile cache of the bake boots of both ranks in /opt/b12x-seed.
+#   - Screen vs v1.5.0 (k73, Thunderdome rules on the pair, boots v1.5.0, c26, c41, c41, c26, v1.5.0, T=0 probe
+#     cells, plans pinned, 0 plans measured on every counted boot): acceptance per draft position within 0.007
+#     (0.853/0.709/0.589/0.492 -> 0.852/0.710/0.587/0.485); fresh c1 +19.0% (noise 11.6%), fresh c4 +3.2% (4.7%),
+#     fresh c8 +8.6% (10.4%), 16K c4 +4.8% (5.5%), counting c8 +12.0% (17.7%), 16K c8 wall +4.6% (7.5%); decode step
+#     -6.7% c1, -4.0% c4, -3.1% c8; llama-benchy (T=1, mean of 2 boots) tg512 c1 82.4 -> 89.3 tok/s (noise 12.3%),
+#     tg512 c8 173.3 -> 187.9 (noise 11.3%), pp2048 c1 2808 -> 2831 (noise 1.6%). No cell worse beyond noise.
+#     Cutoff 26 also passed (fresh c1 +11.7%, 16K c4 +7.9%); 41 won. Compact GDN records + shared prefill staging
+#     on top of 41 was INCONCLUSIVE and is not part of this release.
+#   - Gate (one TP=2 boot): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k plus two more 128k seeds
+#     20/20, stragglers c8/c12/c16 0 preemptions, min MemAvailable 9.48 GiB.
+#   Results: results/k73-tp2-gdnmse-dispatch-20261009-1621, results/k77-2x-ship-check-20261009-2149. Rollback:
+#   qwen3.8-flash-next-2x-dgx-spark-previous (v1.5.0).
+#
+# Base: v1.5.0 (old name b1.6) header below.
 # b1.6 (2026-10-08, #115): b1.4 + the retrained MTP drafter (#97 refit run 1, the drafter of the 1x v3e).
 #   - Main model unchanged: local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1. Only the 24 dense BF16 mtp.*
 #     tensors of model-00034 change, to their values in ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54
@@ -27,14 +57,15 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark
-description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-10-08 build, b1.6: retrained MTP drafter)."
+description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-10-09 build, v2.0.0: GDN-MSE checkpoint, NVFP4 GDN decode / MXFP8 prefill)."
 
-model: local-inference-lab/Qwen3.8-Flash-Next-NVFP4
+model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
-# key, and the overlay (docker/mtp-refit/overlay.py) reads the 7c4f1bc1 snapshot
-# by its full path, so each rank serves exactly that revision (b1.4 and earlier
-# pinned it with --revision; docs/ENGINEERING.md known issues).
-model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
+# key, and --revision in `command` makes each rank serve exactly that revision
+# (docs/ENGINEERING.md known issues). The MXFP8 prefill weights come from
+# local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1 (shard 35), pinned by
+# full path in VLLM_B12X_NVFP4_MXFP8_CHECKPOINT and fetched by `command`.
+model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
 # B1.4 image, promoted 2026-10-01: build.sh image spark-vllm-b12x:b14-b7fbaf96-a7e649d8
 # (vLLM ursuciprian/vllm exp/b14@a7e649d8, tag shipped-b1.4-20261001 = b1.3 7344a9976
 # + the r6/r7 MTP draft-vocab support (VLLM_MTP_DRAFT_VOCAB) + vllm#923 QSA prefill-flag
@@ -59,8 +90,14 @@ model_revision: 7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd
 # docker/b0-warm with the 15b63901 seed (CI build-b0-warm). vLLM and b12x are b1.4's.
 # Digest of the b1.6 tag: sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4 (arm64; kept as a tag,
 # see below). Check boot (results/b1.6-20261008): 221 s, 0 b12x plans measured (scripts/check_seed.py).
-# Previous recommended (b1.4 image, 2026-10-01): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:b1.6-20261008-b7fbaf96-a7e649d8-warm
+# v2.0.0 image (2026-10-09, k73): built from the 1x v3e image's base with vLLM d21d7ade and b12x 21e0b201, plus the
+# TP=2 plan seed 6fdfaa4c and the torch AOT cache of both ranks, plus docker/b0-warm (CI build-b0-warm). The same image
+# is also tagged 2x-v2.0.0. Digest: sha256:8abb60eeeb79ca13680341c17d87975801da1218c06df2505856b23da7ed1821 (arm64; kept as a tag, see above).
+# Check boot (k77-2x-ship-check, results/k77-2x-ship-check-20261009-2149): runtime caches without the plan file and
+# AOT keys, up in 170 s, 0 b12x plans measured on both ranks (scripts/check_seed.py), AOT loaded, no Dynamo compile,
+# fresh-c4 T=0 acceptance 0.842/0.692/0.562/0.449, llama-benchy tg512 c1 81.2 / c8 199.7 / c16 236.6 tok/s.
+# Previous recommended (b1.6 image, 2026-10-08): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:k73-20261009-21e0b201-d21d7ade-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -81,7 +118,9 @@ max_nodes: 2
 # it, so the recipe needs no volumes (and sparkrun ignores `volumes` from an
 # untrusted registry recipe anyway). The first line of `command` seeds the
 # b12x plan-selection cache from the image; see docker/b0-warm/Dockerfile. The
-# second builds the drafter overlay (b1.6 header) and fails the boot if it cannot.
+# second seeds the torch AOT compile cache from the image. The third fetches
+# shard 35 of 7c4f1bc1 (the MXFP8 prefill weights, v2.0.0 header) when the HF
+# cache lacks it and fails the boot if it cannot.
 
 defaults:
   port: 8000
@@ -96,6 +135,10 @@ defaults:
   gpu_memory_utilization: 0.80
 
 env:
+  # M-dispatch (v2.0.0, k73): GDN in_proj_qkvz / out_proj calls below 41 rows (decode) run the
+  # checkpoint's NVFP4 weights, calls of 41+ rows (prefill) the MXFP8 weights of 7c4f1bc1.
+  VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
+  VLLM_B12X_NVFP4_MXFP8_CHECKPOINT: "/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
   # HC (hyper-connection) mixers online MXFP8, router gate stays BF16 (promoted
   # 2026-09-27, vLLM feat/hc-mxfp8-on-b1.1 a9aa81b23). See the comment block above
   # container: for the A/B numbers.
@@ -195,12 +238,14 @@ env:
 # qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
-  python3 /opt/mtp-refit/overlay.py build || exit 1
-  vllm serve /cache/runtime/mtp-refit/Qwen3.8-Flash-Next-NVFP4-7c4f1bc1-mtp-16c9bd54 \
+  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
+  M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
+  vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
+    --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d \
     --host {host} \
     --port {port} \
     --trust-remote-code \
-    --served-model-name qwen3.8-flash-next local-inference-lab/Qwen3.8-Flash-Next-NVFP4 \
+    --served-model-name qwen3.8-flash-next ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
     --tensor-parallel-size {tensor_parallel} \
     --pipeline-parallel-size {pipeline_parallel} \
     --mamba-cache-mode align \

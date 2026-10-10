@@ -1,0 +1,117 @@
+{
+ "arm": "GDN-MSE checkpoint @ 16c9bd54 (drafter D1 included) + M-dispatch cutoff 41 (NVFP4 GDN weights below 41 rows, per-rank MXFP8 copies of 7c4f1bc1 at 41+), vLLM d21d7ade, b12x 21e0b201, plans pinned to the control's selections for every shared key",
+ "baseline": "shipped 2x v3.1.0 (old name b1.6), TP=2 over two Sparks",
+ "design": "Thunderdome rules on the pair: boots ctl, c26, c41, c41, c26, ctl; T=0 probe cells + llama-benchy 4 runs; noise = max(1%, control boot-to-boot, CI half-width); 0 plans measured on every counted boot",
+ "quality_gate": {
+  "pass": true,
+  "hardmode": [
+   90
+  ],
+  "tc45": [
+   100
+  ],
+  "fidelity": "20/20 exact at 8k/32k/64k and 128k x3 seeds",
+  "stragglers_preemptions": 0,
+  "min_mem_available_gib": 9.48
+ },
+ "acceptance_per_position_T0": {
+  "pair": {
+   "control": [
+    0.853,
+    0.709,
+    0.589,
+    0.492
+   ],
+   "arm": [
+    0.852,
+    0.71,
+    0.587,
+    0.485
+   ]
+  }
+ },
+ "cells_arm_vs_control": {
+  "pair": {
+   "fresh_c1": {
+    "pct": 18.95,
+    "noise_pct": 11.58,
+    "beyond_noise": true
+   },
+   "fresh_c4": {
+    "pct": 3.22,
+    "noise_pct": 4.69,
+    "beyond_noise": false
+   },
+   "fresh_c8": {
+    "pct": 8.6,
+    "noise_pct": 10.35,
+    "beyond_noise": false
+   },
+   "d16k_c4": {
+    "pct": 4.83,
+    "noise_pct": 5.47,
+    "beyond_noise": false
+   },
+   "count_c8": {
+    "pct": 11.98,
+    "noise_pct": 17.74,
+    "beyond_noise": false
+   },
+   "d16k_c8_wall": {
+    "pct": 4.6,
+    "noise_pct": 7.45,
+    "beyond_noise": false
+   },
+   "pp2048_c1": {
+    "pct": 0.82,
+    "noise_pct": 1.55,
+    "beyond_noise": false
+   },
+   "tg512_c1": {
+    "pct": 8.38,
+    "noise_pct": 12.34,
+    "beyond_noise": false
+   },
+   "tg512_c8": {
+    "pct": 8.41,
+    "noise_pct": 11.26,
+    "beyond_noise": false
+   }
+  }
+ },
+ "decode_step_change_pct": {
+  "fresh_c1": -6.72,
+  "fresh_c4": -3.96,
+  "fresh_c8": -3.14,
+  "d16k_c4": -5.34,
+  "count_c8": -10.15
+ },
+ "thunderdome_verdict": {
+  "pair": "PROMOTE"
+ },
+ "coverage_note": "No c16 A/B cell was measured. At 9-16 requests a decode step has 45-80 rows and runs the MXFP8 GDN path, the same weights as the control, on newer vLLM/b12x; the gate's straggler probe at c16 was clean.",
+ "kv_pool_tokens": {
+  "control": [
+   3755980,
+   3658739
+  ],
+  "arm": [
+   3525078,
+   3522120
+  ]
+ },
+ "history": "b1.5 (GDN-MSE at TP=2 without the dispatch) failed 128k fidelity (18/20, 20/20, 19/20). Cutoff 26 also PROMOTE (fresh c1 +11.7%, d16k c4 +7.9%). Compact records on top of c41: INCONCLUSIVE, not shipped.",
+ "rules": "Quality gate (non-negotiable, checked in code): hardmode >= 88, TC-45 100, fidelity 20/20 exact at 8k/32k/64k/128k, stragglers c8-c16 with 0 preemptions. Speed: ship if the arm is faster beyond the cell's noise band in at least one cell and no c1..c16 cell is worse beyond noise; a beyond-noise loss anywhere caps the verdict at ship_with_caveat at best, a low-concurrency (c1-c4) loss that is not tiny means reject. A cell whose difference is inside its noise band is neither a win nor a loss. The arm changes the checkpoint (GDN projections requantized to weight-only NVFP4, served below 41 rows; MXFP8 of the base at 41+ rows), so acceptance per draft position must stay within 0.03 of the control.",
+ "losses_beyond_noise": [],
+ "verdict": "reject",
+ "confidence": 0.47,
+ "probabilities": {
+  "ship": 0.34,
+  "ship_with_caveat": 0.06,
+  "reject": 0.6,
+  "rerun": 0.0
+ },
+ "cap_note": null,
+ "judge": "Jev (TypeSafe System One), Choice",
+ "generated_at": "2026-10-09T20:17:50+0300"
+}
