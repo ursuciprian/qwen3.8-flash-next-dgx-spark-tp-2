@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """Decode at depth, per stream chunk: separates kernel slowdown from stalls.
 
 llama-benchy reports one mean tok/s per cell, which cannot tell a uniformly
@@ -26,6 +30,12 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 COUNTERS = {
     "accepted": "vllm:spec_decode_num_accepted_tokens_total",
@@ -68,6 +78,7 @@ def trim(base, model, text, target):
     return text[:lo]
 
 
+@traced("depth-decode")
 def stream(base, model, content, args, on_chunk=None):
     body = {"model": model, "messages": [{"role": "user", "content": content}],
             "max_tokens": args.max_tokens, "min_tokens": args.max_tokens,
@@ -94,6 +105,8 @@ def stream(base, model, content, args, on_chunk=None):
     gaps = [b - a for a, b in zip(times, times[1:])]
     stalls = [g for g in gaps if g * 1000 > args.stall_ms]
     span = (times[-1] - times[0]) if len(times) > 1 else 0.0
+    note(prompt_tokens=usage.get("prompt_tokens"), completion_tokens=comp,
+         ttft_s=(times[0] - t0) if times else None)
     return {
         "prompt_tokens": usage.get("prompt_tokens"), "completion_tokens": comp,
         "ttft_s": (times[0] - t0) if times else None,

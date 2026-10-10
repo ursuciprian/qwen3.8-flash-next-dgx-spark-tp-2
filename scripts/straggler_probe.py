@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """Straggler probe: per-request wall time + /metrics deltas at given concurrencies.
 
 Recreated after /tmp/straggler.py was lost in the 2026-09-19 power cycle.
@@ -17,6 +21,12 @@ import sys
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 BASE = "http://localhost:8000"
 MODEL = "qwen3.8-flash-next"
@@ -39,8 +49,9 @@ def metrics():
     return out
 
 
+@traced("straggler")
 def one_request(_):
-    body = json.dumps({
+    payload = {
         "model": MODEL,
         "messages": [{"role": "user", "content": PROMPT}],
         "max_tokens": MAX_TOK,
@@ -49,12 +60,14 @@ def one_request(_):
         "chat_template_kwargs": {"enable_thinking": False},
         "ignore_eos": True,
         "stream_options": {"include_usage": True},
-    }).encode()
+    }
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{BASE}/v1/chat/completions", data=body,
                                   headers={"Content-Type": "application/json"})
     t0 = time.monotonic()
     t_first = None
-    tokens = 0
+    tokens = prompt_tokens = 0
+    text = []
     with urllib.request.urlopen(req, timeout=600) as r:
         for raw in r:
             line = raw.decode().strip()
@@ -64,11 +77,15 @@ def one_request(_):
             usage = chunk.get("usage")
             if usage:
                 tokens = usage.get("completion_tokens", tokens)
+                prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
                 continue
             delta = chunk.get("choices", [{}])[0].get("delta", {})
             if delta.get("content") and t_first is None:
                 t_first = time.monotonic()
+            text.append(delta.get("content") or "")
     t_last = time.monotonic()
+    note(inputs=payload, outputs={"content": "".join(text)}, prompt_tokens=prompt_tokens,
+         completion_tokens=tokens, ttft_s=(t_first or t_last) - t0)
     return t0, t_first or t_last, t_last, tokens
 
 

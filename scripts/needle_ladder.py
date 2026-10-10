@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """Needle-in-a-haystack ladder against an OpenAI-compatible endpoint.
 
 For each depth, builds a deterministic prose haystack of roughly that many tokens, plants three
@@ -10,6 +14,12 @@ a JSON summary. Exit code 1 if any depth scores below 3/3.
   needle_ladder.py --base http://host:8000 --model m --depths 8000,32000,64000,100000 --out x.json
 """
 import argparse, json, random, sys, time, urllib.request
+
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 WORDS = ("harbor lantern granite meadow copper orchard willow quarry ember thistle saddle canvas "
          "ledger anvil compass furrow tallow gable mortar plinth cistern spindle rafter tether "
@@ -42,6 +52,7 @@ def plant(text, needles):
     return "".join(parts)
 
 
+@traced("needle")
 def ask(base, model, prompt, question, timeout):
     body = {"model": model, "temperature": 0, "max_tokens": 48, "stream": False,
             "chat_template_kwargs": {"enable_thinking": False},
@@ -51,6 +62,7 @@ def ask(base, model, prompt, question, timeout):
                                  {"Content-Type": "application/json"})
     t = time.time()
     r = json.load(urllib.request.urlopen(req, timeout=timeout))
+    note(prompt_tokens=r["usage"]["prompt_tokens"], completion_tokens=r["usage"]["completion_tokens"])
     return r["choices"][0]["message"]["content"], r["usage"]["prompt_tokens"], time.time() - t
 
 

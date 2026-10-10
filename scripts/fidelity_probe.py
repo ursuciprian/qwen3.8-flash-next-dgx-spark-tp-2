@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """Identifier-fidelity probe: synthetic long agent transcript with near-duplicate paths planted
 at spread depths, then a final turn that forces the model to reproduce one exact path inside a
 bash tool call. Scores exact / near-miss (typo, distance 1-3) / wrong / no_call, plus whether the
@@ -9,6 +13,12 @@ produced path is hallucinated (not present anywhere in the transcript).
 """
 import argparse, json, random, re, sys, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor
+
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 CLIENT_BASES = ["acme-billing", "acme-billling", "acme-biling", "umbra-systems", "umbra-systms",
                  "nordic-freight", "nordic-frieght", "delta-logix", "delta-logic",
@@ -130,6 +140,7 @@ def score_trial(target_path, other_paths, message):
     return score_command(target_path, other_paths, cmd)
 
 
+@traced("fidelity")
 def ask(base, model, messages, temperature, max_tokens, thinking, timeout):
     body = {"model": model, "messages": messages, "tools": TOOLS, "tool_choice": "auto",
             "temperature": temperature, "max_tokens": max_tokens, "stream": True,
@@ -163,6 +174,7 @@ def ask(base, model, messages, temperature, max_tokens, thinking, timeout):
                     slot["function"]["name"] += fn.get("name") or ""
                     slot["function"]["arguments"] += fn.get("arguments") or ""
     message = {"content": content or None, "tool_calls": [tool_calls[i] for i in sorted(tool_calls)] or None}
+    note(prompt_tokens=usage.get("prompt_tokens"), completion_tokens=usage.get("completion_tokens"), ttft_s=ttft)
     return message, usage, ttft or 0.0, time.time() - t0
 
 

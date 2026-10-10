@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """Decode-rate probe matching tonyd2wild's published method.
 
 Streaming chat-completions, temp 0, warmed, measured on the head node against
@@ -8,6 +12,12 @@ Repeats each prompt class, because run-to-run variance on these boxes is large
 and a single sample is noise.
 """
 import json, statistics, sys, time, urllib.request
+
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 URL = "http://192.168.100.62:8000/v1/chat/completions"
 MODEL = sys.argv[1] if len(sys.argv) > 1 else "qwen3.8-flash-next"
@@ -22,6 +32,7 @@ PROMPTS = {
 }
 
 
+@traced("decode")
 def run(prompt):
     body = json.dumps({
         "model": MODEL,
@@ -33,8 +44,10 @@ def run(prompt):
     }).encode()
     req = urllib.request.Request(URL, data=body,
                                 headers={"Content-Type": "application/json"})
+    t0 = time.perf_counter()
     t_first = t_last = None
-    completion = 0
+    completion = prompt_tokens = 0
+    text = []
     with urllib.request.urlopen(req, timeout=600) as r:
         for raw in r:
             line = raw.decode().strip()
@@ -47,13 +60,17 @@ def run(prompt):
             usage = obj.get("usage")
             if usage:
                 completion = usage.get("completion_tokens", completion)
+                prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
             ch = obj.get("choices") or []
             d = (ch[0].get("delta") or {}) if ch else {}
+            text.append(d.get("content") or "")
             if d.get("content") or d.get("reasoning_content") or d.get("reasoning"):
                 now = time.perf_counter()
                 if t_first is None:
                     t_first = now
                 t_last = now
+    note(outputs={"content": "".join(text)}, prompt_tokens=prompt_tokens, completion_tokens=completion,
+         ttft_s=(t_first - t0) if t_first else None)
     if not t_first or not t_last or t_last <= t_first or completion < 2:
         return None
     return (completion - 1) / (t_last - t_first)

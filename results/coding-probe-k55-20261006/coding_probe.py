@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["mlflow-tracing>=3.17"]  # optional: traces only when MLFLOW_TRACKING_URI is set
+# ///
 """k55: single-request decode speed on real Python coding prompts (c1, sequential).
 
 decode tok/s = (completion_tokens - 1) / (t_last_token - t_first_token)   (same as scripts/decode_probe.py)
@@ -9,7 +13,14 @@ Settings:
 Usage: python3 coding_probe.py <host> <label> <outdir> [max_tokens] [langs: python,cpp,rust,go (default all)]
 Prompts: 12 Python (k55) + 8 each C++, Rust, Go (k55b, 2026-10-06); summaries per language and all languages.
 """
-import json, statistics, sys, time, urllib.request
+import json, os, statistics, sys, time, urllib.request
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+try:
+    from mlflow_trace import traced, note
+except ImportError:  # helper not shipped next to this copy: run untraced
+    def traced(_benchmark): return lambda fn: fn
+    def note(**_kw): pass
 
 HOST, LABEL, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 MAX_TOK = int(sys.argv[4]) if len(sys.argv) > 4 else 768
@@ -84,13 +95,15 @@ def metrics():
     return d, a
 
 
+@traced("coding")
 def run(prompt, extra):
     body = {"model": MODEL, "messages": [{"role": "user", "content": prompt}], "max_tokens": MAX_TOK,
             "stream": True, "stream_options": {"include_usage": True}, **extra}
     req = urllib.request.Request(f"{BASE}/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     d0, a0 = metrics()
-    t0 = time.perf_counter(); t_first = t_last = None; completion = 0; finish = None; nreason = ncontent = 0
+    t0 = time.perf_counter(); t_first = t_last = None; completion = prompt_tokens = 0; finish = None; nreason = ncontent = 0
+    text, reasoning = [], []
     with urllib.request.urlopen(req, timeout=900) as r:
         for raw in r:
             line = raw.decode().strip()
@@ -101,11 +114,13 @@ def run(prompt, extra):
             obj = json.loads(line[6:])
             if obj.get("usage"):
                 completion = obj["usage"].get("completion_tokens", completion)
+                prompt_tokens = obj["usage"].get("prompt_tokens", prompt_tokens)
             ch = obj.get("choices") or []
             if ch and ch[0].get("finish_reason"):
                 finish = ch[0]["finish_reason"]
             dl = (ch[0].get("delta") or {}) if ch else {}
             rc = dl.get("reasoning_content") or dl.get("reasoning")
+            text.append(dl.get("content") or ""); reasoning.append(rc or "")
             if dl.get("content") or rc:
                 now = time.perf_counter()
                 t_first = t_first or now
@@ -114,10 +129,13 @@ def run(prompt, extra):
     d1, a1 = metrics()
     dd, da = d1 - d0, a1 - a0
     ok = t_first and t_last > t_first and completion >= 2
-    return {"decode_tps": (completion - 1) / (t_last - t_first) if ok else None,
+    res = {"decode_tps": (completion - 1) / (t_last - t_first) if ok else None,
             "ttft_s": (t_first - t0) if t_first else None, "completion_tokens": completion, "finish": finish,
             "reasoning_chunks": nreason, "content_chunks": ncontent, "drafts": dd, "accepted": da,
             "tokens_per_step": 1 + da / dd if dd else None}
+    note(outputs={**res, "content": "".join(text), "reasoning": "".join(reasoning)},
+         prompt_tokens=prompt_tokens, completion_tokens=completion, ttft_s=res["ttft_s"])
+    return res
 
 
 def main():
