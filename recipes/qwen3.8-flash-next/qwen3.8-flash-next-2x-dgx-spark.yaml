@@ -133,8 +133,17 @@ defaults:
   max_num_batched_tokens: 8192
   num_speculative_tokens: 4
   gpu_memory_utilization: 0.80
+  # Request traces (k82, tp-2 #143): vLLM sends one OpenTelemetry span per finished request (queue, prefill and
+  # decode time, token counts; no prompt or reply text) to this OTLP/HTTP endpoint, here MLflow on my network.
+  # Another collector: -o otlp_traces_endpoint=http://<host>:<port>/v1/traces. Outputs do not change.
+  otlp_traces_endpoint: http://192.168.68.59:5050/v1/traces
 
 env:
+  # OTLP/HTTP for --otlp-traces-endpoint (vLLM defaults to gRPC, which MLflow does not accept); the header puts the
+  # spans in MLflow experiment 3. Another collector: -e OTEL_EXPORTER_OTLP_TRACES_HEADERS=<key>=<value>.
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/protobuf"
+  OTEL_EXPORTER_OTLP_TRACES_HEADERS: "x-mlflow-experiment-id=3"
+  OTEL_SERVICE_NAME: "qwen3.8-flash-next-2x"
   # M-dispatch (v2.0.0, k73): GDN in_proj_qkvz / out_proj calls below 41 rows (decode) run the
   # checkpoint's NVFP4 weights, calls of 41+ rows (prefill) the MXFP8 weights of 7c4f1bc1.
   VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
@@ -273,4 +282,5 @@ command: |
     --enable-auto-tool-choice \
     --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
     --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
-    --gpu-memory-utilization {gpu_memory_utilization}
+    --gpu-memory-utilization {gpu_memory_utilization} \
+    --otlp-traces-endpoint {otlp_traces_endpoint}

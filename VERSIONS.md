@@ -41,6 +41,10 @@ paired probes or the llama-benchy coding grid); details in [docs/BENCHMARKS.md](
 
 After v2.0.0, a drafter, kernel, precision, image or KV change is v2.1.0 and a fix without speed claims is v2.0.1.
 
+Pending ([#143](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/issues/143), k82-otlp-traces-ab):
+request traces to MLflow (`--otlp-traces-endpoint` plus `OTEL_*` env). Outputs do not change, so it ships as the next
+PATCH once the A/B shows no cell worse beyond noise.
+
 Every release passed the quality gate. b1.5 (GDN-MSE main weights at TP=2) failed the 128K fidelity gate and never
 shipped.
 
