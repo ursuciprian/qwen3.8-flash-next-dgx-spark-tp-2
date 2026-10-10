@@ -1,0 +1,47 @@
+Boot-to-boot noise and GPU power of the shipped builds (k86-boot-noise-power): 1x v2.2.0 booted 3 times on each Spark (both at once) and 2x v2.0.0 booted 3 times, the same cells at every boot.
+
+Cells: llama-benchy pp2048/tg512 task mode, 3 runs per boot, c1 and c8, at T=1.0 top-p 0.95 top-k 20 with thinking on (`tgdef`) and at T=0 with thinking off (`tgt0`); the 36-prompt coding probe at T=0 with thinking off, c1 and c8, 3 passes per boot. `sd boots` is the standard deviation of the per-boot means; `sd within` is the mean standard deviation of the runs inside one boot. 1x rows are per Spark (3 boots each) and pooled (6 boots).
+
+Power: nvidia-smi power.draw sampled at 1 Hz on both Sparks for the whole job, averaged over each cell's window. This is GPU power as nvidia-smi reports it for the GB10, not wall power (no CPU, memory, NIC or PSU loss). 2x adds both Sparks. Idle = 120 s with the server up and no requests. tok/s/W = the cell's aggregate output tok/s over that mean.
+
+```
+Results: /home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k86-boot-noise-power-20261010-1704
+
+== 1x-v2.2.0
+cell                      hosts        units  tok/s mean  sd boots   cv % sd within   GPU W  tok/s/W
+coding-t0-nothink-c1      dgx01            3        75.2      0.17    0.2      0.60    24.6    3.049
+coding-t0-nothink-c8      dgx01            3       191.7      1.07    0.6      0.58    26.9    7.134
+idle                      dgx01            3           -         -      -         -     9.5        -
+tgdef-c1                  dgx01            3        61.4      2.55    4.2      2.78    24.8    2.481
+tgdef-c8                  dgx01            3       139.2      1.71    1.2      8.78    29.5    4.714
+tgt0-c1                   dgx01            3        72.4      3.16    4.4      6.33    25.9    2.797
+tgt0-c8                   dgx01            3       150.7      2.83    1.9      8.78    29.9    5.041
+coding-t0-nothink-c1      dgx02            3        74.7      0.23    0.3      0.49    23.9    3.121
+coding-t0-nothink-c8      dgx02            3       192.2      1.10    0.6      1.53    25.6    7.502
+idle                      dgx02            3           -         -      -         -    10.0        -
+tgdef-c1                  dgx02            3        59.4      4.05    6.8      3.70    23.7    2.503
+tgdef-c8                  dgx02            3       134.2      2.39    1.8     10.31    28.3    4.747
+tgt0-c1                   dgx02            3        73.3      0.27    0.4      7.45    25.4    2.889
+tgt0-c8                   dgx02            3       147.8     11.26    7.6      8.57    29.0    5.089
+coding-t0-nothink-c1      pooled           6        74.9      0.31    0.4      0.55    24.3    3.085
+coding-t0-nothink-c8      pooled           6       192.0      1.02    0.5      1.06    26.2    7.318
+idle                      pooled           6           -         -      -         -     9.7        -
+tgdef-c1                  pooled           6        60.4      3.22    5.3      3.24    24.2    2.492
+tgdef-c8                  pooled           6       136.7      3.30    2.4      9.55    28.9    4.730
+tgt0-c1                   pooled           6        72.8      2.07    2.8      6.89    25.6    2.843
+tgt0-c8                   pooled           6       149.2      7.52    5.0      8.68    29.5    5.065
+
+== 2x-v2.0.0
+cell                      hosts        units  tok/s mean  sd boots   cv % sd within   GPU W  tok/s/W
+coding-t0-nothink-c1      dgx01+dgx02      3       112.8      0.02    0.0      0.75    49.6    2.275
+coding-t0-nothink-c8      dgx01+dgx02      3       317.4      1.34    0.4      2.91    58.6    5.414
+idle                      dgx01+dgx02      3           -         -      -         -    19.5        -
+tgdef-c1                  dgx01+dgx02      3        86.3      2.37    2.7      3.11    49.8    1.731
+tgdef-c8                  dgx01+dgx02      3       195.3      5.12    2.6     16.05    61.4    3.179
+tgt0-c1                   dgx01+dgx02      3       108.3      3.05    2.8      7.83    52.0    2.083
+tgt0-c8                   dgx01+dgx02      3       227.4      5.02    2.2     20.72    62.9    3.617
+
+tok/s = llama-benchy tg_throughput (aggregate over the concurrent requests, reasoning tokens counted) or coding.py aggregate output tok/s per pass; mean of the runs/passes of a boot, then of the boots. GPU W = nvidia-smi power.draw mean over the cell window (both Sparks added for 2x); idle = 120 s with the server up.
+```
+
+Results: {RESULTS_URL}
