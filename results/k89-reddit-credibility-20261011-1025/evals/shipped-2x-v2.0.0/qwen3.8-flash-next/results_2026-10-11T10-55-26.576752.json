@@ -1,0 +1,155 @@
+{
+  "results": {
+    "ifeval_think_med": {
+      "name": "ifeval_think_med",
+      "alias": "ifeval_think_med",
+      "sample_len": 541,
+      "prompt_level_strict_acc,none": 0.8743068391866913,
+      "prompt_level_strict_acc_stderr,none": 0.014265627567173898,
+      "inst_level_strict_acc,none": 0.9160671462829736,
+      "inst_level_strict_acc_stderr,none": "N/A",
+      "prompt_level_loose_acc,none": 0.9020332717190388,
+      "prompt_level_loose_acc_stderr,none": 0.012792449192922035,
+      "inst_level_loose_acc,none": 0.934052757793765,
+      "inst_level_loose_acc_stderr,none": "N/A"
+    }
+  },
+  "group_subtasks": {},
+  "configs": {
+    "ifeval_think_med": {
+      "task": "ifeval_think_med",
+      "dataset_path": "google/IFEval",
+      "test_split": "train",
+      "doc_to_text": "prompt",
+      "doc_to_target": 0,
+      "unsafe_code": false,
+      "process_results": "def process_results(doc, results):\n    inp = InputExample(\n        key=doc[\"key\"],\n        instruction_id_list=doc[\"instruction_id_list\"],\n        prompt=doc[\"prompt\"],\n        kwargs=doc[\"kwargs\"],\n    )\n    response = results[0]\n\n    out_strict = test_instruction_following_strict(inp, response)\n    out_loose = test_instruction_following_loose(inp, response)\n\n    return {\n        \"prompt_level_strict_acc\": out_strict.follow_all_instructions,\n        \"inst_level_strict_acc\": out_strict.follow_instruction_list,\n        \"prompt_level_loose_acc\": out_loose.follow_all_instructions,\n        \"inst_level_loose_acc\": out_loose.follow_instruction_list,\n    }\n",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "fewshot_config": {
+        "sampler": "default",
+        "split": null,
+        "process_docs": null,
+        "fewshot_indices": null,
+        "samples": null,
+        "doc_to_text": "prompt",
+        "doc_to_choice": null,
+        "doc_to_target": 0,
+        "gen_prefix": null,
+        "fewshot_delimiter": "\n\n",
+        "target_delimiter": " "
+      },
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "prompt_level_strict_acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        },
+        {
+          "metric": "inst_level_strict_acc",
+          "aggregation": "def agg_inst_level_acc(items):\n    flat_items = [item for sublist in items for item in sublist]\n    inst_level_acc = sum(flat_items) / len(flat_items)\n    return inst_level_acc\n",
+          "higher_is_better": true
+        },
+        {
+          "metric": "prompt_level_loose_acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        },
+        {
+          "metric": "inst_level_loose_acc",
+          "aggregation": "def agg_inst_level_acc(items):\n    flat_items = [item for sublist in items for item in sublist]\n    inst_level_acc = sum(flat_items) / len(flat_items)\n    return inst_level_acc\n",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "generate_until",
+      "generation_kwargs": {
+        "until": [],
+        "do_sample": true,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 0.0,
+        "repetition_penalty": 1.0,
+        "max_gen_toks": 32768,
+        "chat_template_kwargs": {
+          "reasoning_effort": "medium"
+        }
+      },
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 4.0,
+        "model": "qwen3.8-flash-next",
+        "base_url": "http://<cx7-ip-a>:8000/v1/chat/completions",
+        "num_concurrent": 16,
+        "max_retries": 5,
+        "timeout": 7200,
+        "tokenized_requests": false,
+        "config_source": "/home/nvidia/GEN-AI/backlog/k89/tasks/ifeval_think_med/ifeval_think_med.yaml"
+      }
+    }
+  },
+  "versions": {
+    "ifeval_think_med": 4.0
+  },
+  "n-shot": {
+    "ifeval_think_med": 0
+  },
+  "higher_is_better": {
+    "ifeval_think_med": {
+      "prompt_level_strict_acc": true,
+      "inst_level_strict_acc": true,
+      "prompt_level_loose_acc": true,
+      "inst_level_loose_acc": true
+    }
+  },
+  "n-samples": {
+    "ifeval_think_med": {
+      "original": 541,
+      "effective": 541
+    }
+  },
+  "config": {
+    "model": "local-chat-completions",
+    "model_args": {
+      "model": "qwen3.8-flash-next",
+      "base_url": "http://<cx7-ip-a>:8000/v1/chat/completions",
+      "num_concurrent": 16,
+      "max_retries": 5,
+      "timeout": 7200,
+      "tokenized_requests": false
+    },
+    "batch_size": 1,
+    "batch_sizes": [],
+    "device": "cuda:0",
+    "use_cache": "/home/nvidia/GEN-AI/backlog/k89/cache/shipped-2x-v2.0.0/lm",
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": {},
+    "random_seed": 1234,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": null,
+  "date": 1791703517.1029642,
+  "pretty_env_info": "N/A (torch not installed)",
+  "transformers_version": "N/A",
+  "lm_eval_version": "0.4.13",
+  "upper_git_hash": null,
+  "task_hashes": {
+    "ifeval_think_med": "bdcf10fc42fb3b39fd60af9d347a998b5bcb0a6782900c760b7dcc67ef0109d7"
+  },
+  "model_source": "local-chat-completions",
+  "model_name": "qwen3.8-flash-next",
+  "model_name_sanitized": "qwen3.8-flash-next",
+  "system_instruction": null,
+  "system_instruction_sha": null,
+  "fewshot_as_multiturn": true,
+  "chat_template": "",
+  "chat_template_sha": null,
+  "total_evaluation_time_seconds": "1812.0661368180008"
+}
