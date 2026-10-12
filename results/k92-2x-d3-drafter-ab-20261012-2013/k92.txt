@@ -1,0 +1,64 @@
+k92 2026-10-12 20:13:04 EEST: MTP drafter D3 (@03f4a057) vs the shipped 2x v2.0.0 (D1, @16c9bd54), same image
+2x /home/nvidia/.cache/sparkrun/registries/_url_e47b9e8b5e91/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml @ f40c277 # Release: v2.0.0 (k73-2x-gdnmse-dispatch)
+re-keyed plan: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records, /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/16c9bd54788d12390838a65ce4a4ecda97fa5f1d -> /cache/huggingface/hub/models--ursuciprian--Qwen3.8-Flash-Next-NVFP4-GDN-MSE/snapshots/03f4a0570496bbe741189f4a2a7d611679e85406
+bake:
+  arm-full: boot 172s Directly load AOT compilation; localhost: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records <cx7-ip-b>: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records rank 0 measured: 0 
+  prebake-try1: boot 242s Dynamo bytecode transform time; localhost: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records <cx7-ip-b>: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records rank 0 measured: 0 
+
+== screen (ctl:1 arm:1 arm:2 ctl:2 arm:3 ctl:3 ctl:4 arm:4): RULE=PASS
+== acceptance per draft position (T=0 probe cells, pooled)
+  pos 0: control 0.840 arm 0.853 shift +0.013
+  pos 1: control 0.686 arm 0.702 shift +0.016
+  pos 2: control 0.555 arm 0.576 shift +0.021
+  pos 3: control 0.444 arm 0.469 shift +0.025
+== cells: arm vs control % (noise = the cell's noise band, %)
+  probe  fresh-c1      -1.30%  noise  4.11%            n=8 CI [-5.3,+2.9] control boot-to-boot +0.14%, step -0.46%
+  probe  fresh-c4      +4.64%  noise  5.26%            n=32 CI [+1.9,+7.4] control boot-to-boot +5.26%, step -0.28%
+  probe  fresh-c8      +1.84%  noise  1.16%  better    n=64 CI [+0.7,+3.0] control boot-to-boot +0.44%, step -0.58%
+  probe  d16k-c4       +3.68%  noise  2.20%  better    n=32 CI [+1.6,+5.8] control boot-to-boot -2.20%, step -0.68%
+  benchy pp2048 (c1)   -0.77%  noise  2.73%            control 2797.3 arm 2775.8 t/s (boots 4/4)
+  benchy tg512 (c1)    +0.89%  noise 11.94%            control 83.0 arm 83.8 t/s (boots 4/4)
+  benchy tg512 (c4)    +3.13%  noise  8.16%            control 157.0 arm 161.9 t/s (boots 4/4)
+  benchy tg512 (c8)    +2.62%  noise  5.15%            control 186.0 arm 190.9 t/s (boots 4/4)
+  benchy tg512 (c16)   +3.07%  noise  7.48%            control 233.7 arm 240.9 t/s (boots 4/4)
+== logits_equiv (reported, not judged)
+better: probe fresh-c8 +1.84% (noise 1.16%); probe d16k-c4 +3.68% (noise 2.20%)
+VERDICT=PROMOTE
+== boot-level Welch 95% CI, benchy cells (reported; the rule uses the noise bands above)
+  pp2048 (c1)   -0.77%  CI [-5.05,+3.52]  control 2775.2 2799.9 2769.6 2844.4 | arm 2793.4 2659.2 2820.9 2829.7
+  tg512 (c1)    +0.89%  CI [-11.24,+13.02]  control 83.4 86.1 77.9 84.7 | arm 86.4 74.5 88.7 85.4
+  tg512 (c4)    +3.13%  CI [-8.86,+15.12]  control 151.9 152.9 159.0 164.3 | arm 146.8 157.9 174.6 168.5
+  tg512 (c8)    +2.62%  CI [-1.47,+6.71]  control 190.5 182.7 189.9 180.9 | arm 188.5 189.4 189.8 195.8
+  tg512 (c16)   +3.07%  CI [-1.95,+8.08]  control 235.6 231.7 242.5 225.0 | arm 246.1 234.3 238.5 244.5
+== post checks per boot
+  ctl-p1: --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d kv 3,529,700 ok
+  ctl-p2: --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d kv 3,521,196 ok
+  ctl-p3: --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d kv 3,537,649 ok
+  ctl-p4: --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d kv 3,536,725 ok
+  arm-p1: --revision 03f4a0570496bbe741189f4a2a7d611679e85406 kv 3,520,272 ok
+  arm-p2: --revision 03f4a0570496bbe741189f4a2a7d611679e85406 kv 3,525,263 ok
+  arm-p3: --revision 03f4a0570496bbe741189f4a2a7d611679e85406 kv 3,522,120 ok
+  arm-p4: --revision 03f4a0570496bbe741189f4a2a7d611679e85406 kv 3,523,784 ok
+worse: none
+better: probe  fresh-c8      +1.84%  noise  1.16%  better    n=64 CI [+0.7,+3.0] control boot-to-boot +0.44%, step -0.58%; probe  d16k-c4       +3.68%  noise  2.20%  better    n=32 CI [+1.6,+5.8] control boot-to-boot -2.20%, step -0.68%
+RULE=PASS
+
+== gate (arm, one TP2 boot): PASS
+hardmode 94 (ok); long-context retrieval 8000:20/20 32000:20/20 64000:20/20 128000:20/20 128000:20/20 128000:20/20 (ok); stragglers c8/c12/c16 {'8': 'preempt 0, max/median 1.00', '12': 'preempt 0, max/median 1.01', '16': 'preempt 0, max/median 1.01'} (none)
+│    Quality:        94/100                                                    │
+│    Score:  100 / 100                                                         │
+│    Score:   100.0 ± 0.0 / 100                                                │
+depth    8000 | actual_tokens   15709 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   0.86s | lat    2.0s
+depth   32000 | actual_tokens   61730 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   2.02s | lat    3.5s
+depth   64000 | actual_tokens  122614 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   3.97s | lat    5.4s
+depth  128000 | actual_tokens  245267 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   7.95s | lat    9.7s
+depth  128000 | actual_tokens  244166 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   7.31s | lat    8.9s
+depth  128000 | actual_tokens  244893 | exact  20 near   0 wrong   0 explore   0 no_call   0 | typo_rate 0.00 | ttft   7.79s | lat    9.1s
+c=8 round wall 4.1s | per request (submit order): #0:4.08s/320t #1:4.08s/320t #2:4.15s/320t #3:4.15s/320t #4:4.08s/320t #5:4.08s/320t #6:4.14s/320t #7:4.14s/320t
+      preemptions +0 | queue time total 0.01s over 8 req | prefill total 1.44s | decode total 31.5s | accept 4.00/draft
+c=12 round wall 5.2s | per request (submit order): #0:5.08s/320t #1:5.16s/320t #2:5.08s/320t #3:5.08s/320t #4:5.08s/320t #5:5.15s/320t #6:5.15s/320t #7:5.22s/320t #8:5.15s/320t #9:5.22s/320t #10:5.22s/320t #11:5.22s/320t
+      preemptions +0 | queue time total 0.38s over 12 req | prefill total 2.86s | decode total 58.9s | accept 4.00/draft
+c=16 round wall 6.2s | per request (submit order): #0:5.96s/320t #1:5.96s/320t #2:5.96s/320t #3:6.05s/320t #4:6.13s/320t #5:6.05s/320t #6:5.96s/320t #7:6.05s/320t #8:6.05s/320t #9:6.13s/320t #10:6.13s/320t #11:6.13s/320t #12:6.21s/320t #13:6.21s/320t #14:6.21s/320t #15:6.21s/320t
+      preemptions +0 | queue time total 0.91s over 16 req | prefill total 5.18s | decode total 92.2s | accept 4.00/draft
+guard dgx01: min MemAvailable 10.61 GiB
+guard dgx02: min MemAvailable 14.21 GiB

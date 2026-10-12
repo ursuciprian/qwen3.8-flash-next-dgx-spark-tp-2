@@ -1,0 +1,18 @@
+ok   ctl-2x: ghcr.io/ursuciprian/spark-vllm-b12x:k73-20261009-21e0b201-d21d7ade-warm, ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE@16c9bd54
+arm diff:
+   59c59
+   < name: qwen3.8-flash-next-2x-dgx-spark
+   ---
+   > name: qwen3.8-flash-next-2x-k92-d3
+   68c68
+   < model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+   ---
+   > model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
+   137a138,140
+   >   # k92 arm: own runtime cache (03f4a057 keys to the 1x v2.2.0 cache dir; keep that one untouched)
+   >   XDG_CACHE_HOME: "/cache/runtime/k92-d3"
+   >   VLLM_CACHE_ROOT: "/cache/runtime/k92-d3/vllm"
+   244c247
+   <     --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d \
+   ---
+   >     --revision 03f4a0570496bbe741189f4a2a7d611679e85406 \

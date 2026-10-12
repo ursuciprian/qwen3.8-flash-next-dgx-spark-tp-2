@@ -1,0 +1,256 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 4,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 13,
+  "timeout": 1800,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k92-2x-d3-drafter-ab-20261012-2013/gate/fidelity-seed13.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 244893,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 7.787735688686371,
+   "mean_latency": 9.131949377059936,
+   "results": [
+    {
+     "target": "INV-1000-71C6",
+     "path": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 124.90396690368652,
+     "dt": 126.12961745262146
+    },
+    {
+     "target": "INV-1000-71C6",
+     "path": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.729928731918335,
+     "dt": 3.656493663787842
+    },
+    {
+     "target": "INV-1000-71C6",
+     "path": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.6082086563110352,
+     "dt": 2.745429277420044
+    },
+    {
+     "target": "INV-1000-71C6",
+     "path": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-f28c78/svc-relay-v2/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.570488691329956,
+     "dt": 3.4185707569122314
+    },
+    {
+     "target": "INV-1001-C0E9",
+     "path": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.616870641708374,
+     "dt": 3.893479585647583
+    },
+    {
+     "target": "INV-1001-C0E9",
+     "path": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.6212852001190186,
+     "dt": 2.6304681301116943
+    },
+    {
+     "target": "INV-1001-C0E9",
+     "path": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.7027432918548584,
+     "dt": 3.044304132461548
+    },
+    {
+     "target": "INV-1001-C0E9",
+     "path": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logic-d3c5c9/svc-export_v1/logs/sync.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.7138757705688477,
+     "dt": 2.4851410388946533
+    },
+    {
+     "target": "INV-1002-A3EC",
+     "path": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "prompt_tokens": 244891,
+     "ttft": 1.5733845233917236,
+     "dt": 3.3346197605133057
+    },
+    {
+     "target": "INV-1002-A3EC",
+     "path": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "prompt_tokens": 244891,
+     "ttft": 1.588521957397461,
+     "dt": 2.3745648860931396
+    },
+    {
+     "target": "INV-1002-A3EC",
+     "path": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "prompt_tokens": 244891,
+     "ttft": 1.6251018047332764,
+     "dt": 2.8848767280578613
+    },
+    {
+     "target": "INV-1002-A3EC",
+     "path": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertexx-cargo-39d60f/svc-export-v1/logs/access.log",
+     "prompt_tokens": 244891,
+     "ttft": 1.5660185813903809,
+     "dt": 3.1677236557006836
+    },
+    {
+     "target": "INV-1003-699B",
+     "path": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.623314619064331,
+     "dt": 2.534194231033325
+    },
+    {
+     "target": "INV-1003-699B",
+     "path": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.5826833248138428,
+     "dt": 2.505293607711792
+    },
+    {
+     "target": "INV-1003-699B",
+     "path": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.6126673221588135,
+     "dt": 2.538731098175049
+    },
+    {
+     "target": "INV-1003-699B",
+     "path": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/delta-logix-e3045e/svc-reconcile_v1/logs/export.log",
+     "prompt_tokens": 244893,
+     "ttft": 1.6000630855560303,
+     "dt": 2.687601089477539
+    },
+    {
+     "target": "INV-1004-BE3C",
+     "path": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.6838860511779785,
+     "dt": 2.6092047691345215
+    },
+    {
+     "target": "INV-1004-BE3C",
+     "path": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.6154932975769043,
+     "dt": 3.0361106395721436
+    },
+    {
+     "target": "INV-1004-BE3C",
+     "path": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.609145164489746,
+     "dt": 3.2107036113739014
+    },
+    {
+     "target": "INV-1004-BE3C",
+     "path": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/orryn-data-a13a15/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244892,
+     "ttft": 1.6070661544799805,
+     "dt": 3.751859426498413
+    }
+   ]
+  }
+ ]
+}
