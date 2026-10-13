@@ -1,6 +1,6 @@
 # Benchmarks: full tables
 
-Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.0.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.1.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
 
 
 ## Quality gate: pass rule
@@ -25,7 +25,8 @@ Retries and partial results so far:
 - One-Spark v2.1.0 (gated in this repo before the split): one of three ~245K seeds 19/20 (dgx-01); every gated depth
   20/20.
 
-Raw gate logs of 2× v2.0.0 (hardmode, TC-45, stragglers, fidelity):
+Raw gate logs of 2× v2.1.0 (hardmode, TC-45, stragglers, fidelity):
+[`results/k92-2x-d3-drafter-ab-20261012-2013/gate/`](../results/k92-2x-d3-drafter-ab-20261012-2013/gate/); 2× v2.0.0:
 [`results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/`](../results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/);
 DP=2 gate through the router: [`results/dp2-gate-k72-20261008-1135/gate/`](../results/dp2-gate-k72-20261008-1135/gate/).
 
@@ -63,9 +64,60 @@ What it shows: the coding probe at T=0 repeats within 0.5% between boots; llama-
 2× build, TG defaults c8 differs most (k76 172.2, k86 195.3 ± 5.1); the README now quotes the multi-boot means. Per-Spark rows, per-boot values and the 1 Hz power traces:
 [`results/k86-boot-noise-power-20261010-1704/`](../results/k86-boot-noise-power-20261010-1704/).
 
+## v2.1.0: MTP drafter D3 on 2× Spark (2026-10-13)
+
+Release 2× v2.1.0 (experiment k92-2x-d3-drafter-ab, #137), the current default. No old build name.
+
+v2.1.0 = v2.0.0 with drafter D3 (refit run 3a, the drafter of the 1× since v2.2.0): checkpoint
+`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `03f4a057`, which differs from `16c9bd54` only in the 26 dense `mtp.*`
+tensors of `model-00034` and the model card. Same image code (vLLM d21d7ade, b12x 21e0b201), flags and env, plus
+`--enable-prompt-tokens-details`: the usage field reports `prompt_tokens_details.cached_tokens` (11,456 of 14,239 prompt
+tokens on a repeated prompt in k94). The image adds the plan seed `225bf665` (the 682 records of `6fdfaa4c` re-keyed to
+the `03f4a057` snapshot path) and the torch AOT cache of both ranks for that path.
+
+Screen (k92): Thunderdome rules on the pair, boots ctl arm arm ctl arm ctl ctl arm (4 per side), same image and plan
+selections, 0 plans measured on every counted boot; T=0 probe cells plus llama-benchy (T=1, 4 runs per boot).
+
+| Cell | D3 vs D1 (noise) |
+|---|:---:|
+| Acceptance per draft position 1 / 2 / 3 / 4 (T=0, pooled) | 0.840 / 0.686 / 0.555 / 0.444 → 0.853 / 0.702 / 0.576 / 0.469 |
+| probe fresh c1 | −1.30% (4.11%) |
+| probe fresh c4 | +4.64% (5.26%) |
+| probe fresh c8 | +1.84% (1.16%), better |
+| probe 16K c4 | +3.68% (2.20%), better |
+| llama-benchy pp2048 c1 | −0.77% (2.73%), 2797.3 → 2775.8 t/s |
+| llama-benchy tg512 c1 | +0.89% (11.94%), 83.0 → 83.8 t/s |
+| llama-benchy tg512 c4 | +3.13% (8.16%), 157.0 → 161.9 t/s |
+| llama-benchy tg512 c8 | +2.62% (5.15%), 186.0 → 190.9 t/s |
+| llama-benchy tg512 c16 | +3.07% (7.48%), 233.7 → 240.9 t/s |
+
+No cell worse beyond noise: PROMOTE. Gate (one TP=2 boot of D3): hardmode 94, TC-45 100, fidelity 20/20 at
+8k/32k/64k/128k and at two more 128k seeds, stragglers c8/c12/c16 with 0 preemptions, min MemAvailable 10.61 GiB /
+14.21 GiB. The usage flag came after the gate; it only adds a field to the response, so the gate was not rerun.
+
+Ship check (k94-2x-ship-check, plain `sparkrun run` of the recipe with the `225bf665` plan file and both AOT keys moved
+out of the runtime caches on both Sparks first): up 348 s after `sparkrun run` on that first boot (65 s of sparkrun
+launch, then 50 b12x kernel compiles, which are keyed by GPU and not shipped), AOT loaded on both ranks with no Dynamo
+compile, 0 plans measured, both plan files at 682 records, 72 MXFP8 copies per rank, rank 0 serving `--revision
+03f4a057`; fresh c8 T=0 acceptance 0.851 / 0.701 / 0.574 / 0.471 (k92 D3 arm: 0.853 / 0.702 / 0.576 / 0.469). Its
+one-boot llama-benchy tg512 c4 was 148.2 t/s, −8.4% against the k92 arm mean with an 8.16% band, so its single-boot rule
+said FAIL; k92's own arm boot 1 had 146.8. Recheck (k94b, rule written before the boot, one attempt): a second boot, up
+in 243 s, and the 2-boot mean of every cell within its k92 band with no boot below the lowest of the 8 k92 boots:
+
+| Cell | k94 | k94b | 2-boot mean vs k92 D3 arm (band) |
+|---|--:|--:|:---:|
+| pp2048 c1 | 2847.7 | 2735.1 | 2791.4, +0.6% (2.73%) |
+| tg512 c1 | 89.5 | 87.8 | 88.7, +5.8% (11.94%) |
+| tg512 c4 | 148.2 | 157.3 | 152.8, −5.6% (8.16%) |
+| tg512 c8 | 187.2 | 198.8 | 193.0, +1.1% (5.15%) |
+| tg512 c16 | 234.3 | 235.2 | 234.7, −2.6% (7.48%) |
+
+Raw files: [`results/k92-2x-d3-drafter-ab-20261012-2013/`](../results/k92-2x-d3-drafter-ab-20261012-2013/),
+[`results/k94-2x-ship-check-20261013-1056/`](../results/k94-2x-ship-check-20261013-1056/), [`results/k94b-2x-ship-recheck-20261013-1115/`](../results/k94b-2x-ship-recheck-20261013-1115/).
+
 ## v2.0.0: GDN-MSE checkpoint with the M-dispatch on 2× Spark (2026-10-09)
 
-Release 2× v2.0.0 (experiment k73-2x-gdnmse-dispatch, #123), the current default. No old build name.
+Release 2× v2.0.0 (experiment k73-2x-gdnmse-dispatch, #123), the default from 2026-10-09 to 2026-10-13. No old build name.
 
 The checkpoint changes to `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`: 7c4f1bc1 with the GDN
 in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16 base to weight-only NVFP4
