@@ -1,0 +1,8 @@
+Excerpt of the rank-0 serve log (container removed by hand at 10:39 so the job moved on; copied from the terminal):
+(Worker_TP0) File ".../vllm/models/qwen4_exp/nvidia/model.py", line 938, in __init__: self.visual = Qwen3_VisionTransformer(
+  File ".../vllm/model_executor/models/qwen3_vl.py", line 422, in __init__: self.linear_fc2 = RowParallelLinear(
+  File ".../vllm/model_executor/layers/quantization/modelopt.py", line 1918, in create_weights: raise ValueError(
+(Worker_TP0) ValueError: Unsupported model when in features size is not multiple of 16
+(Worker_TP1) ValueError: Unsupported model when in features size is not multiple of 16  (rank 1, same place)
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+Container entrypoint: null (cleared by executor_config), image vllm/vllm-openai:v0.31.0: vLLM started and failed in model init.
