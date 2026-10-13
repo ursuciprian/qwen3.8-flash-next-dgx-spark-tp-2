@@ -1,12 +1,48 @@
-# Release: 1× v2.0.0 (old name v3d), see the 1× repo's VERSIONS.md
-# MOVED (2026-10-08): the single-Spark recipe now lives in https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark
-#   (sparkrun registry qwen38-flashnext-1x). This copy stays so existing `sparkrun run` setups and raw links keep
-#   working; it gets no new builds. Its results/ links below point to directories that moved to that repo.
+# Release: v2.2.0
+# Rollback since 2026-10-13: the single-Spark v2.2.0 recipe that was the default from 2026-10-10 to 2026-10-13.
+# Superseded by v2.3.0 (b12x large-row MXFP8 tile fix, cached-prompt usage reporting). Serves
+# ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 03f4a057 with drafter D3 on b12x 21e0b201.
 #
-# Rollback since 2026-10-08: the single-Spark v3d recipe that was the default from 2026-10-05 to 2026-10-08.
-# Superseded by v3e (v3d + the retrained MTP drafter, HF revision 16c9bd54). Serves
-# ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 244cb6fe with the original drafter.
+# EXPERIMENTAL single-Spark (TP=1) recipe v2.2.0 (2026-10-10): v2.1.0 (old name v3e) with MTP drafter D3.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 03f4a057 = 16c9bd54 (v2.1.0) with the dense BF16 mtp.* tensors
+#     of model-00034 retrained again (D3 = refit run 3a, 1x #7): initialized from D1, one pass over 10.66M anchors (D1's
+#     896,564 + ~7.35M tokens of new own outputs + 230 earlier responses over 4096 tokens), lr 2e-5 decaying to ~2e-6,
+#     same KL loss and fp8 drafter KV emulation. Every other tensor and file is byte-identical to 16c9bd54.
+#   - Offline held-out acceptance per position, T=0, D1 -> D3: 0.905/0.797/0.699/0.614/0.542/0.480 ->
+#     0.911/0.810/0.718/0.640/0.574/0.517 (+2.21 pts per position).
+#   - Screen vs v2.1.0 (k56c + k56d Thunderdome, one arm per Spark, 6 boots per side per Spark pooled, T=0 probes):
+#     acceptance pos 1-4 dgx-01 0.849/0.699/0.575/0.472 -> 0.860/0.720/0.598/0.498, dgx-02 0.852/0.703/0.578/0.474 ->
+#     0.857/0.717/0.596/0.493; dgx-01 fresh c4 +3.4% (noise 2.4%), fresh c8 +3.3% (1.0%), 16K c4 +4.6% (2.5%); every
+#     other cell on both Sparks inside its noise band (dgx-02: all up, none beyond noise); no cell worse beyond noise.
+#   - Gate (k56c, dgx-01 tools + dgx-02 fidelity): hardmode 93, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds
+#     11/13 20/20, stragglers c8-c16 0 preemptions.
+#   - Image: the v2.1.0 image + the b12x plan seed re-keyed to the 03f4a057 snapshot path (33d9b32e, 289 records) and
+#     the torch AOT compile cache of boots of this recipe (k79-1x-d3-ship-check). Nothing else changes.
+#   - Published stack (k80-1x-d3-hf-ab, this recipe vs v2.1.0, 4 boots per side per Spark): acceptance pos 2-4
+#     +0.021..+0.026 on both Sparks; dgx-01 fresh c8 +2.1% (noise 1.8%), dgx-02 fresh c4 +2.6% (2.4%); no cell worse.
+#     Image digest sha256:1c191c0a5f816750145e19e104ed812e9b3e63148b00fac901892f310a96a438 (CI run
+#     38033947121); the first boot on a host other than dgx-01 recompiles a few Triton kernels once (277 s, then 147 s).
+#   Results: results/thunderdome-k56c-20261009-1421, results/thunderdome-k56d-20261009-2029.
+#   Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v2.1.0).
 #
+# Base: v2.1.0 (old name v3e) header below.
+# EXPERIMENTAL single-Spark (TP=1) recipe v3e (2026-10-08): v3d + the retrained MTP drafter.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 = 244cb6fe (v3d) with the 24 dense BF16 mtp.* tensors
+#     of model-00034 retrained (#97 refit run 1): 72 steps of 8192 anchors (0.66 epoch) on ~3.5M tokens of v3d's own
+#     outputs, KL to the served target's top-20 at 6 draft depths, fp8 drafter KV as served. Drafter experts and the
+#     K131072 draft head stay at the served NVFP4 values. Every other file is byte-identical to 244cb6fe.
+#   - Offline held-out acceptance per position, T=0: 0.878/0.750/0.635/0.534/0.449/0.377 -> 0.905/0.797/0.699/0.614/0.542/0.480.
+#   - Screen vs v3d (k56 Thunderdome, one arm per Spark, 2 passes, T=0): acceptance pos 1-4
+#     dgx-01 0.819/0.661/0.535/0.431 -> 0.856/0.713/0.593/0.489, dgx-02 0.818/0.666/0.539/0.438 -> 0.854/0.708/0.589/0.488;
+#     fresh c4 +4.9% (noise 3.1%) / +7.9% (2.8%), fresh c8 +6.8% (3.6%) / +8.1% (2.6%), 16K c4 +5.5% (3.7%) / +5.7% (3.2%),
+#     16K c8 wall +2.9% (1.0%) / +2.0% (1.0%), pp2048 c1 +0.0% (1.0%) / -0.9% (2.0%); no cell worse beyond noise.
+#   - Gate (both Sparks): hardmode 91, TC-45 100, fidelity 20/20 at 8k-128k (one extra 128k seed on dgx-01 19/20),
+#     stragglers c8-c16 0 preemptions. Jev ship 0.97.
+#   - Image: the v3d HF image + the b12x plan seed re-keyed to the 16c9bd54 snapshot path (3205a613) and the torch AOT
+#     compile cache of boots of this recipe. Nothing else changes.
+#   Results: results/thunderdome-k56-20261007. Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v3d).
+#
+# Base: v3d header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3d (2026-10-05): v3c + NVFP4 GDN weights for decode, MXFP8 for prefill.
 #   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE = local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1 with
 #     the GDN in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16 base to weight-only
@@ -100,11 +136,11 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark-previous
-description: "Rollback (v3d). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-05)."
+description: "Rollback (v2.2.0: drafter D3, b12x 21e0b201). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-10)."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
-model_revision: 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3d-hf-20261005-21e0b201-5dad364d-warm
+model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
+container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-d3-hf-20261010-21e0b201-5dad364d-warm
 runtime: vllm
 
 build_args: []
@@ -159,7 +195,7 @@ command: |
   A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
-    --revision 244cb6fe99ff8231e3f5eeaa0b09a0b5f3203f8b \
+    --revision 03f4a0570496bbe741189f4a2a7d611679e85406 \
     --host {host} \
     --port {port} \
     --trust-remote-code \
