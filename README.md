@@ -9,7 +9,7 @@
   <tr>
     <td align="center"><h2>86 / 113 tok/s</h2><b>TG c1</b><br><sub>defaults (ISL/OSL 2048/512)<br>/ T=0, thinking off (coding)</sub></td>
     <td align="center"><h2>195 / 317 tok/s</h2><b>TG aggregate c8</b><br><sub>defaults (ISL/OSL 2048/512)<br>/ T=0, thinking off (coding)</sub></td>
-    <td align="center"><h2>90/100</h2><b>Hardmode</b><br><sub>pass ≥ 88, T=0, thinking on</sub></td>
+    <td align="center"><h2>94/100</h2><b>Hardmode</b><br><sub>pass ≥ 88, T=0, thinking on</sub></td>
     <td align="center"><h2>5.6 s</h2><b>TTFT, ISL 16K</b><br><sub>c1, cold prefix</sub></td>
   </tr>
 </table>
@@ -32,7 +32,7 @@
 | TG aggregate c8, defaults | 195.3 tok/s | 5.12 | 3 | llama-benchy task mode, ISL/OSL 2048/512 | T=1.0, top-p 0.95, top-k 20, thinking on | v2.0.0 (2026-10-10) | [results](results/k86-boot-noise-power-20261010-1704/) |
 | TG aggregate c8, coding | 317.4 tok/s | 1.34 | 3 | 36 prompts, OSL ≤768, aggregate output tok/s per pass | T=0, thinking off | v2.0.0 (2026-10-10) | [results](results/k86-boot-noise-power-20261010-1704/) |
 | TTFT, ISL 16K | 5.64 s | – | 1 | c1, cold prefix | – | v2.0.0 (2026-10-10) | [results](results/k76-capability-matrix-20261010-1059/2x/) |
-| Hardmode | 90/100 | – | 1 | 88 multi-step tool-use scenarios; pass ≥ 88 | T=0, thinking on | v2.0.0 (2026-10-09) | [BENCHMARKS](docs/BENCHMARKS.md) |
+| Hardmode | 94/100 | – | 1 | 88 multi-step tool-use scenarios; pass ≥ 88 | T=0, thinking on | v2.1.0 (2026-10-12) | [results](results/k92-2x-d3-drafter-ab-20261012-2013/gate/) |
 | GPU power, idle | 19.5 W | – | 3 | server up, no requests, 120 s | – | v2.0.0 (2026-10-10) | [results](results/k86-boot-noise-power-20261010-1704/) |
 | GPU power, TG c1 defaults | 49.8 W | – | 3 | power.draw, GPU only (nvidia-smi), not wall power, mean over the cell | T=1.0, top-p 0.95, top-k 20, thinking on | v2.0.0 (2026-10-10) | [results](results/k86-boot-noise-power-20261010-1704/) |
 | TG per GPU watt, c1 defaults | 1.73 tok/s/W | – | 3 | TG aggregate / GPU W | T=1.0, top-p 0.95, top-k 20, thinking on | v2.0.0 (2026-10-10) | [results](results/k86-boot-noise-power-20261010-1704/) |
@@ -46,7 +46,7 @@ Method and full tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 <!-- badges:start (scripts/make_charts.py writes this block) -->
 <p align="center">
-  <img alt="release: v2.0.0" src="https://img.shields.io/badge/release-v2.0.0-0969da?style=flat-square">
+  <img alt="release: v2.1.0" src="https://img.shields.io/badge/release-v2.1.0-0969da?style=flat-square">
   <img alt="hardware: 2× DGX Spark" src="https://img.shields.io/badge/hardware-2%C3%97%20DGX%20Spark-555555?style=flat-square">
   <img alt="quality gate: passed" src="https://img.shields.io/badge/quality%20gate-passed-2ea44f?style=flat-square">
   <img alt="license: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-555555?style=flat-square">
@@ -76,8 +76,9 @@ sparkrun run qwen3.8-flash-next-2x-dgx-spark
 ```
 
 First run downloads ~140 GB per node (time depends on the link; a 98 GB checkpoint download took 3 h 15 min at
-~8.6 MB/s on mine). Boot with model and image on disk: ~3 min (170 s on the v2.0.0 image check); a cold-page-cache boot
-was not timed on v2.0.0. `sparkrun run` returns before the
+~8.6 MB/s on mine). Boot with model and image on disk: ~4 to 6 min the first time (348 s on the v2.1.0 image check, which includes
+50 b12x kernel compiles that are keyed by GPU and not shipped), ~4 min after that (243 s on the recheck); a
+cold-page-cache boot was not timed on v2.1.0. `sparkrun run` returns before the
 engine is ready: poll `http://<head>:8000/health` (`<head>` = first node), then use `http://<head>:8000/v1`,
 model `qwen3.8-flash-next`:
 
@@ -129,16 +130,16 @@ and does not refresh them on `run`.
 
 | | |
 |---|---|
-| **Model** | [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE) @ `16c9bd54`: NVFP4 experts, MXFP8 dense and attention, GDN projections NVFP4 for TG and MXFP8 for PP |
-| **MTP** | MTP ×4, probabilistic drafts, rejection sampling; drafter D1 refit on the served model's outputs |
+| **Model** | [`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE`](https://huggingface.co/ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE) @ `03f4a057`: NVFP4 experts, MXFP8 dense and attention, GDN projections NVFP4 for TG and MXFP8 for PP |
+| **MTP** | MTP ×4, probabilistic drafts, rejection sampling; drafter D3 refit on the served model's outputs (v2.1.0) |
 | **Hardware** | 2x DGX Spark (GB10, 128 GB unified each), CX-7 back to back |
 | **Parallelism** | TP=2 over RoCE, one rank per GB10 |
 | **Engine** | vLLM + b12x (NVFP4 MoE, MXFP8 linears, GDN, QSA), plan and compile caches baked into the image |
 | **Context** | 262,144 tokens (max_model_len) |
 | **Concurrent requests** | up to 16 (max_num_seqs) |
 | **KV cache** | 3,527,297 tokens, 13.46 concurrent 262K requests (v2.0.0 boot log) |
-| **API** | OpenAI-compatible, tool calling, reasoning on (`reasoning_effort` medium) |
-| **Disk / start time** | ~140 GB per node / ~3 min warm (170 s on the v2.0.0 image check) |
+| **API** | OpenAI-compatible, tool calling, reasoning on (`reasoning_effort` medium); `usage.prompt_tokens_details.cached_tokens` reports prefix-cache hits |
+| **Disk / start time** | ~140 GB per node / ~4 min warm (243 s on the v2.1.0 recheck boot; 348 s on the first boot of a runtime cache) |
 | **License** | Recipe Apache-2.0; weights Qwen Community License 1.0 |
 
 | Task | Section |
@@ -272,12 +273,12 @@ c1, cold prefix.
 <!-- quality:start (scripts/make_charts.py writes this block) -->
 | Check | Result | Criterion |
 |---|---|---|
-| Hardmode | **90/100** | score /100, pass ≥ 88 (88 scenarios), T=0, thinking on |
+| Hardmode | **94/100** | score /100, pass ≥ 88 (88 scenarios), T=0, thinking on |
 | TC-45 | **100/100** | regression test (1 scenario, 2 pts, 5 trials) |
 | Fidelity | **20/20** | 20 needles retrieved via tool calls, ISL 8K to ~245K |
 | Stragglers | **none** | no stalled request at c8-c16 |
 
-Gate run: release v2.0.0, 2026-10-09. Every release passes this gate before promotion.
+Gate run: release v2.1.0 (drafter D3), 2026-10-12. Every release passes this gate before promotion.
 <!-- quality:end -->
 
 Full gate tables: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
@@ -343,7 +344,7 @@ its raw file. Full grids for every build: [docs/BENCHMARKS.md](docs/BENCHMARKS.m
 | KV cache, tokens | 993,754 <sup>n</sup> | 3,525,633 <sup>o</sup> | 1,987,508 <sup>p</sup> |
 | Concurrent 262K requests in KV (vLLM count) | 3.79 <sup>q</sup> | 13.46 <sup>r</sup> | 2 × 3.79 <sup>s</sup> |
 | Requests that fit KV at 16K / 64K / 128K | 39.7 <sup>t</sup> / 14.1 <sup>t</sup> / 7.5 <sup>t</sup> | not measured | not measured |
-| Gate: hardmode / TC-45 / fidelity to ~245K / stragglers | 93 <sup>u</sup> / 100 <sup>u</sup> / 20/20 <sup>u</sup> / none, c8-c16 <sup>u</sup> | 90 <sup>v</sup> / 100 <sup>v</sup> / 20/20 <sup>v</sup> / none, c8-c16 <sup>v</sup> | 93 <sup>w</sup> / 100 <sup>w</sup> / 20/20 <sup>w</sup> / none, c5-c16 <sup>w</sup> |
+| Gate: hardmode / TC-45 / fidelity to ~245K / stragglers | 91 <sup>u</sup> / 100 <sup>u</sup> / 20/20 <sup>u</sup> / none, c8-c16 <sup>u</sup> | 94 <sup>v</sup> / 100 <sup>v</sup> / 20/20 <sup>v</sup> / none, c8-c16 <sup>v</sup> | 93 <sup>w</sup> / 100 <sup>w</sup> / 20/20 <sup>w</sup> / none, c5-c16 <sup>w</sup> |
 
 Releases and runs behind the numbers:
 
@@ -367,8 +368,8 @@ Releases and runs behind the numbers:
 - <sup>r</sup> two-Spark v2.0.0, 2026-10-09, serve log ([files](results/k77-2x-ship-check-20261009-2149/check/))
 - <sup>s</sup> DP=2 on one-Spark v2.1.0 (old name v3e), 2026-10-08, serve log ([files](results/dp2-gate-k72-20261008-1135/))
 - <sup>t</sup> one-Spark v1.3.0 (old name v3c), 2026-10-05, kv-capacity page accounting, same 14 GiB pool in 1× v2.0.0 and v2.1.0 ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/tp1-v3c-20261005/))
-- <sup>u</sup> one-Spark v2.2.0, 2026-10-09, promotion gate ([files](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/thunderdome-k56c-20261009-1421/run3-02/gate/))
-- <sup>v</sup> two-Spark v2.0.0, 2026-10-09, promotion gate ([files](docs/BENCHMARKS.md))
+- <sup>u</sup> one-Spark v2.3.0, 2026-10-13, promotion gate ([1x repo](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/blob/main/docs/BENCHMARKS.md))
+- <sup>v</sup> two-Spark v2.1.0, 2026-10-12, promotion gate ([files](results/k92-2x-d3-drafter-ab-20261012-2013/gate/))
 - <sup>w</sup> DP=2 on one-Spark v2.1.0 (old name v3e), 2026-10-08, quality gate through the router ([files](results/dp2-gate-k72-20261008-1135/))
 <!-- capability-table:end -->
 
