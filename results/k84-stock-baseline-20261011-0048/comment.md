@@ -1,3 +1,5 @@
+Correction (2026-10-13): the "did not boot" attempts below were a launcher problem on my side (the image ENTRYPOINT consumed sparkrun's command, so vLLM never started), not a vLLM problem. See CORRECTION.md in this folder and the k84c rerun.
+
 Correction to the earlier k84 failure on this issue: it came from my image check, which looked up only the alias `Qwen3_8FlashNextForConditionalGeneration`. Both stock images register `Qwen4ExpForConditionalGeneration`, the first architecture in the checkpoint's config, and vLLM uses that one. This rerun checks every listed architecture.
 
 Stock baseline (k84-stock-baseline): upstream vLLM on the unmodified checkpoint `local-inference-lab/Qwen3.8-Flash-Next-NVFP4` @ `7c4f1bc1`, on the same two Sparks, with the harnesses of the capability matrix (k76).
