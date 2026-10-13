@@ -31,7 +31,7 @@ paired probes or the llama-benchy coding grid); details in [docs/BENCHMARKS.md](
 
 | Release | Old name | Default since | Recipe PR | What changed | Bump | Measured |
 |---|---|---|---|---|---|---|
-| **v2.1.0** | none (k92-2x-d3-drafter-ab) | 2026-10-13 | [#PRNUM](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/pull/PRNUM) | MTP drafter D3 (refit run 3a), checkpoint revision `03f4a057` (only the 26 `mtp.*` tensors in `model-00034` differ from `16c9bd54`); `--enable-prompt-tokens-details` (usage reports cached prompt tokens); image adds the `03f4a057` plan seed and AOT cache | MINOR: drafter only; users coming from v2.0.0 download one shard | acceptance +0.013 to +0.025 per position; probe fresh c8 +1.84% (noise 1.16%), 16K c4 +3.68% (noise 2.20%); tg512 c1 to c16 +0.9 to +3.1% inside noise; no cell worse beyond noise |
+| **v2.1.0** | none (k92-2x-d3-drafter-ab) | 2026-10-13 | [#172](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/pull/172) | MTP drafter D3 (refit run 3a), checkpoint revision `03f4a057` (only the 26 `mtp.*` tensors in `model-00034` differ from `16c9bd54`); `--enable-prompt-tokens-details` (usage reports cached prompt tokens); image adds the `03f4a057` plan seed and AOT cache | MINOR: drafter only; users coming from v2.0.0 download one shard | acceptance +0.013 to +0.025 per position; probe fresh c8 +1.84% (noise 1.16%), 16K c4 +3.68% (noise 2.20%); tg512 c1 to c16 +0.9 to +3.1% inside noise; no cell worse beyond noise |
 | v2.0.0 | none (k73-2x-gdnmse-dispatch) | 2026-10-09 | [#131](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/pull/131) | GDN-MSE checkpoint `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54` (GDN projections weight-only NVFP4, drafter D1 included) with the M-dispatch: NVFP4 GDN weights below 41 rows, per-rank MXFP8 copies of 7c4f1bc1 shard 35 at 41+; vLLM d21d7ade, b12x 21e0b201; KV pool 3.66M to 3.52M tokens | MAJOR: new main-model weights to download | probe fresh c1 +19.0% (noise 11.6%), decode step −6.7% at 1 request, −3.1% at 8; tg512 c1 82.4 to 89.3 and c8 173.3 to 187.9 tok/s inside noise; no cell worse beyond noise |
 | v1.5.0 | b1.6 | 2026-10-08 | [#120](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/pull/120) | Retrained MTP drafter D1 (24 `mtp.*` tensors over the same main weights), plan seed with all 616 plans | MINOR: drafter only, main weights unchanged | acceptance +0.036 to +0.047 per position; probe fresh c4 +10.9%, fresh c8 +6.2%, tg512 c8 +7.2%; 1 request within noise |
 | v1.4.0 | b1.4 | 2026-10-01 | [#57](https://github.com/ursuciprian/qwen3.8-flash-next-dgx-spark-tp-2/pull/57) | 131k-id MTP draft vocab, QSA race and recompile fixes, server default `reasoning_effort` `xhigh` to `medium` | MINOR: no action needed; the thinking effort is a server default each request can override | step −2 to −5% at 1–8 requests; coding c5 +4.2%; counting c1 +4.9% |
@@ -57,7 +57,7 @@ recipes for compatibility; their releases are listed in the 1× repo.
 
 | Release | Tag on commit | Date tag (alias) |
 |---|---|---|
-| v2.1.0 | the merge commit of #PRNUM | none |
+| v2.1.0 | the merge commit of #172 | none |
 | v2.0.0 | the merge commit of #131 | none |
 | v1.5.0 | `21e616a8` (#120) | none |
 | v1.4.0 | `6194f910` (#57) | `v2026.10.01` on `4afa6b95` (#58, the docs PR after it) |
@@ -76,7 +76,7 @@ commit of the image is unknown for every release except v1.4.0 (`798528a2`).
 
 | Release | Image tag | Digest | vLLM | b12x | Drafter | Plan seed | Recipe commit |
 |---|---|---|---|---|---|---|---|
-| v2.1.0 | `k94-20261013-21e0b201-d21d7ade-warm`, `2x-v2.1.0` | `sha256:1346035488a5c8a0f405ade8e74febf68c66b8df1e026b7e3a6fb83cb9f4ce13` | `d21d7ade` | `21e0b201` | D3, part of the checkpoint | `225bf665` (682) | #PRNUM |
+| v2.1.0 | `k94-20261013-21e0b201-d21d7ade-warm`, `2x-v2.1.0` | `sha256:1346035488a5c8a0f405ade8e74febf68c66b8df1e026b7e3a6fb83cb9f4ce13` | `d21d7ade` | `21e0b201` | D3, part of the checkpoint | `225bf665` (682) | #172 |
 | v2.0.0 | `k73-20261009-21e0b201-d21d7ade-warm`, `2x-v2.0.0` | `sha256:8abb60eeeb79ca13680341c17d87975801da1218c06df2505856b23da7ed1821` | `d21d7ade` | `21e0b201` | D1, part of the checkpoint | `6fdfaa4c` (682) | #131 |
 | v1.5.0 | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | `sha256:ed8582a1a2bb7c7c173ba8ffe30f4b821bdd021b51e87f90011c8e78ec53cfb4` | `a7e649d8fede` | `b7fbaf968464` | D1: `mtp.*` of `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54`, carried in the image | `15b63901` (616) | `21e616a8` |
 | v1.4.0 | `b1.4-20261001-b7fbaf96-a7e649d8-warm` | `sha256:3b2f26080addadafe675f31227d6dacec3716064cbc0c7fd376b643bc34183fd` | `a7e649d8fede` | `b7fbaf968464` | D0 | `8ccf4799` (583) | `6194f910` |
