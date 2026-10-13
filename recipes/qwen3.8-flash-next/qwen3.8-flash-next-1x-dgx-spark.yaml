@@ -1,8 +1,49 @@
-# Release: 1× v2.1.0 (old name v3e), see the 1× repo's VERSIONS.md
-# MOVED (2026-10-08): the single-Spark recipe now lives in https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark
-#   (sparkrun registry qwen38-flashnext-1x). This copy stays so existing `sparkrun run` setups and raw links keep
-#   working; it gets no new builds. Its results/ links below point to directories that moved to that repo.
+# Release: v2.3.0
+# EXPERIMENTAL single-Spark (TP=1) recipe v2.3.0 (2026-10-13): v2.2.0 with the b12x large-row MXFP8 tile fix and
+# cached-prompt usage reporting.
+#   - b12x b45fe867 (fix/pf-large-m-regime, base 21e0b201): a packed MXFP8 declaration of >= 4096 rows with K >= 4096
+#     and N > 1536 (the max_num_batched_tokens capacity regime of GDN out_proj and attention o_proj, K6144 N2560) lowers
+#     to 128x128/BK64 without the large-M unroll on low-SM parts; a 4095-row regime keeps the shipped plan for every live
+#     M below 4096. Decode (exact M) and prefill chunks below 4096 rows run the v2.2.0 kernels. Model, revision, flags
+#     and env are unchanged.
+#   - --enable-prompt-tokens-details: usage.prompt_tokens_details.cached_tokens reports the prompt tokens served from
+#     the prefix cache, so clients see cache reads. It changes only the usage field.
+#   - Cold prefill vs v2.2.0 (k90-1x-tile-fix, ctl arm arm ctl on both Sparks, 3 cold prompts per depth and boot):
+#     Spark 1 16K +1.7%, 64K +1.6%, 128K +2.3%; Spark 2 +2.0% at 16K, 64K and 128K (noise 1.0%).
+#   - Decode (k90b, 4 boots per side per Spark): llama-benchy pp2048 c1, tg512 c1 and tg512 c8 FLAT on both Sparks
+#     (largest difference -2.44%, no boot-level 95% CI entirely below zero).
+#   - Compile cache root /cache/runtime/vllm-b12x-b45fe867 (VLLM_CACHE_ROOT, env block): the AOT key is the same as
+#     v2.2.0's, and loading v2.2.0's artifacts with this b12x fails (k95). The image's AOT seed is copied there.
+#   - Gate and check boots: k95-1x-ship-check, k95f, k95b (results/k95-1x-ship-check-*, k95f-*, k95b-*).
+#   - Image: the tile-fix image (CI build-b12x-overlay on the v2.2.0 image) plus the 303-record plan 33d9b32e (v2.2.0's
+#     302 records + the capacity-regime plan) and the torch AOT cache of the tile-fix boots (k90). Tagged 1x-v2.3.0.
+#   Results: results/k90-1x-tile-fix-20261011-2132, results/k90b-1x-tile-fix-decode-recheck-20261012-1900.
+#   Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v2.2.0).
 #
+# Base: v2.2.0 header below.
+# EXPERIMENTAL single-Spark (TP=1) recipe v2.2.0 (2026-10-10): v2.1.0 (old name v3e) with MTP drafter D3.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 03f4a057 = 16c9bd54 (v2.1.0) with the dense BF16 mtp.* tensors
+#     of model-00034 retrained again (D3 = refit run 3a, 1x #7): initialized from D1, one pass over 10.66M anchors (D1's
+#     896,564 + ~7.35M tokens of new own outputs + 230 earlier responses over 4096 tokens), lr 2e-5 decaying to ~2e-6,
+#     same KL loss and fp8 drafter KV emulation. Every other tensor and file is byte-identical to 16c9bd54.
+#   - Offline held-out acceptance per position, T=0, D1 -> D3: 0.905/0.797/0.699/0.614/0.542/0.480 ->
+#     0.911/0.810/0.718/0.640/0.574/0.517 (+2.21 pts per position).
+#   - Screen vs v2.1.0 (k56c + k56d Thunderdome, one arm per Spark, 6 boots per side per Spark pooled, T=0 probes):
+#     acceptance pos 1-4 dgx-01 0.849/0.699/0.575/0.472 -> 0.860/0.720/0.598/0.498, dgx-02 0.852/0.703/0.578/0.474 ->
+#     0.857/0.717/0.596/0.493; dgx-01 fresh c4 +3.4% (noise 2.4%), fresh c8 +3.3% (1.0%), 16K c4 +4.6% (2.5%); every
+#     other cell on both Sparks inside its noise band (dgx-02: all up, none beyond noise); no cell worse beyond noise.
+#   - Gate (k56c, dgx-01 tools + dgx-02 fidelity): hardmode 93, TC-45 100, fidelity 20/20 at 8k-128k plus 128k seeds
+#     11/13 20/20, stragglers c8-c16 0 preemptions.
+#   - Image: the v2.1.0 image + the b12x plan seed re-keyed to the 03f4a057 snapshot path (33d9b32e, 289 records) and
+#     the torch AOT compile cache of boots of this recipe (k79-1x-d3-ship-check). Nothing else changes.
+#   - Published stack (k80-1x-d3-hf-ab, this recipe vs v2.1.0, 4 boots per side per Spark): acceptance pos 2-4
+#     +0.021..+0.026 on both Sparks; dgx-01 fresh c8 +2.1% (noise 1.8%), dgx-02 fresh c4 +2.6% (2.4%); no cell worse.
+#     Image digest sha256:1c191c0a5f816750145e19e104ed812e9b3e63148b00fac901892f310a96a438 (CI run
+#     38033947121); the first boot on a host other than dgx-01 recompiles a few Triton kernels once (277 s, then 147 s).
+#   Results: results/thunderdome-k56c-20261009-1421, results/thunderdome-k56d-20261009-2029.
+#   Rollback: qwen3.8-flash-next-1x-dgx-spark-previous (v2.1.0).
+#
+# Base: v2.1.0 (old name v3e) header below.
 # EXPERIMENTAL single-Spark (TP=1) recipe v3e (2026-10-08): v3d + the retrained MTP drafter.
 #   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 = 244cb6fe (v3d) with the 24 dense BF16 mtp.* tensors
 #     of model-00034 retrained (#97 refit run 1): 72 steps of 8192 anchors (0.66 epoch) on ~3.5M tokens of v3d's own
@@ -113,11 +154,13 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-1x-dgx-spark
-description: "Experimental (v3e: v3d + retrained MTP drafter). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-08)."
+description: "Experimental (v2.3.0: v2.2.0 with the b12x large-row MXFP8 tile fix). Qwen3.8-Flash-Next on ONE DGX Spark (TP=1, NVFP4 GDN decode / MXFP8 prefill, PLE table through the page cache, NVMe keepalive, prefill read-ahead, 14 GiB KV pool), OpenAI-compatible API on port 8000 (2026-10-13)."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
-model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
-container: ghcr.io/ursuciprian/spark-vllm-b12x:tp1-v3e-hf-20261008-21e0b201-5dad364d-warm
+model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
+# v2.3.0 image (2026-10-13, k95): tile-fix image tf-20261011-b45fe867-5dad364d plus plan 33d9b32e (303 records) and the
+# torch AOT cache of the tile-fix boots (local base on dgx-01, CI build-b0-warm). The same image is also tagged 1x-v2.3.0.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:k95-20261013-b45fe867-5dad364d-warm
 runtime: vllm
 
 build_args: []
@@ -142,6 +185,11 @@ defaults:
   gpu_memory_utilization: 0.01
 
 env:
+  # v2.3.0: vLLM's torch AOT cache key does not include the b12x build, and the AOT graphs hold b12x plan handles, so
+  # the v2.2.0 artifacts stored under the same keys crash this image at load ("ValueError: plan belongs to moe.decode,
+  # not norm.hyperconnection", k95 upgrade-path boot). A compile cache root of its own keeps v2.3.0 and v2.2.0 apart
+  # in both directions (upgrade and rollback). The b12x plan cache stays shared: v2.3.0 adds one record to it.
+  VLLM_CACHE_ROOT: "/cache/runtime/vllm-b12x-b45fe867"
   VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
   VLLM_B12X_NVFP4_MXFP8_CHECKPOINT: "/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd"
   VLLM_GDN_SHARED_PREFILL_STAGING: "1"
@@ -169,10 +217,10 @@ env:
 
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
-  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
+  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$VLLM_CACHE_ROOT" ]; then mkdir -p "$VLLM_CACHE_ROOT/torch_compile_cache" && cp -rn "$A/." "$VLLM_CACHE_ROOT/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
-    --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d \
+    --revision 03f4a0570496bbe741189f4a2a7d611679e85406 \
     --host {host} \
     --port {port} \
     --trust-remote-code \
@@ -201,6 +249,7 @@ command: |
     --reasoning-parser qwen3 \
     --tool-call-parser qwen3_xml \
     --enable-auto-tool-choice \
+    --enable-prompt-tokens-details \
     --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
     --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
     --kv-cache-memory-bytes {kv_cache_memory_bytes} \
