@@ -89,6 +89,8 @@ curl http://<head>:8000/v1/chat/completions -H 'Content-Type: application/json' 
 
 No API key: keep it on a trusted network or put an authenticating proxy in front.
 
+**Multi-user setups.** I set this recipe up for a single user. `--enable-prompt-tokens-details` (since v2.1.0) makes the usage field report `prompt_tokens_details.cached_tokens` exactly, so on a server shared by several users or tenants one user can tell whether someone else already sent the same prompt prefix. Prefix caching already leaks this through time to first token; the flag makes it exact. With several users or tenants, give each one its own random, secret `cache_salt` in the request body (the pinned vLLM accepts it on `/v1/chat/completions`, `/v1/completions` and `/v1/responses`; a gateway can set it per API key), so their prefix-cache entries never match each other. Otherwise, remove `--enable-prompt-tokens-details` from the recipe.
+
 <details>
 <summary>Check that it works, stop, upgrade, secure</summary>
 

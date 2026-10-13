@@ -53,6 +53,8 @@ DP=2 ([`tools/dp2/`](tools/dp2/README.md), #122 on 2026-10-08, router fix #126 o
 release: it runs two copies of the current 1× release behind the router. This repo also carries copies of the 1×
 recipes for compatibility; their releases are listed in the 1× repo.
 
+**Multi-user setups (v2.1.0 and later).** I set this recipe up for a single user. `--enable-prompt-tokens-details` (since v2.1.0) makes the usage field report `prompt_tokens_details.cached_tokens` exactly, so on a server shared by several users or tenants one user can tell whether someone else already sent the same prompt prefix. Prefix caching already leaks this through time to first token; the flag makes it exact. With several users or tenants, give each one its own random, secret `cache_salt` in the request body (the pinned vLLM accepts it on `/v1/chat/completions`, `/v1/completions` and `/v1/responses`; a gateway can set it per API key), so their prefix-cache entries never match each other. Otherwise, remove `--enable-prompt-tokens-details` from the recipe.
+
 ## Tags and aliases
 
 | Release | Tag on commit | Date tag (alias) |
