@@ -1,0 +1,14 @@
+k94 2026-10-13 11:08:49 EEST: 2x v2.1.0 ship check, image ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm: FAIL
+image: ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm 
+boot: health after 348 s; pong: pong
+serve.log: Directly load AOT 2, saved AOT 0, Dynamo bytecode transform 0, MXFP8 copies 72, Traceback 0
+serve-node1.log: Directly load AOT 2, saved AOT 0, Dynamo bytecode transform 0, MXFP8 copies 72, Traceback 0
+/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k94-2x-ship-check-20261013-1056/check/serve.log: attention.gdn 0 measured / 0 cached, attention.qsa 0 measured / 10 cached, comm.roce 0 measured / 456 cached, gemm.blockscaled_precision 0 measured / 456 cached, moe.decode 0 measured / 456 cached, norm.hyperconnection 0 measured / 456 cached, sequence.gdn_prefill 0 measured / 10 cached, sequence.mtp_feedback 0 measured / 456 cached, sequence.ple_embedding 0 measured / 0 cached
+seed check PASS
+plan 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json: rank 0 682 records, rank 1 682 records (seed 682)
+revision: --revision 03f4a0570496bbe741189f4a2a7d611679e85406; prompt tokens details flag: 1
+usage on a repeated prompt: prompt_tokens=14239 cached_tokens=11456
+cleared before boot: 18
+cleared before boot: 16
+fresh-c8 acceptance per position (T=0): 0.851 0.701 0.574 0.471 (k92 D3 arm 0.853 0.702 0.576 0.469)
+benchy: BAD (tg512 (c4)) | pp2048 (c1) 2847.7 (+2.6% vs k92 D3 arm 2775.8, band 2.73%); tg512 (c1) 89.5 (+6.8% vs k92 D3 arm 83.8, band 11.94%); tg512 (c4) 148.2 (-8.4% vs k92 D3 arm 161.9, band 8.16%); tg512 (c8) 187.2 (-1.9% vs k92 D3 arm 190.9, band 5.15%); tg512 (c16) 234.3 (-2.7% vs k92 D3 arm 240.9, band 7.48%)
