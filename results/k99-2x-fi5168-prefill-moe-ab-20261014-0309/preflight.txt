@@ -1,0 +1,14 @@
+arm diff:
+   82c82
+   < name: qwen3.8-flash-next-2x-dgx-spark
+   ---
+   > name: qwen3.8-flash-next-2x-k99-fi5168
+   162a163,170
+   >   # k99 arm: FlashInfer 5c4058bd fused MoE for prefill calls >= MIN rows (mod on PYTHONPATH), own runtime cache
+   >   XDG_CACHE_HOME: "/cache/runtime/k99"
+   >   VLLM_CACHE_ROOT: "/cache/runtime/k99/vllm"
+   >   FLASHINFER_CACHE_DIR: "/cache/runtime/k99/flashinfer"
+   >   FLASHINFER_WORKSPACE_BASE: "/cache/runtime/k99/flashinfer"
+   >   PYTHONPATH: "/cache/runtime/k99/mod"
+   >   VLLM_K99_FI_MOE_SRC: "/cache/runtime/k99/fi-src"
+   >   VLLM_K99_FI_MOE_MIN_TOKENS: "4096"

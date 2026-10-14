@@ -1,0 +1,57 @@
+k99 2026-10-14 03:09:56 EEST: FlashInfer 5c4058bd fused MoE for prefill calls >= 4096 rows vs the shipped 2x v2.1.0 (same image)
+2x /home/nvidia/.cache/sparkrun/registries/_url_e47b9e8b5e91/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml @ 4720536 # Release: v2.1.0 (k92-2x-d3-drafter-ab)
+
+== P0 op check (shipped image as is: cutlass-dsl 4.7.0, flashinfer 0.7.0 + the 5c4058bd tree through the mod)
+sampler before: ok (flashinfer 0.7.0 from /usr/local/lib/python3.12/dist-packages/flashinfer/__init__.py)
+5c4058bd tree loaded in 1.3 s: /fi/flashinfer/__init__.py
+layer 5 inputs: captured 16384 rows, router overlap 0.979, n_moe 49
+layer 5 bytes: still [gate; up] before the first FlashInfer call True (False = b12x's weight preparation flipped it already), [up; gate] after it True, FC1 scales = swizzle_128x4 True, FC2 scales = swizzle_128x4 True, FlashInfer operands are views True
+layer 47 inputs: captured 16384 rows, router overlap 0.981, n_moe 49
+layer 47 bytes: still [gate; up] before the first FlashInfer call True (False = b12x's weight preparation flipped it already), [up; gate] after it True, FC1 scales = swizzle_128x4 True, FC2 scales = swizzle_128x4 True, FlashInfer operands are views True
+sampler after: ok (flashinfer 0.7.0 from /usr/local/lib/python3.12/dist-packages/flashinfer/__init__.py)
+  layer      M   err FI  err b12x  diff   ms FI  ms b12x   x
+      5   2864   0.1138    0.1138 0.007   5.316    5.380 x1.01
+      5   5728   0.1137    0.1138 0.009   6.998    8.271 x1.18
+      5   6048   0.1137    0.1138 0.009   7.122    8.574 x1.20
+      5   9072   0.1137    0.1138 0.009   9.754   11.884 x1.22
+     47   2864   0.1193    0.1193 0.005     nan      nan xnan
+     47   5728   0.1193    0.1193 0.008     nan      nan xnan
+     47   6048   0.1193    0.1193 0.008     nan      nan xnan
+     47   9072   0.1193    0.1193 0.008     nan      nan xnan
+  projection at M 5728 (operator only): +1.273 ms per layer x 49 layers = +62.4 ms per chunk; per cold prompt 16K 2 chunks +0.12 s, 64K 11 chunks +0.69 s, 128K 22 chunks +1.37 s
+  memory kept by FlashInfer: layer 5 260 MiB (with the shared workspace), layer 47 90 MiB -> per rank ~4.47 GiB (49 layers + workspace 170 MiB at M 5728; grows with the largest M seen)
+    layer 5 FlashInfer caches (MiB): _WEIGHT_CACHE 75, _PADDED_SCALE_CACHE 90, _PADDED_FP4_CACHE 0, _WORKSPACE_CACHE 170, _W4A16_WEIGHT_CACHE 0
+    layer 47 FlashInfer caches (MiB): _WEIGHT_CACHE 75, _PADDED_SCALE_CACHE 90, _PADDED_FP4_CACHE 0, _WORKSPACE_CACHE 0, _W4A16_WEIGHT_CACHE 0
+  OPCHECK PASS
+
+bake:
+  arm-full: boot 182s Directly load AOT compilation; localhost: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records <cx7-ip-b>: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records rank 0 measured: 0 
+  prebake-try1: boot 161s Directly load AOT compilation; localhost: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records <cx7-ip-b>: 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json 682 records rank 0 measured: 0 
+
+== screen (ctl:1 arm:1 arm:2 ctl:2): RULE=FLAT
+== cold TTFT (s, mean of 3 per boot); noise = larger boot-to-boot spread of either side (floor 0.5%)
+  16K: ctl 5.64 5.64 | arm 5.59 5.64 -> -0.5% (-0.03 s; noise 1.0%) flat
+  64K: ctl 24.65 24.62 | arm 24.50 24.58 -> -0.4% (-0.10 s; noise 0.5%) flat
+  128K: ctl 55.38 55.18 | arm 54.99 55.20 -> -0.3% (-0.18 s; noise 0.5%) flat
+== llama-benchy pp2048 + tg512 (tok/s, side means; band = max(k92 band, side spread))
+  pp2048 (c1): ctl 2798.5 arm 2765.4 -1.2% (band 4.7%)
+  tg512 (c1): ctl 83.7 arm 87.2 +4.2% (band 11.9%)
+  tg512 (c4): ctl 150.2 arm 165.3 +10.0% (band 8.2%)
+  tg512 (c8): ctl 198.8 arm 193.0 -2.9% (band 6.5%)
+== MTP acceptance per draft position (fresh c8, T=0), pooled per side
+  ctl: 0.843 0.694 0.567 0.467
+  arm: 0.851 0.705 0.577 0.470
+== path: K99FI calls (rank 0 / rank 1) and KV pool per boot
+  ctl-p1: FlashInfer calls 0 / 0; KV 3519347 tokens, 29.25 GiB available for KV
+  ctl-p2: FlashInfer calls 0 / 0; KV 3520087 tokens, 29.25 GiB available for KV
+  arm-p1: FlashInfer calls 1000 / 1000; KV 2987480 tokens, 24.83 GiB available for KV
+  arm-p2: FlashInfer calls 1000 / 1000; KV 2994690 tokens, 24.89 GiB available for KV
+  KV pool arm vs ctl: -15.0% tokens, -4.39 GiB (the FlashInfer path's memory cost per rank)
+better: none
+RULE=FLAT
+
+== gate (arm, one TP=2 boot): PASS
+hardmode 93; TC-45 100.0; long-context retrieval 8000:20/20 32000:20/20 64000:20/20 128000:20/20 128000:20/20 128000:20/20; straggler preemptions 0 0 0 0 0 0
+guard dgx01: min MemAvailable 10.26 GiB
+guard dgx02: min MemAvailable 13.40 GiB
+FlashInfer row counts on the arm boots (rank 0, distinct): 27 distinct row counts from 4185 to 8192: 4185 4188 4189 4190 4199 4206 4220 4651 4659 5728 6276 6287 6288 6290 6291 6292 6293 6294 6298 6301 6302 6303 6305 6308 6309 6313 8192 
