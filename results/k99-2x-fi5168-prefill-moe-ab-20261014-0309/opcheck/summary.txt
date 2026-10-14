@@ -1,0 +1,14 @@
+  layer      M   err FI  err b12x  diff   ms FI  ms b12x   x
+      5   2864   0.1138    0.1138 0.007   5.316    5.380 x1.01
+      5   5728   0.1137    0.1138 0.009   6.998    8.271 x1.18
+      5   6048   0.1137    0.1138 0.009   7.122    8.574 x1.20
+      5   9072   0.1137    0.1138 0.009   9.754   11.884 x1.22
+     47   2864   0.1193    0.1193 0.005     nan      nan xnan
+     47   5728   0.1193    0.1193 0.008     nan      nan xnan
+     47   6048   0.1193    0.1193 0.008     nan      nan xnan
+     47   9072   0.1193    0.1193 0.008     nan      nan xnan
+  projection at M 5728 (operator only): +1.273 ms per layer x 49 layers = +62.4 ms per chunk; per cold prompt 16K 2 chunks +0.12 s, 64K 11 chunks +0.69 s, 128K 22 chunks +1.37 s
+  memory kept by FlashInfer: layer 5 260 MiB (with the shared workspace), layer 47 90 MiB -> per rank ~4.47 GiB (49 layers + workspace 170 MiB at M 5728; grows with the largest M seen)
+    layer 5 FlashInfer caches (MiB): _WEIGHT_CACHE 75, _PADDED_SCALE_CACHE 90, _PADDED_FP4_CACHE 0, _WORKSPACE_CACHE 170, _W4A16_WEIGHT_CACHE 0
+    layer 47 FlashInfer caches (MiB): _WEIGHT_CACHE 75, _PADDED_SCALE_CACHE 90, _PADDED_FP4_CACHE 0, _WORKSPACE_CACHE 0, _W4A16_WEIGHT_CACHE 0
+  OPCHECK PASS
