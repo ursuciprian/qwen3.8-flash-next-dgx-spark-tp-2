@@ -27,7 +27,8 @@ cell is missing. Fixed rules:
   KILL          a cell worse than 2x its noise, acceptance moved by more than 0.03 at any shared position,
                 an arm boot failed, the arm server died during a boot (DIED), or an arm cell did not finish
                 (timeout or error) in a pass where the control's did
-  PROMOTE       every cell measured, none worse than 1x noise, at least one better than 1x noise
+  PROMOTE       every cell measured, none worse than 1x noise, at least one better than 1x noise,
+                and no benchy boot-level Welch 95% interval wholly below -1%
   INCONCLUSIVE  anything else: control boot failed, a cold boot, a missing pass dir, missing cells, a cell
                 worse than 1x but not 2x noise, or nothing better than noise
 
@@ -38,7 +39,7 @@ Drops past 0.03 still KILL. Default (unset): two-sided.
 --acc-only checks acceptance on the boots done so far and exits 3 when that alone means KILL.
 Last line: VERDICT=KILL|PROMOTE|INCONCLUSIVE.
 """
-import glob, json, os, re, shutil, statistics, sys, tempfile
+import glob, json, math, os, re, shutil, statistics, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paired_decode_ab import compare, load  # noqa: E402
 
@@ -47,6 +48,9 @@ ACC_RISE_OK = os.environ.get("TD_ACC_RISE_OK") == "1"
 PROBES = ("fresh-c1", "fresh-c4", "fresh-c8", "d16k-c4", "count-c8")
 WALL = ("d16k-c8",)
 BENCHY = ("pp2048 (c1)", "tg512 (c1)", "tg512 (c8)")
+# Rounded up; round Welch degrees of freedom down and cap at 20 conservatively.
+T975 = (12.707, 4.303, 3.183, 2.777, 2.571, 2.447, 2.365, 2.307, 2.263, 2.229,
+        2.201, 2.179, 2.161, 2.145, 2.132, 2.120, 2.110, 2.101, 2.094, 2.086)
 ROW = re.compile(r"^\|\s*[^|]+\|\s*([^|]+?)\s*\|\s*([\d.]+)\s*±\s*([\d.]+)")
 POS = re.compile(r'vllm:spec_decode_num_(accepted|draft)_tokens_per_pos_total\{.*position="(\d+)"\} ([0-9.e+]+)')
 
@@ -157,6 +161,20 @@ def benchy_cell(C, A, cell):
     return (am / cm - 1) * 100, noise, f"control {cm:.1f} arm {am:.1f} t/s (boots {len(c)}/{len(a)})"
 
 
+def benchy_interval(C, A, cell):
+    """95% interval for the difference of boot means, in % of the control mean."""
+    m = matched(C, A, lambda p: benchy(p).get(cell))
+    if isinstance(m, str):
+        return None
+    c, a = ([m[k][side][0] for k in sorted(m)] for side in (0, 1))
+    cm, am = statistics.mean(c), statistics.mean(a)
+    vc, va = statistics.variance(c) / len(c), statistics.variance(a) / len(a)
+    se = math.sqrt(vc + va)
+    df = (vc + va) ** 2 / (vc ** 2 / (len(c) - 1) + va ** 2 / (len(a) - 1)) if se else 1
+    t = T975[min(len(T975), max(1, int(df))) - 1]
+    return ((am - cm - t * se) / cm * 100, (am - cm + t * se) / cm * 100)
+
+
 def counts(p, cell):
     def rd(f):
         out = {}
@@ -255,9 +273,14 @@ def main(d, acc_only=False):
                 continue
             delta, noise, info = r
             line = f"{kind} {cell} {delta:+.2f}% (noise {noise:.2f}%)"
+            ci = benchy_interval(C, A, cell) if kind == "benchy" else None
+            if ci is not None:
+                interval = f"boot 95% CI [{ci[0]:+.2f},{ci[1]:+.2f}]%"
+                info += f"; {interval}"
+                line += f"; {interval}"
             if delta < -KILL_X * noise:
                 tag = "WORSE>2x"; kill.append(line)
-            elif delta < -noise:
+            elif delta < -noise or (ci is not None and ci[1] < -NOISE_FLOOR):
                 tag = "worse"; worse.append(line)
             elif delta > noise:
                 tag = "better"; better.append(line)
@@ -282,7 +305,8 @@ def main(d, acc_only=False):
 
 
 def selftest():
-    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205), ctl_wall=(300, 310), passes=2):
+    def make(d, arm=1.0, cell_arm=None, acc=0.0, fail=None, arm_wall=(200, 205), ctl_wall=(300, 310), passes=2,
+             benchy_c1=None):
         """2 boots per side (passes); arm tok/s x arm (or x cell_arm[cell]); control boot 2 is 0.3 % faster than
         boot 1; d16k-c8 wall: control 300/310 s, arm arm_wall (480 = cut), cycled over extra passes."""
         for who, k in ((w, k) for k in range(1, passes + 1) for w in ("ctl", "arm")):
@@ -307,7 +331,7 @@ def selftest():
                         f'vllm:spec_decode_num_draft_tokens_per_pos_total{{engine="0",position="{q}"}} {n}\n' for q in range(4)))
             g = arm if who == "arm" else f
             open(os.path.join(p, "task.csv"), "w").write("".join(
-                f"| qwen3.8-flash-next | {c} | {v * g:.2f} ± {v * 0.004:.2f} | x |\n"
+                f"| qwen3.8-flash-next | {c} | {(benchy_c1[who][k - 1] if benchy_c1 and c == 'tg512 (c1)' else v * g):.2f} ± {v * 0.004:.2f} | x |\n"
                 for c, v in (("pp2048 (c1)", 1700.0), ("tg512 (c1)", 55.0), ("tg512 (c8)", 130.0))))
 
     def run(drop=(), link=False, **kw):
@@ -372,6 +396,17 @@ def selftest():
     assert run(arm=1.05, passes=3) == ("PROMOTE", 0)
     assert run(arm=1.05, passes=3, drop=["arm-p3"])[0] == "INCONCLUSIVE"
     assert run(arm=1.05, passes=3, drop=["arm-p3/task.csv"])[0] == "INCONCLUSIVE"
+    # k101: the 6.2% control range hides a 5.9% c1 regression; boot CI must block PROMOTE.
+    assert run(arm=1.05, passes=4, benchy_c1={
+        "ctl": (59.5, 57.5, 59.3, 61.2), "arm": (54.6, 57.0, 57.1, 54.8),
+    }) == ("INCONCLUSIVE", 0)
+    # A sub-1% shift and an uncertain shift do not veto an otherwise successful screen.
+    assert run(arm=1.05, passes=4, benchy_c1={
+        "ctl": (100, 100, 100, 100), "arm": (99.5, 99.5, 99.5, 99.5),
+    }) == ("PROMOTE", 0)
+    assert run(arm=1.05, passes=4, benchy_c1={
+        "ctl": (90, 110, 90, 110), "arm": (95, 95, 95, 95),
+    }) == ("PROMOTE", 0)
     assert run(arm=1.05, link=True) == ("PROMOTE", 0)
     assert run(arm=1.05, link=True, drop=["arm-p2"])[0] == "INCONCLUSIVE"     # dangling link = missing pass
     print("selftest ok")

@@ -409,7 +409,7 @@ from its shard 35, which the recipe downloads on the first boot. Image and video
 - The v2.0.0 A/B measured c1, c4 and c8 against v1.5.0; c16 was not part of the A/B. k76 measured the shipped
   v2.0.0 at c16: 231.3 ± 4.9 tok/s aggregate (v1.4.0 A/B: 242.8). At c9-c16 the GDN layers run the same MXFP8 weights
   as v1.5.0.
-- c1 TG varies between boots (earlier builds showed two levels, ~95–100 and ~85–88 tok/s on counting).
+- c1 TG varies between boots (earlier builds showed two levels, ~95 to 100 and ~85 to 88 tok/s on counting).
 - Hardmode still fails a few multi-step scenarios (e.g. TC-30, TC-68, TC-74, TC-88) on every release.
 - Above 16 requests: a `max_num_seqs` 32 run (quality gate not run at that cap) reached 285.5 tok/s aggregate TG at c32
   (llama-benchy task mode, mean of 3 runs, v1.4.0; [high concurrency](docs/BENCHMARKS.md#high-concurrency-max_num_seqs-32-2026-10-05)).
@@ -421,11 +421,11 @@ from its shard 35, which the recipe downloads on the first boot. Image and video
 
 | Recipe | Release | Image | Use |
 |---|---|---|---|
-| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | v2.0.0 | `k73-20261009-21e0b201-d21d7ade-warm` (also `2x-v2.0.0`) | Default |
-| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | v1.5.0 (old name b1.6) | `b1.6-20261008-b7fbaf96-a7e649d8-warm` | Rollback, 7c4f1bc1 checkpoint |
-| `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | one-Spark v2.1.0 / v2.0.0 | | Compatibility copies; the one-Spark recipes live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
+| [`qwen3.8-flash-next-2x-dgx-spark`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark.yaml) | v2.1.0 | `k94-20261013-21e0b201-d21d7ade-warm` (also `2x-v2.1.0`) | Default |
+| [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | v2.0.0 | `k73-20261009-21e0b201-d21d7ade-warm` (also `2x-v2.0.0`) | Rollback, GDN-MSE checkpoint with drafter D1 |
+| `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | one-Spark v2.3.0 / v2.2.0 | | Compatibility copies; the one-Spark recipes live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
 
-Rolling back to `-previous` needs the full 7c4f1bc1 checkpoint (98.5 GiB) in the HF cache; on a pair that ran v1.5.0 before, it boots warm. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
+Rolling back to `-previous` (v2.0.0) needs `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `16c9bd54` plus shard 35 of 7c4f1bc1, which the recipe fetches on the first boot when it is not in the HF cache. Against v2.1.0 (`03f4a057`, same repo, same shard 35) only the 26 `mtp.*` tensors in `model-00034` differ. Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
 
 </details>
 
@@ -447,7 +447,7 @@ Each release's own A/B against the one before it is in the [release history](#re
   (control, candidate, candidate, control), T=0 TG probes at c1/c4/c8 and at 16K context, plus llama-benchy
   at temperature 1.0. Noise band = the control's boot-to-boot spread, at least 1%.
 - To be promoted, a build must pass the gate, be faster beyond noise in at least one cell, and be slower beyond
-  noise in no cell at 1–4 requests; a loss at 5–16 requests is published as a caveat
+  noise in no cell at 1 to 4 requests; a loss at 5 to 16 requests is published as a caveat
   ([`scripts/arm_verdict.py`](scripts/arm_verdict.py)).
 - MTP acceptance per draft position is compared cell by cell as a numerics canary.
 - Copy-heavy and counting workloads accept nearly every draft and show the TG ceiling of MTP; the coding grid
