@@ -1,0 +1,14 @@
+arm diff:
+   82c82
+   < name: qwen3.8-flash-next-2x-dgx-spark
+   ---
+   > name: qwen3.8-flash-next-2x-k101-gv
+   125c125
+   < container: ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm
+   ---
+   > container: spark-vllm-b12x:k101-gv-10d0acc8-d21d7ade
+   162a163,166
+   >   # k101 arm: GDN prefill views, own runtime cache
+   >   XDG_CACHE_HOME: "/cache/runtime/k101"
+   >   VLLM_CACHE_ROOT: "/cache/runtime/k101/vllm"
+   >   VLLM_GDN_PREFILL_VIEWS: "1"
