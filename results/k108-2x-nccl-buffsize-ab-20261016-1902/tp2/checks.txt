@@ -1,0 +1,14 @@
+arm diff:
+   107c107
+   < name: qwen3.8-flash-next-2x-dgx-spark
+   ---
+   > name: qwen3.8-flash-next-2x-k108
+   190a191,194
+   >   # k108 arm: own runtime cache, NCCL_BUFFSIZE=1048576 NCCL_MAX_CTAS=8
+   >   XDG_CACHE_HOME: "/cache/runtime/k108"
+   >   NCCL_BUFFSIZE: "1048576"
+   >   NCCL_MAX_CTAS: "8"
+   194c198
+   <   VLLM_CACHE_ROOT: "/cache/runtime/vllm-2x-21e0b201-10d0acc8"
+   ---
+   >   VLLM_CACHE_ROOT: "/cache/runtime/k108/vllm"
