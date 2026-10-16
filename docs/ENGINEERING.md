@@ -257,6 +257,8 @@ revision `7c4f1bc1`.
 | `CUTE_DSL_ARCH` | `sm_121a` | GB10 target |
 | `VLLM_USE_V2_MODEL_RUNNER` | `1` | V2 model runner |
 | `VLLM_USE_AOT_COMPILE`, `VLLM_USE_MEGA_AOT_ARTIFACT` | `1` | AOT compile cache, warm boots |
+| `VLLM_GDN_PREFILL_VIEWS` | `1` | v2.2.0: GDN prefill reads its projections as views and writes its output in place when a step has no speculative rows (no token gathers or output scatter); cold TTFT -2.2 to -2.5% at TP=2 |
+| `VLLM_CACHE_ROOT` | `/cache/runtime/vllm-2x-21e0b201-10d0acc8` | v2.2.0: compile cache root of its own; the AOT key does not change with the new GDN files, the artifact does |
 | `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | GDN conv state layout |
 | `SAFETENSORS_FAST_GPU` | `1` | Faster weight load |
 | `VLLM_WORKER_MULTIPROC_METHOD` | `spawn` | Worker start method |

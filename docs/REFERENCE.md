@@ -96,7 +96,7 @@ Full provenance, including the previous image: [docs/ENGINEERING.md](ENGINEERING
 | Kernel | `7.0.0-1019-nvidia` fails NCCL memory registration (`ibv_reg_mr_iova2 ... Cannot allocate memory`) once ~85-90 GB per node is GPU-resident; hold `6.17.0-1032-nvidia` |
 | Memory | Memory is unified (CPU and GPU share 121 GB). `gpu_memory_utilization` 0.84+ drives host RAM to ~2 GB and earlyoom kills the server; 0.88 kills kernel preparation. Keep 0.80 |
 | Shared memory | systemd-logind `RemoveIPC=yes` deletes the `nvidia` user's shared memory when an ssh session ends; `loginctl enable-linger nvidia` prevents it |
-| Rolling back | `sparkrun stop --all`, then `sparkrun run qwen3.8-flash-next-2x-dgx-spark-previous`. Both builds share the runtime cache |
+| Rolling back | `sparkrun stop --all`, then `sparkrun run qwen3.8-flash-next-2x-dgx-spark-previous`. Both builds share the runtime cache; v2.2.0 keeps its vLLM compile cache in `/cache/runtime/vllm-2x-21e0b201-10d0acc8` (`VLLM_CACHE_ROOT`), because its AOT key is the same as v2.1.0's and the artifact is not |
 
 ## Thinking effort
 

@@ -1,9 +1,34 @@
-# Release: v2.1.0 (k92-2x-d3-drafter-ab)
+# Release: v2.2.0 (k101s-gdn-prefill-views-ab)
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
 # 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
+
+# v2.2.0 (2026-10-16, k101s-gdn-prefill-views-ab, #176): v2.1.0 with GDN prefill views.
+#   - VLLM_GDN_PREFILL_VIEWS=1 (env block): when a step has no speculative rows, the GDN layer reads its q/k/v, a/b
+#     and gate projections as views and writes its output rows in place, instead of gathering rows by token index and
+#     scattering the output back. Graph capture keeps the gathers. The GPU tests (k101) found the outputs, recurrent
+#     states, checkpoint states and conv states bit-identical to the gather path. Same weights, plans and flags
+#     otherwise. MINOR: prefill kernels only.
+#   - Image: the v2.1.0 image (vLLM d21d7ade, b12x 21e0b201) plus six files of vLLM 10d0acc8 (ursuciprian/vllm
+#     exp/k101-gdn-views; only the GDN prefill path and envs.py change behavior, and the flag is not part of the compile
+#     cache key) plus the torch AOT artifact of both ranks for key f509586e, compiled again for those files on the pair
+#     (k101s). Plan seed 225bf665 and AOT key 295b0fe4 are v2.1.0's. The same image is also tagged 2x-v2.2.0.
+#   - Compile cache root /cache/runtime/vllm-2x-21e0b201-10d0acc8 (VLLM_CACHE_ROOT, env block): the AOT key is the
+#     same as v2.1.0's but the artifact is not, and with v2.1.0's artifact under that key vLLM compiles again on every
+#     switch. A root of its own keeps v2.2.0 and v2.1.0 apart in both directions (upgrade and rollback). The image's AOT
+#     seed is copied there. The b12x plan cache stays shared.
+#   - A/B vs v2.1.0 (k101s TP=2 stage, boots ctl arm arm ctl ctl arm arm ctl, 3 cold prompts per length and boot):
+#     cold TTFT 16K 5.63 -> 5.49 s (-2.5%, noise 1.9%), 64K 24.62 -> 24.04 s (-2.4%, noise 0.6%), 128K 55.27 ->
+#     54.04 s (-2.2%, noise 0.9%); llama-benchy pp2048 c1 +4.9% (band 4.2%); tg512 c1/c4/c8 inside noise; MTP
+#     acceptance per draft position within 0.008; KV pool -0.1%. RULE2=WIN.
+#   - Gate (k104, one TP=2 boot): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k plus two more 128k seeds
+#     20/20, stragglers c7/c8/c12/c16 0 preemptions, views path on both ranks.
+#   Results: results/k104-2x-gdn-views-gate-20261016-1131, the 1x repo's
+#   results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2. Rollback: qwen3.8-flash-next-2x-dgx-spark-previous (v2.1.0).
+#
+# Base: v2.1.0 header below.
 
 # v2.1.0 (2026-10-13, k92-2x-d3-drafter-ab, #137): v2.0.0 with MTP drafter D3 and cached-prompt usage reporting.
 #   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 03f4a057 (drafter D3, refit run 3a, the drafter of the 1x
@@ -80,7 +105,7 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark
-description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-10-13 build, v2.1.0: GDN-MSE checkpoint with MTP drafter D3, NVFP4 GDN decode / MXFP8 prefill)."
+description: "Recommended. Qwen3.8-Flash-Next on two DGX Sparks, OpenAI-compatible API on port 8000 (2026-10-16 build, v2.2.0: GDN-MSE checkpoint with MTP drafter D3, NVFP4 GDN decode / MXFP8 prefill, GDN prefill views)."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -122,7 +147,10 @@ model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
 # Previous recommended (b1.6 image, 2026-10-08): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
 # v2.1.0 image (2026-10-13, k94): the v2.0.0 image plus the 03f4a057 plan seed 225bf665 and the torch AOT cache of both
 # ranks for that path (local base built on dgx-01, CI build-b0-warm). The same image is also tagged 2x-v2.1.0.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm
+# v2.2.0 image (2026-10-16, k104s): the k101s/k104 test image (the v2.1.0 image plus six files of vLLM 10d0acc8) plus
+# the f509586e AOT artifact of both ranks for those files (local base built on dgx-01, CI build-b0-warm). The same
+# image is also tagged 2x-v2.2.0.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -143,7 +171,7 @@ max_nodes: 2
 # it, so the recipe needs no volumes (and sparkrun ignores `volumes` from an
 # untrusted registry recipe anyway). The first line of `command` seeds the
 # b12x plan-selection cache from the image; see docker/b0-warm/Dockerfile. The
-# second seeds the torch AOT compile cache from the image. The third fetches
+# second seeds the torch AOT compile cache from the image into VLLM_CACHE_ROOT. The third fetches
 # shard 35 of 7c4f1bc1 (the MXFP8 prefill weights, v2.0.0 header) when the HF
 # cache lacks it and fails the boot if it cannot.
 
@@ -160,6 +188,10 @@ defaults:
   gpu_memory_utilization: 0.80
 
 env:
+  # v2.2.0: GDN prefill views (header). Off (unset or 0) is the v2.1.0 gather path on the same image.
+  VLLM_GDN_PREFILL_VIEWS: "1"
+  # v2.2.0: compile cache root of its own (header). vLLM's AOT key is the same as v2.1.0's, the artifact is not.
+  VLLM_CACHE_ROOT: "/cache/runtime/vllm-2x-21e0b201-10d0acc8"
   # M-dispatch (v2.0.0, k73): GDN in_proj_qkvz / out_proj calls below 41 rows (decode) run the
   # checkpoint's NVFP4 weights, calls of 41+ rows (prefill) the MXFP8 weights of 7c4f1bc1.
   VLLM_B12X_NVFP4_MXFP8_MIN_TOKENS: "41"
@@ -263,7 +295,7 @@ env:
 # qwen3.8-flash-next-nvfp4-tp2-argmax-drafts.yaml.
 command: |
   S=/opt/b12x-seed/preparation; D="$XDG_CACHE_HOME/b12x/compile/preparation"; if [ -d "$S" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$D" && for f in "$S"/*.json; do [ -e "$D/$(basename "$f")" ] || cp "$f" "$D/"; done; fi
-  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
+  A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$VLLM_CACHE_ROOT" ]; then mkdir -p "$VLLM_CACHE_ROOT/torch_compile_cache" && cp -rn "$A/." "$VLLM_CACHE_ROOT/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
     --revision 03f4a0570496bbe741189f4a2a7d611679e85406 \
