@@ -1,0 +1,9 @@
+image: ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm sha256:9c05231a900dda1c301b410b90dfaf0611b1804ba4ed3d2f39c534f98e50a840 ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm sha256:9c05231a900dda1c301b410b90dfaf0611b1804ba4ed3d2f39c534f98e50a840 
+boot 1: health after 279 s; pong: pong; /v1/models: qwen3.8-flash-next ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
+serve.log: Directly load AOT 2 (from vllm-2x-21e0b201-10d0acc8 2), compiled again 0, saved AOT 0, Dynamo bytecode transform 0, views lines 1, MXFP8 copies 72, Traceback 0
+serve-node1.log: Directly load AOT 2 (from vllm-2x-21e0b201-10d0acc8 2), compiled again 0, saved AOT 0, Dynamo bytecode transform 0, views lines 1, MXFP8 copies 72, Traceback 0
+/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k104s-2x-ship-check-20261016-1438/boot1/serve.log: attention.gdn 0 measured / 0 cached, attention.qsa 0 measured / 10 cached, comm.roce 0 measured / 456 cached, gemm.blockscaled_precision 0 measured / 456 cached, moe.decode 0 measured / 456 cached, norm.hyperconnection 0 measured / 456 cached, sequence.gdn_prefill 0 measured / 10 cached, sequence.ple_embedding 0 measured / 0 cached seed check PASS 
+plan 225bf66521da31897db0719256f6a56cc38d43f87dd4f85f1f52549540986fe2.json: rank 0 682 records, rank 1 682 records (seed 682)
+revision: --revision 03f4a0570496bbe741189f4a2a7d611679e85406; env: VLLM_CACHE_ROOT=/cache/runtime/vllm-2x-21e0b201-10d0acc8 VLLM_GDN_PREFILL_VIEWS=1 XDG_CACHE_HOME=/cache/runtime 
+cleared before boot: moved plan
+cleared before boot: moved plan
