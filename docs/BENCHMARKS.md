@@ -1,6 +1,6 @@
 # Benchmarks: full tables
 
-Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.1.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
+Release names follow [VERSIONS.md](../VERSIONS.md). Section headings keep the old build names so existing links keep working; each build section opens with its release name. The current default is 2× v2.2.0; every other section is history, kept for comparison. The README's capability table and charts read [`docs/data/capability.csv`](data/capability.csv).
 
 
 ## Quality gate: pass rule
@@ -25,7 +25,8 @@ Retries and partial results so far:
 - One-Spark v2.1.0 (gated in this repo before the split): one of three ~245K seeds 19/20 (dgx-01); every gated depth
   20/20.
 
-Raw gate logs of 2× v2.1.0 (hardmode, TC-45, stragglers, fidelity):
+Raw gate logs of 2× v2.2.0 (hardmode, TC-45, stragglers, fidelity):
+[`results/k104-2x-gdn-views-gate-20261016-1131/gate/`](../results/k104-2x-gdn-views-gate-20261016-1131/gate/); 2× v2.1.0:
 [`results/k92-2x-d3-drafter-ab-20261012-2013/gate/`](../results/k92-2x-d3-drafter-ab-20261012-2013/gate/); 2× v2.0.0:
 [`results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/`](../results/k73-tp2-gdnmse-dispatch-20261009-1621/gate-c41/);
 DP=2 gate through the router: [`results/dp2-gate-k72-20261008-1135/gate/`](../results/dp2-gate-k72-20261008-1135/gate/).
@@ -64,9 +65,64 @@ What it shows: the coding probe at T=0 repeats within 0.5% between boots; llama-
 2× build, TG defaults c8 differs most (k76 172.2, k86 195.3 ± 5.1); the README now quotes the multi-boot means. Per-Spark rows, per-boot values and the 1 Hz power traces:
 [`results/k86-boot-noise-power-20261010-1704/`](../results/k86-boot-noise-power-20261010-1704/).
 
+## v2.2.0: GDN prefill views on 2× Spark (2026-10-16)
+
+Release 2× v2.2.0 (experiment k101s-gdn-prefill-views-ab, TP=2 stage, #176), the current default. No old build name.
+
+v2.2.0 = v2.1.0 with `VLLM_GDN_PREFILL_VIEWS=1`. When a step has no speculative rows, the GDN layer reads its q/k/v,
+a/b and gate projections as views and writes its output rows in place, instead of gathering rows by token index and
+scattering the output back; graph capture keeps the gathers. On one Spark the GPU tests found the outputs and every
+state bit-identical to the gather path (k101), and the change won its A/B there first. Same checkpoint (`03f4a057`),
+plans and flags. The image is the v2.1.0 image plus six files of vLLM `10d0acc8` (only the GDN prefill path and
+`envs.py` change behavior) plus the torch AOT artifact of both ranks for key `f509586e`, compiled again for those files.
+The AOT key is the same as v2.1.0's (the flag is not part of it), so the recipe gives v2.2.0 a compile cache root of its
+own (`VLLM_CACHE_ROOT=/cache/runtime/vllm-2x-21e0b201-10d0acc8`).
+
+A/B against v2.1.0 (TP=2 on the pair, boots ctl arm arm ctl ctl arm arm ctl; control = the shipped v2.1.0 recipe and image, arm =
+the test image with the flag; cold TTFT = 3 cold prompts per length and boot, noise = the larger boot-to-boot spread):
+
+| Cell | v2.1.0 | v2.2.0 | Change (noise or band) |
+|---|--:|--:|:---:|
+| Cold TTFT 16K, s | 5.63 | 5.49 | −2.5% (1.9%), better |
+| Cold TTFT 64K, s | 24.62 | 24.04 | −2.4% (0.6%), better |
+| Cold TTFT 128K, s | 55.27 | 54.04 | −2.2% (0.9%), better |
+| llama-benchy pp2048 c1, t/s | 2758.0 | 2892.4 | +4.9% (4.2%) |
+| llama-benchy tg512 c1, t/s | 78.4 | 84.9 | +8.3% (15.5%) |
+| llama-benchy tg512 c4, t/s | 160.4 | 166.2 | +3.6% (10.6%) |
+| llama-benchy tg512 c8, t/s | 193.2 | 195.2 | +1.0% (11.7%) |
+| Acceptance per draft position 1 / 2 / 3 / 4 (T=0, fresh c8) | 0.844 / 0.696 / 0.571 / 0.466 | 0.850 / 0.704 / 0.576 / 0.470 | flat |
+| KV pool, tokens | | | −0.1% |
+
+No cell worse beyond noise and all three cold lengths better: RULE2=WIN. The views path logged on both ranks on every
+arm boot and on no control boot.
+
+Gate (k104, one TP=2 boot of the test image): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k and at two more
+128k seeds, stragglers c7/c8/c12/c16 with 0 preemptions, 0 plans measured, the views line on both ranks.
+
+Release image and ship check (k104s): the image is the test image plus one layer with the `f509586e` artifacts of both
+ranks, built with CI build-b0-warm; all 103 layers of the test image come first in it unchanged, and its vLLM and b12x
+Python code hashes the same as the test image's (digest `sha256:bba1374d1026bf3eba13d68102a0001d66e8b39c35c582937094359cc91ed2e2`). The second Spark
+pulled it from ghcr and got the same image. Then a plain `sparkrun run` of the recipe, with the plan file and the new
+compile cache root moved out of the runtime caches on both Sparks: up in 279 s, AOT loaded on both ranks from the new
+root (no recompile, nothing saved), 0 plans measured, 682 records on both ranks, the views line on both ranks, pong and
+`/v1/models`; fresh c8 T=0 acceptance 0.860 / 0.713 / 0.600 / 0.490 (A/B arm 0.850 / 0.704 / 0.576 / 0.470).
+
+| Cell | k104s | A/B arm mean (band) |
+|---|--:|:---:|
+| pp2048 c1 | 2939.3 | 2892.4, +1.6% (4.2%) |
+| tg512 c1 | 83.3 | 84.9, −1.9% (15.5%) |
+| tg512 c8 | 192.8 | 195.2, −1.3% (11.7%) |
+
+PASS on the first boot. The v2.1.0 boot that restored the pair after the check left the shared compile cache root as
+it was (no artifact rewritten), so going back to v2.1.0 did not recompile either.
+
+Raw files: [1x repo `results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2/`](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2/),
+[`results/k104-2x-gdn-views-gate-20261016-1131/`](../results/k104-2x-gdn-views-gate-20261016-1131/),
+[`results/k104s-2x-ship-check-20261016-1438/`](../results/k104s-2x-ship-check-20261016-1438/).
+
 ## v2.1.0: MTP drafter D3 on 2× Spark (2026-10-13)
 
-Release 2× v2.1.0 (experiment k92-2x-d3-drafter-ab, #137), the current default. No old build name.
+Release 2× v2.1.0 (experiment k92-2x-d3-drafter-ab, #137), the default from 2026-10-13 to 2026-10-16. No old build name.
 
 v2.1.0 = v2.0.0 with drafter D3 (refit run 3a, the drafter of the 1× since v2.2.0): checkpoint
 `ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `03f4a057`, which differs from `16c9bd54` only in the 26 dense `mtp.*`

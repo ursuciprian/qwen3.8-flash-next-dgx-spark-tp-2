@@ -1,15 +1,38 @@
-# Release: v2.0.0 (k73-2x-gdnmse-dispatch)
+# Release: v2.1.0 (k92-2x-d3-drafter-ab)
 # formerly eugr-agents-serve-local16-la.yaml
 # eugr/spark-vllm-docker recipes/qwen3.8-flash-next-nvfp4-cluster.yaml, copied 2026-09-15 (repo 3e1578b) as the bisect baseline.
 # Measured on eugr's image 2026-09-15 with scripts/decode_probe.py (c1, streaming, temp 0,
 # 512 max tokens, fresh context): structured 113, prose 53 tok/s on the first boot only;
 # later boots structured 70-85, prose 43-47. tool-eval short 100/100. results/eugr-b12x/RESULTS.md.
 
-# Fallback since 2026-10-13: was the recommended recipe from 2026-10-09 to 2026-10-13 (v2.0.0, drafter D1).
-# Superseded by v2.1.0 (k92-2x-d3-drafter-ab, #137: drafter D3 at checkpoint revision 03f4a057).
-# The v1.5.0 recipe it replaced as fallback is archived as
-# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-b1.6-20261008.yaml.
+# Fallback since 2026-10-16: was the recommended recipe from 2026-10-13 to 2026-10-16 (v2.1.0, drafter D3).
+# Superseded by v2.2.0 (k101s-gdn-prefill-views-ab, #176: GDN prefill views, VLLM_GDN_PREFILL_VIEWS=1).
+# The v2.0.0 recipe it replaced as fallback is archived as
+# archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-v2.0.0-20261009.yaml.
 #
+# v2.1.0 (2026-10-13, k92-2x-d3-drafter-ab, #137): v2.0.0 with MTP drafter D3 and cached-prompt usage reporting.
+#   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 03f4a057 (drafter D3, refit run 3a, the drafter of the 1x
+#     since v2.2.0). It differs from 16c9bd54 only in the 26 dense mtp.* tensors of model-00034 and the model card; the
+#     main weights are unchanged. MINOR: drafter only (one shard to download).
+#   - --enable-prompt-tokens-details: usage.prompt_tokens_details.cached_tokens reports the prompt tokens served from
+#     the prefix cache, so clients see cache reads. It changes only the usage field.
+#   - Image: the v2.0.0 image (vLLM d21d7ade, b12x 21e0b201) plus the TP=2 plan seed 225bf665 (the 682 records of
+#     6fdfaa4c re-keyed to the 03f4a057 snapshot path, same selections) and the torch AOT cache of both ranks for that
+#     path (keys f509586e, 295b0fe4) from the k92 boots. The same image is also tagged 2x-v2.1.0.
+#   - Screen vs v2.0.0 (k92, Thunderdome rules on the pair, 4 boots per side, same image and plan selections, 0 plans
+#     measured on every counted boot): acceptance per draft position (T=0) 0.840/0.686/0.555/0.444 ->
+#     0.853/0.702/0.576/0.469; fresh c8 +1.84% (noise 1.16%), 16K c4 +3.68% (noise 2.20%); llama-benchy tg512 c1
+#     +0.9%, c4 +3.1%, c8 +2.6%, c16 +3.1%, pp2048 c1 -0.8%, all inside noise. No cell worse beyond noise.
+#   - Gate (k92, one TP=2 boot): hardmode 94, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k plus two more 128k seeds
+#     20/20, stragglers c8/c12/c16 0 preemptions. The flag above is frontend only, so the gate was not rerun.
+#   - Check boot (k94 + k94b recheck, image seeds moved out of the runtime caches first): AOT loaded on both ranks, 0 plans
+#     measured, fresh c8 acceptance 0.851/0.701/0.574/0.471; first boot of a runtime cache 348 s (50 b12x kernel compiles,
+#     keyed by GPU, not shipped), the next one 243 s; llama-benchy 2-boot means within the k92 noise bands.
+#   Results: results/k92-2x-d3-drafter-ab-20261012-2013, results/k94-2x-ship-check-20261013-1056,
+#   results/k94b-2x-ship-recheck-20261013-1115. Rollback: qwen3.8-flash-next-2x-dgx-spark-previous (v2.0.0).
+#
+# Base: v2.0.0 header below.
+
 # v2.0.0 (2026-10-09, k73-2x-gdnmse-dispatch, #123): v1.5.0 (old name b1.6) on the GDN-MSE checkpoint with an M-dispatch.
 #   - Model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE @ 16c9bd54 = local-inference-lab/Qwen3.8-Flash-Next-NVFP4
 #     @ 7c4f1bc1 with the GDN in_proj_qkv / in_proj_z / out_proj weights of all 36 GDN layers requantized from the BF16
@@ -62,7 +85,7 @@
 
 recipe_version: "1"
 name: qwen3.8-flash-next-2x-dgx-spark-previous
-description: "Fallback. The previous build (2026-10-09, v2.0.0); pick it only if the recommended recipe misbehaves."
+description: "Fallback. The previous build (2026-10-13, v2.1.0); pick it only if the recommended recipe misbehaves."
 
 model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
 # Pinned twice on purpose: model_revision drives sparkrun's download and cache
@@ -70,7 +93,7 @@ model: ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE
 # (docs/ENGINEERING.md known issues). The MXFP8 prefill weights come from
 # local-inference-lab/Qwen3.8-Flash-Next-NVFP4 @ 7c4f1bc1 (shard 35), pinned by
 # full path in VLLM_B12X_NVFP4_MXFP8_CHECKPOINT and fetched by `command`.
-model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
+model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
 # B1.4 image, promoted 2026-10-01: build.sh image spark-vllm-b12x:b14-b7fbaf96-a7e649d8
 # (vLLM ursuciprian/vllm exp/b14@a7e649d8, tag shipped-b1.4-20261001 = b1.3 7344a9976
 # + the r6/r7 MTP draft-vocab support (VLLM_MTP_DRAFT_VOCAB) + vllm#923 QSA prefill-flag
@@ -102,7 +125,9 @@ model_revision: 16c9bd54788d12390838a65ce4a4ecda97fa5f1d
 # AOT keys, up in 170 s, 0 b12x plans measured on both ranks (scripts/check_seed.py), AOT loaded, no Dynamo compile,
 # fresh-c4 T=0 acceptance 0.842/0.692/0.562/0.449, llama-benchy tg512 c1 81.2 / c8 199.7 / c16 236.6 tok/s.
 # Previous recommended (b1.6 image, 2026-10-08): qwen3.8-flash-next-2x-dgx-spark-previous.yaml.
-container: ghcr.io/ursuciprian/spark-vllm-b12x:k73-20261009-21e0b201-d21d7ade-warm
+# v2.1.0 image (2026-10-13, k94): the v2.0.0 image plus the 03f4a057 plan seed 225bf665 and the torch AOT cache of both
+# ranks for that path (local base built on dgx-01, CI build-b0-warm). The same image is also tagged 2x-v2.1.0.
+container: ghcr.io/ursuciprian/spark-vllm-b12x:k94-20261013-21e0b201-d21d7ade-warm
 runtime: vllm
 
 # Empty on purpose. Any token here (including --exp-b12x) makes sparkrun's
@@ -246,7 +271,7 @@ command: |
   A=/opt/b12x-seed/torch_compile_cache; if [ -d "$A" ] && [ -n "$XDG_CACHE_HOME" ]; then mkdir -p "$XDG_CACHE_HOME/vllm/torch_compile_cache" && cp -rn "$A/." "$XDG_CACHE_HOME/vllm/torch_compile_cache/" || true; fi
   M=/cache/huggingface/hub/models--local-inference-lab--Qwen3.8-Flash-Next-NVFP4/snapshots/7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd; [ -s $M/model-00035-of-00036.safetensors ] && [ -s $M/model.safetensors.index.json ] || HF_HUB_OFFLINE=0 python3 -c "from huggingface_hub import snapshot_download as d; d('local-inference-lab/Qwen3.8-Flash-Next-NVFP4', revision='7c4f1bc1a2d6847e0cbc01ac6b823f00251de8dd', allow_patterns=['model-00035-of-00036.safetensors', 'model.safetensors.index.json'])" || exit 1
   vllm serve ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE \
-    --revision 16c9bd54788d12390838a65ce4a4ecda97fa5f1d \
+    --revision 03f4a0570496bbe741189f4a2a7d611679e85406 \
     --host {host} \
     --port {port} \
     --trust-remote-code \
@@ -276,6 +301,7 @@ command: |
     --reasoning-parser qwen3 \
     --tool-call-parser qwen3_xml \
     --enable-auto-tool-choice \
+    --enable-prompt-tokens-details \
     --default-chat-template-kwargs '{{"reasoning_effort":"medium"}}' \
     --compilation-config '{{"pass_config":{{"fuse_act_quant":true}}}}' \
     --gpu-memory-utilization {gpu_memory_utilization}
