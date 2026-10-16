@@ -260,3 +260,24 @@ stage's own check on the boot dirs before the arm is promoted.
   Drops past 0.03 still KILL. Unset, the rule stays two-sided.
 - llama-benchy runs at T=1 with 2 runs per boot. Its noise band is wider than the probes'.
 - The gate is summarized, not judged.
+
+## Boot-level regression check
+
+The reporter prints a Welch 95% interval for each llama-benchy cell using one
+mean per boot. An interval wholly below -1% marks the cell `worse` and prevents
+`PROMOTE`, even when the older noise band (the full control range) is wider than
+the slowdown. It yields `INCONCLUSIVE` unless an existing KILL condition also
+applies. This is a per-cell check only; it does not make quality or missing-data requirements optional.
+
+This catches k101's single-Spark c1 decode result: about -5.9%, with a boot-level
+interval near [-10.3%, -1.5%], was previously hidden by a 6.3% control noise band.
+A targeted repeat is needed before promotion. k101 is tracked in
+[1x #65](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/issues/65).
+
+The calculation uses only the standard library, floors the Welch degrees of
+freedom, and uses an upper-rounded t table capped at 20 degrees of freedom.
+Intervals are therefore conservative approximations. Run
+`python3 scripts/thunderdome_report.py --selftest` to check the rules, including
+the k101 regression and sub-1% or uncertain changes that should not block a win.
+Archived experiment scripts retain their historical rules; new jobs should use
+the current reporter rather than an older result directory's copy.
