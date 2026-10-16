@@ -25,7 +25,12 @@
 #     acceptance per draft position within 0.008; KV pool -0.1%. RULE2=WIN.
 #   - Gate (k104, one TP=2 boot): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k plus two more 128k seeds
 #     20/20, stragglers c7/c8/c12/c16 0 preemptions, views path on both ranks.
-#   Results: results/k104-2x-gdn-views-gate-20261016-1131, the 1x repo's
+#   - Check boot (k104s, plan file and the new compile cache root moved out of the runtime caches first): up in 279 s,
+#     AOT loaded on both ranks from the new root with no recompile, 0 plans measured, 682 records on both ranks, views
+#     path on both ranks; fresh c8 acceptance 0.860/0.713/0.600/0.490; llama-benchy pp2048 c1 2939.3, tg512 c1 83.3,
+#     tg512 c8 192.8 t/s, inside the k101s bands. Every layer of the tested image is in the release image unchanged, and
+#     its vLLM and b12x code is byte-identical to the tested image.
+#   Results: results/k104-2x-gdn-views-gate-20261016-1131, results/k104s-2x-ship-check-20261016-1438, the 1x repo's
 #   results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2. Rollback: qwen3.8-flash-next-2x-dgx-spark-previous (v2.1.0).
 #
 # Base: v2.1.0 header below.
@@ -149,7 +154,7 @@ model_revision: 03f4a0570496bbe741189f4a2a7d611679e85406
 # ranks for that path (local base built on dgx-01, CI build-b0-warm). The same image is also tagged 2x-v2.1.0.
 # v2.2.0 image (2026-10-16, k104s): the k101s/k104 test image (the v2.1.0 image plus six files of vLLM 10d0acc8) plus
 # the f509586e AOT artifact of both ranks for those files (local base built on dgx-01, CI build-b0-warm). The same
-# image is also tagged 2x-v2.2.0.
+# image is also tagged 2x-v2.2.0. Digest: sha256:bba1374d1026bf3eba13d68102a0001d66e8b39c35c582937094359cc91ed2e2 (arm64; kept as a tag, see above).
 container: ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm
 runtime: vllm
 

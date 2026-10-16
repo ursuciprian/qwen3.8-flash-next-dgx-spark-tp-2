@@ -76,9 +76,9 @@ sparkrun run qwen3.8-flash-next-2x-dgx-spark
 ```
 
 First run downloads ~140 GB per node (time depends on the link; a 98 GB checkpoint download took 3 h 15 min at
-~8.6 MB/s on mine). Boot with model and image on disk: ~4 to 6 min the first time (348 s on the v2.1.0 image check, which includes
-50 b12x kernel compiles that are keyed by GPU and not shipped), ~4 min after that (243 s on the recheck); a
-cold-page-cache boot was not timed on v2.1.0. `sparkrun run` returns before the
+~8.6 MB/s on mine). Boot with model and image on disk: ~5 min (279 s on the v2.2.0 image check, with the plan file and the compile
+cache coming from the image). A runtime cache that has never seen your GPUs also builds ~50 b12x kernels, which are
+keyed by GPU and not shipped (348 s on the v2.1.0 image check); a cold-page-cache boot was not timed on v2.2.0. `sparkrun run` returns before the
 engine is ready: poll `http://<head>:8000/health` (`<head>` = first node), then use `http://<head>:8000/v1`,
 model `qwen3.8-flash-next`:
 
@@ -141,7 +141,7 @@ and does not refresh them on `run`.
 | **Concurrent requests** | up to 16 (max_num_seqs) |
 | **KV cache** | 3,527,297 tokens, 13.46 concurrent 262K requests (v2.0.0 boot log) |
 | **API** | OpenAI-compatible, tool calling, reasoning on (`reasoning_effort` medium); `usage.prompt_tokens_details.cached_tokens` reports prefix-cache hits |
-| **Disk / start time** | ~140 GB per node / ~4 min warm (243 s on the v2.1.0 recheck boot; 348 s on the first boot of a runtime cache) |
+| **Disk / start time** | ~140 GB per node / ~5 min warm (279 s on the v2.2.0 check boot; up to ~6 min when the b12x kernels for your GPUs are not built yet) |
 | **License** | Recipe Apache-2.0; weights Qwen Community License 1.0 |
 
 | Task | Section |
@@ -427,7 +427,7 @@ from its shard 35, which the recipe downloads on the first boot. Image and video
 | [`qwen3.8-flash-next-2x-dgx-spark-previous`](recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-previous.yaml) | v2.1.0 | `k94-20261013-21e0b201-d21d7ade-warm` (also `2x-v2.1.0`) | Rollback, same checkpoint without GDN prefill views |
 | `qwen3.8-flash-next-1x-dgx-spark`, `-previous` | one-Spark v2.3.0 / v2.2.0 | | Compatibility copies; the one-Spark recipes live in [qwen3.8-flash-next-1x-dgx-spark](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark) |
 
-Rolling back to `-previous` (v2.1.0) needs no download: it serves the same checkpoint (`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `03f4a057` plus shard 35 of 7c4f1bc1) on the v2.1.0 image. v2.2.0 keeps its torch compile cache in a root of its own (`VLLM_CACHE_ROOT`), so neither direction recompiles. The v2.0.0 recipe is archived in [archive/recipes/](archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-v2.0.0-20261009.yaml). Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
+Rolling back to `-previous` (v2.1.0) needs no download: it serves the same checkpoint (`ursuciprian/Qwen3.8-Flash-Next-NVFP4-GDN-MSE` @ `03f4a057` plus shard 35 of 7c4f1bc1) on the v2.1.0 image. v2.2.0 keeps its torch compile cache in a root of its own (`VLLM_CACHE_ROOT`), so switching does not recompile: in the v2.2.0 check the v2.2.0 boot loaded its cache from its own root, and the v2.1.0 boot after it left the shared root unchanged. The v2.0.0 recipe is archived in [archive/recipes/](archive/recipes/qwen3.8-flash-next/qwen3.8-flash-next-2x-dgx-spark-v2.0.0-20261009.yaml). Renames: [recipes/RENAMES.md](recipes/RENAMES.md).
 
 </details>
 

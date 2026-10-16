@@ -99,10 +99,26 @@ arm boot and on no control boot.
 Gate (k104, one TP=2 boot of the test image): hardmode 90, TC-45 100, fidelity 20/20 at 8k/32k/64k/128k and at two more
 128k seeds, stragglers c7/c8/c12/c16 with 0 preemptions, 0 plans measured, the views line on both ranks.
 
-Ship check (k104s): see [`results/`](../results/) (filled in when the check boot finishes).
+Release image and ship check (k104s): the image is the test image plus one layer with the `f509586e` artifacts of both
+ranks, built with CI build-b0-warm; all 103 layers of the test image come first in it unchanged, and its vLLM and b12x
+Python code hashes the same as the test image's (digest `sha256:bba1374d1026bf3eba13d68102a0001d66e8b39c35c582937094359cc91ed2e2`). The second Spark
+pulled it from ghcr and got the same image. Then a plain `sparkrun run` of the recipe, with the plan file and the new
+compile cache root moved out of the runtime caches on both Sparks: up in 279 s, AOT loaded on both ranks from the new
+root (no recompile, nothing saved), 0 plans measured, 682 records on both ranks, the views line on both ranks, pong and
+`/v1/models`; fresh c8 T=0 acceptance 0.860 / 0.713 / 0.600 / 0.490 (A/B arm 0.850 / 0.704 / 0.576 / 0.470).
+
+| Cell | k104s | A/B arm mean (band) |
+|---|--:|:---:|
+| pp2048 c1 | 2939.3 | 2892.4, +1.6% (4.2%) |
+| tg512 c1 | 83.3 | 84.9, −1.9% (15.5%) |
+| tg512 c8 | 192.8 | 195.2, −1.3% (11.7%) |
+
+PASS on the first boot. The v2.1.0 boot that restored the pair after the check left the shared compile cache root as
+it was (no artifact rewritten), so going back to v2.1.0 did not recompile either.
 
 Raw files: [1x repo `results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2/`](https://github.com/ursuciprian/qwen3.8-flash-next-1x-dgx-spark/tree/main/results/k101s-1x-gdn-prefill-views-ab-20261015-1600/tp2/),
-[`results/k104-2x-gdn-views-gate-20261016-1131/`](../results/k104-2x-gdn-views-gate-20261016-1131/).
+[`results/k104-2x-gdn-views-gate-20261016-1131/`](../results/k104-2x-gdn-views-gate-20261016-1131/),
+[`results/k104s-2x-ship-check-20261016-1438/`](../results/k104s-2x-ship-check-20261016-1438/).
 
 ## v2.1.0: MTP drafter D3 on 2× Spark (2026-10-13)
 
