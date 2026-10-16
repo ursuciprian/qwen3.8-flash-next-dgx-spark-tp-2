@@ -1,0 +1,256 @@
+{
+ "args": {
+  "base": "http://localhost:8000",
+  "model": "qwen3.8-flash-next",
+  "depths": "128000",
+  "k": 5,
+  "trials": 4,
+  "temperature": 0.6,
+  "max_tokens": 4096,
+  "thinking": "on",
+  "concurrency": 1,
+  "chars_per_token": 4.6,
+  "seed": 11,
+  "timeout": 1800,
+  "out": "/home/nvidia/GEN-AI/qwen3.8-flash-next-dgx-spark-tp-2/results/k104-2x-gdn-views-gate-20261016-1131/gate/fidelity-seed11.json",
+  "selftest": false
+ },
+ "depths": [
+  {
+   "depth": 128000,
+   "actual_prompt_tokens": 244166,
+   "counts": {
+    "exact": 20,
+    "near": 0,
+    "wrong": 0,
+    "explore": 0,
+    "no_call": 0
+   },
+   "typo_rate": 0.0,
+   "mean_ttft": 7.063097810745239,
+   "mean_latency": 8.315799117088318,
+   "results": [
+    {
+     "target": "INV-1000-AA22",
+     "path": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244164,
+     "ttft": 118.99433326721191,
+     "dt": 120.19709467887878
+    },
+    {
+     "target": "INV-1000-AA22",
+     "path": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244164,
+     "ttft": 1.1470129489898682,
+     "dt": 2.1736416816711426
+    },
+    {
+     "target": "INV-1000-AA22",
+     "path": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244164,
+     "ttft": 1.1265907287597656,
+     "dt": 2.1096456050872803
+    },
+    {
+     "target": "INV-1000-AA22",
+     "path": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/vertex-cargo-9b7661/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244164,
+     "ttft": 1.2457923889160156,
+     "dt": 2.3141825199127197
+    },
+    {
+     "target": "INV-1001-F224",
+     "path": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1155707836151123,
+     "dt": 2.1333842277526855
+    },
+    {
+     "target": "INV-1001-F224",
+     "path": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1320273876190186,
+     "dt": 2.709900140762329
+    },
+    {
+     "target": "INV-1001-F224",
+     "path": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1792244911193848,
+     "dt": 2.109102725982666
+    },
+    {
+     "target": "INV-1001-F224",
+     "path": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-9fc2de/svc-ingest-v2/logs/access.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.2630431652069092,
+     "dt": 3.731959104537964
+    },
+    {
+     "target": "INV-1002-9897",
+     "path": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "prompt_tokens": 244166,
+     "ttft": 1.269554853439331,
+     "dt": 2.3321032524108887
+    },
+    {
+     "target": "INV-1002-9897",
+     "path": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "prompt_tokens": 244166,
+     "ttft": 1.2209289073944092,
+     "dt": 2.914288282394409
+    },
+    {
+     "target": "INV-1002-9897",
+     "path": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "prompt_tokens": 244166,
+     "ttft": 1.1896231174468994,
+     "dt": 2.3070905208587646
+    },
+    {
+     "target": "INV-1002-9897",
+     "path": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-b68e3f/svc-reconcile_v1/logs/access.log",
+     "prompt_tokens": 244166,
+     "ttft": 1.1240265369415283,
+     "dt": 2.259417772293091
+    },
+    {
+     "target": "INV-1003-5BA8",
+     "path": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1537549495697021,
+     "dt": 2.711422920227051
+    },
+    {
+     "target": "INV-1003-5BA8",
+     "path": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1073472499847412,
+     "dt": 2.418827772140503
+    },
+    {
+     "target": "INV-1003-5BA8",
+     "path": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1372771263122559,
+     "dt": 2.2281782627105713
+    },
+    {
+     "target": "INV-1003-5BA8",
+     "path": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/nordic-freight-f48845/svc-export-v1/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1281070709228516,
+     "dt": 2.4092800617218018
+    },
+    {
+     "target": "INV-1004-A593",
+     "path": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.151228666305542,
+     "dt": 2.328605890274048
+    },
+    {
+     "target": "INV-1004-A593",
+     "path": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.18558931350708,
+     "dt": 2.1575028896331787
+    },
+    {
+     "target": "INV-1004-A593",
+     "path": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.1268246173858643,
+     "dt": 2.477473258972168
+    },
+    {
+     "target": "INV-1004-A593",
+     "path": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "cat": "exact",
+     "dist": 0,
+     "hallucinated": false,
+     "cmd": "/srv/clients/acme-biling-dfadaf/svc-ingest_v2/logs/error.log",
+     "prompt_tokens": 244165,
+     "ttft": 1.2640986442565918,
+     "dt": 2.2928807735443115
+    }
+   ]
+  }
+ ]
+}
