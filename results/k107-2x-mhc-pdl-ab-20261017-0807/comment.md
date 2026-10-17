@@ -1,0 +1,42 @@
+k107 result: I tested programmatic dependent launch for the b12x hyper-connection kernels (`B12X_MHC_PDL=1`) on the 2x against the 2x v2.2.0, TP=2, 4 boots per side in the order ctl arm arm ctl ctl arm arm ctl. The arm image is the v2.2.0 image with one vLLM change, the declaration of `B12X_MHC_PDL` in `vllm/envs.py` (`648bd37e25`), so the setting reaches the compile cache key; the arm also has a compile cache root of its own. Measure only; nothing ships from this job.
+
+`RULE2=FLAT`. Main cells: tg512 at c1, c4 and c8 and the fresh-c1 paired probe.
+Nothing is worse beyond noise, but no decode cell is faster beyond noise in this run.
+
+```
+k107 2026-10-17 10:12:43 EEST: B12X_MHC_PDL=1 on the 2x v2.2.0 (ghcr.io/ursuciprian/spark-vllm-b12x:k107-20261016-d717da5a-d21d7ade-648bd37e: vLLM 648bd37e declares it, b12x d717da5a) vs 2x v2.2.0 (ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm), TP=2, 4 boots per side
+RULE2=FLAT
+
+k107 2x 2026-10-17 08:08:30 EEST: arm ghcr.io/ursuciprian/spark-vllm-b12x:k107-20261016-d717da5a-d21d7ade-648bd37e B12X_MHC_PDL=1 vs 2x v2.2.0 (ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm)
+bake: prebake boot 313s Dynamo bytecode transform time; full boot 202s Directly load AOT compilation; rank 0 measured 0
+screen (ctl:1 arm:1 arm:2 ctl:2 ctl:3 arm:3 arm:4 ctl:4):
+main cells (can make WIN): tg512 (c1), tg512 (c4), tg512 (c8), fresh-c1
+== cold TTFT (s, mean of 3 per boot); noise = larger boot-to-boot spread of either side (floor 0.5%); CI guard: whole boot-level 95% CI above +1% is worse
+  16K: ctl 5.78 5.43 5.43 5.47 | arm 5.50 5.48 5.43 5.41 -> -1.3% (-0.07 s; noise 6.5%; CI [-6.4,+3.8]) flat
+  64K: ctl 24.17 23.88 23.90 24.01 | arm 24.15 24.19 23.91 23.89 -> +0.2% (+0.04 s; noise 1.3%; CI [-0.9,+1.3]) flat
+  128K: ctl 54.55 53.71 53.84 53.97 | arm 53.98 56.65 54.14 53.87 -> +1.2% (+0.64 s; noise 5.1%; CI [-2.9,+5.3]) flat
+== llama-benchy pp2048 + tg512 (tok/s, side means; band = max(k92 band, side spread); CI guard: whole boot-level 95% CI below -1% is worse)
+  pp2048 (c1): ctl 2869.0 arm 2876.3 +0.3% (band 6.5%; CI [-4.63,+5.13])
+  tg512 (c1): ctl 89.2 arm 85.6 -4.0% (band 11.9%; CI [-10.34,+2.42])
+  tg512 (c4): ctl 162.6 arm 159.8 -1.7% (band 20.4%; CI [-17.68,+14.24])
+  tg512 (c8): ctl 187.3 arm 187.2 -0.0% (band 6.9%; CI [-5.18,+5.11])
+== fresh-c1 T=0 probe, pass K of the arm paired with pass K of the control (decode tok/s, stalls excluded)
+  fresh-c1: +4.12% (noise 20.44%; n=16 CI [-7.2,+17.5] control boot-to-boot +20.44%, step -0.34%) flat
+== MTP acceptance per draft position (fresh c8, T=0), pooled per side
+  ctl: 0.847 0.700 0.571 0.464
+  arm: 0.850 0.700 0.580 0.475
+== path: arm pairs B12X_MHC_PDL=1 on both ranks, images; KV pool per boot
+  ctl-p1: pairs 0/1 on both ranks; image ok; KV 3344646 tokens, 27.8 GiB available for KV
+  ctl-p2: pairs 0/1 on both ranks; image ok; KV 3541717 tokens, 29.43 GiB available for KV
+  ctl-p3: pairs 0/1 on both ranks; image ok; KV 3512322 tokens, 29.19 GiB available for KV
+  ctl-p4: pairs 0/1 on both ranks; image ok; KV 3518053 tokens, 29.24 GiB available for KV
+  arm-p1: pairs 1/1 on both ranks; image ok; KV 3509180 tokens, 29.16 GiB available for KV
+  arm-p2: pairs 1/1 on both ranks; image ok; KV 3596253 tokens, 29.89 GiB available for KV
+  arm-p3: pairs 1/1 on both ranks; image ok; KV 3518978 tokens, 29.25 GiB available for KV
+  arm-p4: pairs 1/1 on both ranks; image ok; KV 3517868 tokens, 29.24 GiB available for KV
+  KV pool arm vs ctl: +1.6% tokens, +0.47 GiB per rank
+better: none; in the main cells: none
+RULE2=FLAT
+```
+
+Results: {RESULTS_URL}
