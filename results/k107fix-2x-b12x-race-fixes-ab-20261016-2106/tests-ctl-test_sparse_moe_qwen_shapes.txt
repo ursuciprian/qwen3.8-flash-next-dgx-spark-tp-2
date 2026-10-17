@@ -1,0 +1,17 @@
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting test_sparse_moe_qwen_shapes.py ________________
+ImportError while importing test module '/b/tests/moe/test_sparse_moe_qwen_shapes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/b/tests/moe/test_sparse_moe_qwen_shapes.py:15: in <module>
+    from benchmarks.benchmark_moe import (
+E   ModuleNotFoundError: No module named 'benchmarks.benchmark_moe'
+=========================== short test summary info ============================
+ERROR ../b/tests/moe/test_sparse_moe_qwen_shapes.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.69s

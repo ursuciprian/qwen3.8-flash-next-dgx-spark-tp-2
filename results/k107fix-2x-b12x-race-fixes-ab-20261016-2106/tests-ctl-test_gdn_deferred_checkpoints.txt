@@ -1,0 +1,343 @@
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+....................s...FFFFF..                                          [100%]
+=================================== FAILURES ===================================
+_______________ test_external_records_are_the_in_pool_records[1] _______________
+
+live_seqs = 1
+
+    @pytest.mark.parametrize("live_seqs", (1, 8, 16))
+    def test_external_records_are_the_in_pool_records(live_seqs) -> None:
+        device = require_sm120()
+        lengths = (5,) * live_seqs
+        pool_binding, pool, ext_binding, ext = _external_pair(device, lengths)
+        gdn.run(pool_binding)
+        gdn.run(ext_binding)
+        torch.cuda.synchronize(device)
+>       _assert_same_step(pool, ext, lengths)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:804: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+pool = {'A_log': tensor([-0.0561, -0.0019,  0.0653,  0.0538,  0.1006, -0.0295, -0.0472, -0.0130,
+        -0.0951,  0.0088,  0...-0.0649,
+         0.0684,  0.3053, -0.1550, -0.0785, -0.0501, -0.0605,  0.0692,  0.2147],
+       device='cuda:0'), ...}
+ext = {'A_log': tensor([-0.0561, -0.0019,  0.0653,  0.0538,  0.1006, -0.0295, -0.0472, -0.0130,
+        -0.0951,  0.0088,  0...-0.0649,
+         0.0684,  0.3053, -0.1550, -0.0785, -0.0501, -0.0605,  0.0692,  0.2147],
+       device='cuda:0'), ...}
+query_lengths = (5,)
+
+    def _assert_same_step(pool, ext, query_lengths) -> None:
+        tokens = sum(query_lengths)
+        torch.testing.assert_close(
+            ext["output"][:tokens], pool["output"][:tokens], rtol=0, atol=0
+        )
+        width = ext["records"].shape[1]
+        slots = pool["recurrent_state"].shape[0]
+        pool_flat = pool["recurrent_state"].view(slots, -1)
+        pool_indices = pool["state_indices"].tolist()
+        ext_indices = ext["state_indices"].tolist()
+        for request, length in enumerate(query_lengths):
+            base = pool_indices[request][0]
+            torch.testing.assert_close(
+                ext["recurrent_state"][base],
+                pool["recurrent_state"][base],
+                rtol=0,
+                atol=0,
+            )
+            # The record blocks themselves, byte for byte, in their new home.
+            for column in range(1, length):
+>               torch.testing.assert_close(
+                    ext["records"][ext_indices[request][column]],
+                    pool_flat[pool_indices[request][column], :width],
+                    rtol=0,
+                    atol=0,
+                )
+E               AssertionError: Tensor-likes are not equal!
+E               
+E               Mismatched elements: 1440 / 16896 (8.5%)
+E               Greatest absolute difference: nan at index (161,)
+E               Greatest relative difference: nan at index (161,)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:788: AssertionError
+_______________ test_external_records_are_the_in_pool_records[8] _______________
+
+live_seqs = 8
+
+    @pytest.mark.parametrize("live_seqs", (1, 8, 16))
+    def test_external_records_are_the_in_pool_records(live_seqs) -> None:
+        device = require_sm120()
+        lengths = (5,) * live_seqs
+        pool_binding, pool, ext_binding, ext = _external_pair(device, lengths)
+        gdn.run(pool_binding)
+        gdn.run(ext_binding)
+        torch.cuda.synchronize(device)
+>       _assert_same_step(pool, ext, lengths)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:804: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+pool = {'A_log': tensor([ 0.0724, -0.1138,  0.0586,  0.0131, -0.0062, -0.0769, -0.0537,  0.0511,
+        -0.1042, -0.1611,  0...-0.0890,
+        -0.0935, -0.0887,  0.0216,  0.0508,  0.1379, -0.0760,  0.1164,  0.0098],
+       device='cuda:0'), ...}
+ext = {'A_log': tensor([ 0.0724, -0.1138,  0.0586,  0.0131, -0.0062, -0.0769, -0.0537,  0.0511,
+        -0.1042, -0.1611,  0...-0.0890,
+        -0.0935, -0.0887,  0.0216,  0.0508,  0.1379, -0.0760,  0.1164,  0.0098],
+       device='cuda:0'), ...}
+query_lengths = (5, 5, 5, 5, 5, 5, ...)
+
+    def _assert_same_step(pool, ext, query_lengths) -> None:
+        tokens = sum(query_lengths)
+        torch.testing.assert_close(
+            ext["output"][:tokens], pool["output"][:tokens], rtol=0, atol=0
+        )
+        width = ext["records"].shape[1]
+        slots = pool["recurrent_state"].shape[0]
+        pool_flat = pool["recurrent_state"].view(slots, -1)
+        pool_indices = pool["state_indices"].tolist()
+        ext_indices = ext["state_indices"].tolist()
+        for request, length in enumerate(query_lengths):
+            base = pool_indices[request][0]
+            torch.testing.assert_close(
+                ext["recurrent_state"][base],
+                pool["recurrent_state"][base],
+                rtol=0,
+                atol=0,
+            )
+            # The record blocks themselves, byte for byte, in their new home.
+            for column in range(1, length):
+>               torch.testing.assert_close(
+                    ext["records"][ext_indices[request][column]],
+                    pool_flat[pool_indices[request][column], :width],
+                    rtol=0,
+                    atol=0,
+                )
+E               AssertionError: Tensor-likes are not equal!
+E               
+E               Mismatched elements: 1440 / 16896 (8.5%)
+E               Greatest absolute difference: nan at index (161,)
+E               Greatest relative difference: nan at index (161,)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:788: AssertionError
+______________ test_external_records_are_the_in_pool_records[16] _______________
+
+live_seqs = 16
+
+    @pytest.mark.parametrize("live_seqs", (1, 8, 16))
+    def test_external_records_are_the_in_pool_records(live_seqs) -> None:
+        device = require_sm120()
+        lengths = (5,) * live_seqs
+        pool_binding, pool, ext_binding, ext = _external_pair(device, lengths)
+        gdn.run(pool_binding)
+        gdn.run(ext_binding)
+        torch.cuda.synchronize(device)
+>       _assert_same_step(pool, ext, lengths)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:804: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+pool = {'A_log': tensor([ 0.1556,  0.0207, -0.0172,  0.0188,  0.0972,  0.0980, -0.0618, -0.0399,
+        -0.1467,  0.0246,  0...-0.1631,
+         0.1764, -0.0026, -0.1096, -0.1764,  0.1093, -0.0439, -0.0810,  0.0423],
+       device='cuda:0'), ...}
+ext = {'A_log': tensor([ 0.1556,  0.0207, -0.0172,  0.0188,  0.0972,  0.0980, -0.0618, -0.0399,
+        -0.1467,  0.0246,  0...-0.1631,
+         0.1764, -0.0026, -0.1096, -0.1764,  0.1093, -0.0439, -0.0810,  0.0423],
+       device='cuda:0'), ...}
+query_lengths = (5, 5, 5, 5, 5, 5, ...)
+
+    def _assert_same_step(pool, ext, query_lengths) -> None:
+        tokens = sum(query_lengths)
+        torch.testing.assert_close(
+            ext["output"][:tokens], pool["output"][:tokens], rtol=0, atol=0
+        )
+        width = ext["records"].shape[1]
+        slots = pool["recurrent_state"].shape[0]
+        pool_flat = pool["recurrent_state"].view(slots, -1)
+        pool_indices = pool["state_indices"].tolist()
+        ext_indices = ext["state_indices"].tolist()
+        for request, length in enumerate(query_lengths):
+            base = pool_indices[request][0]
+            torch.testing.assert_close(
+                ext["recurrent_state"][base],
+                pool["recurrent_state"][base],
+                rtol=0,
+                atol=0,
+            )
+            # The record blocks themselves, byte for byte, in their new home.
+            for column in range(1, length):
+>               torch.testing.assert_close(
+                    ext["records"][ext_indices[request][column]],
+                    pool_flat[pool_indices[request][column], :width],
+                    rtol=0,
+                    atol=0,
+                )
+E               AssertionError: Tensor-likes are not equal!
+E               
+E               Mismatched elements: 1440 / 16896 (8.5%)
+E               Greatest absolute difference: nan at index (161,)
+E               Greatest relative difference: nan at index (161,)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:788: AssertionError
+_____ test_external_replay_commit_and_export_match_in_pool[query_lengths0] _____
+
+query_lengths = (5, 5, 5, 5, 5, 5, ...)
+
+    @pytest.mark.parametrize(
+        "query_lengths", ((5,) * 8, (1, 5, 3, 2, 5, 4, 1, 5))
+    )
+    def test_external_replay_commit_and_export_match_in_pool(query_lengths) -> None:
+        """Fused replay, in-place commit and export commit, accepted 1..length."""
+        device = require_sm120()
+        live = len(query_lengths)
+        pool_binding, pool, ext_binding, ext = _external_pair(device, query_lengths)
+        gdn.run(pool_binding)
+        gdn.run(ext_binding)
+        torch.cuda.synchronize(device)
+>       _assert_same_step(pool, ext, query_lengths)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:818: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+pool = {'A_log': tensor([-0.0006,  0.1983,  0.0043, -0.0653, -0.1311, -0.0724, -0.0504, -0.0902,
+        -0.0113, -0.0765, -0...-0.0827,
+        -0.0376, -0.0054, -0.0399, -0.0014, -0.0147,  0.1928,  0.0592, -0.1331],
+       device='cuda:0'), ...}
+ext = {'A_log': tensor([-0.0006,  0.1983,  0.0043, -0.0653, -0.1311, -0.0724, -0.0504, -0.0902,
+        -0.0113, -0.0765, -0...-0.0827,
+        -0.0376, -0.0054, -0.0399, -0.0014, -0.0147,  0.1928,  0.0592, -0.1331],
+       device='cuda:0'), ...}
+query_lengths = (5, 5, 5, 5, 5, 5, ...)
+
+    def _assert_same_step(pool, ext, query_lengths) -> None:
+        tokens = sum(query_lengths)
+        torch.testing.assert_close(
+            ext["output"][:tokens], pool["output"][:tokens], rtol=0, atol=0
+        )
+        width = ext["records"].shape[1]
+        slots = pool["recurrent_state"].shape[0]
+        pool_flat = pool["recurrent_state"].view(slots, -1)
+        pool_indices = pool["state_indices"].tolist()
+        ext_indices = ext["state_indices"].tolist()
+        for request, length in enumerate(query_lengths):
+            base = pool_indices[request][0]
+            torch.testing.assert_close(
+                ext["recurrent_state"][base],
+                pool["recurrent_state"][base],
+                rtol=0,
+                atol=0,
+            )
+            # The record blocks themselves, byte for byte, in their new home.
+            for column in range(1, length):
+>               torch.testing.assert_close(
+                    ext["records"][ext_indices[request][column]],
+                    pool_flat[pool_indices[request][column], :width],
+                    rtol=0,
+                    atol=0,
+                )
+E               AssertionError: Tensor-likes are not equal!
+E               
+E               Mismatched elements: 1440 / 16896 (8.5%)
+E               Greatest absolute difference: nan at index (161,)
+E               Greatest relative difference: nan at index (161,)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:788: AssertionError
+_____ test_external_replay_commit_and_export_match_in_pool[query_lengths1] _____
+
+query_lengths = (1, 5, 3, 2, 5, 4, ...)
+
+    @pytest.mark.parametrize(
+        "query_lengths", ((5,) * 8, (1, 5, 3, 2, 5, 4, 1, 5))
+    )
+    def test_external_replay_commit_and_export_match_in_pool(query_lengths) -> None:
+        """Fused replay, in-place commit and export commit, accepted 1..length."""
+        device = require_sm120()
+        live = len(query_lengths)
+        pool_binding, pool, ext_binding, ext = _external_pair(device, query_lengths)
+        gdn.run(pool_binding)
+        gdn.run(ext_binding)
+        torch.cuda.synchronize(device)
+>       _assert_same_step(pool, ext, query_lengths)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:818: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+pool = {'A_log': tensor([ 0.0782,  0.0018,  0.1286, -0.1104,  0.2516, -0.0446, -0.1465, -0.0822,
+        -0.0315, -0.1379,  0...-0.0554,
+        -0.0221,  0.1402,  0.1390, -0.0239, -0.0496,  0.1162, -0.0541,  0.0526],
+       device='cuda:0'), ...}
+ext = {'A_log': tensor([ 0.0782,  0.0018,  0.1286, -0.1104,  0.2516, -0.0446, -0.1465, -0.0822,
+        -0.0315, -0.1379,  0...-0.0554,
+        -0.0221,  0.1402,  0.1390, -0.0239, -0.0496,  0.1162, -0.0541,  0.0526],
+       device='cuda:0'), ...}
+query_lengths = (1, 5, 3, 2, 5, 4, ...)
+
+    def _assert_same_step(pool, ext, query_lengths) -> None:
+        tokens = sum(query_lengths)
+        torch.testing.assert_close(
+            ext["output"][:tokens], pool["output"][:tokens], rtol=0, atol=0
+        )
+        width = ext["records"].shape[1]
+        slots = pool["recurrent_state"].shape[0]
+        pool_flat = pool["recurrent_state"].view(slots, -1)
+        pool_indices = pool["state_indices"].tolist()
+        ext_indices = ext["state_indices"].tolist()
+        for request, length in enumerate(query_lengths):
+            base = pool_indices[request][0]
+            torch.testing.assert_close(
+                ext["recurrent_state"][base],
+                pool["recurrent_state"][base],
+                rtol=0,
+                atol=0,
+            )
+            # The record blocks themselves, byte for byte, in their new home.
+            for column in range(1, length):
+>               torch.testing.assert_close(
+                    ext["records"][ext_indices[request][column]],
+                    pool_flat[pool_indices[request][column], :width],
+                    rtol=0,
+                    atol=0,
+                )
+E               AssertionError: Tensor-likes are not equal!
+E               
+E               Mismatched elements: 1440 / 16896 (8.5%)
+E               Greatest absolute difference: nan at index (161,)
+E               Greatest relative difference: nan at index (161,)
+
+/b/tests/sequence/test_gdn_deferred_checkpoints.py:788: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_knob_stays_out_of_the_selection_key
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_query_round_trips_the_knob
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_unsupported_geometry_is_rejected[overrides0]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_unsupported_geometry_is_rejected[overrides1]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_unsupported_geometry_is_rejected[overrides2]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_caps_reject_unsupported_deferred_geometry
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_two_fma_orders_are_observably_different
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_commit_reproduces_every_accepted_prefix_checkpoint[1]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_commit_reproduces_every_accepted_prefix_checkpoint[8]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_commit_reproduces_every_accepted_prefix_checkpoint[16]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_next_step_replays_the_accepted_prefix_in_place[1]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_next_step_replays_the_accepted_prefix_in_place[8]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_next_step_replays_the_accepted_prefix_in_place[16]
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_mixed_accepted_and_query_lengths_stay_per_request
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_replay_matches_the_verify_fma_contraction
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_a_destination_aliasing_a_record_column_is_refused
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_a_single_column_plan_needs_no_records
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_the_commit_requires_the_deferred_contract
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_graph_replays_follow_device_live_counts_acceptance_and_order
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_large_slot_stride_crosses_the_signed_32_bit_boundary
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_records_stay_out_of_the_selection_key_and_off_payload
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_caps_require_deferred_checkpoints_for_external_records
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_off_compiled_program_keys_are_unchanged
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_commit_into_a_block_id_equal_to_a_record_id
+PASSED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_graph_replays_follow_request_slots_not_batch_rows
+SKIPPED [1] ../b/tests/sequence/test_gdn_deferred_checkpoints.py:607: set B12X_TEST_LARGE_POOL=1 in an exclusive GPU window
+FAILED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_records_are_the_in_pool_records[1]
+FAILED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_records_are_the_in_pool_records[8]
+FAILED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_records_are_the_in_pool_records[16]
+FAILED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_replay_commit_and_export_match_in_pool[query_lengths0]
+FAILED ../b/tests/sequence/test_gdn_deferred_checkpoints.py::test_external_replay_commit_and_export_match_in_pool[query_lengths1]
+5 failed, 25 passed, 1 skipped in 19.91s
