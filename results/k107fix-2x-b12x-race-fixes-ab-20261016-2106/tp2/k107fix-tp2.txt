@@ -1,0 +1,53 @@
+k107fix 2x 2026-10-16 21:13:03 EEST: arm ghcr.io/ursuciprian/spark-vllm-b12x:k107fix-20261016-3657d13a-d21d7ade-10d0acc8  vs 2x v2.2.0 (ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm)
+bake: prebake boot 303s Dynamo bytecode transform time; full boot 181s Directly load AOT compilation; rank 0 measured 0
+screen (ctl:1 arm:1 arm:2 ctl:2 ctl:3 arm:3 arm:4 ctl:4):
+main cells (can make WIN): none (correctness arm)
+== cold TTFT (s, mean of 3 per boot); noise = larger boot-to-boot spread of either side (floor 0.5%); CI guard: whole boot-level 95% CI above +1% is worse
+  16K: ctl 5.51 5.49 5.48 5.47 | arm 5.46 5.46 5.45 5.46 -> -0.5% (-0.03 s; noise 0.6%; CI [-1.0,-0.0]) flat
+  64K: ctl 24.01 24.11 23.98 23.98 | arm 23.96 24.01 23.94 23.93 -> -0.2% (-0.06 s; noise 0.5%; CI [-0.7,+0.2]) flat
+  128K: ctl 53.78 54.22 53.79 53.78 | arm 53.81 53.85 53.68 53.72 -> -0.2% (-0.13 s; noise 0.8%; CI [-0.9,+0.5]) flat
+== llama-benchy pp2048 + tg512 (tok/s, side means; band = max(k92 band, side spread); CI guard: whole boot-level 95% CI below -1% is worse)
+  pp2048 (c1): ctl 2912.1 arm 2851.5 -2.1% (band 6.1%; CI [-6.91,+2.75])
+  tg512 (c1): ctl 82.8 arm 83.2 +0.5% (band 23.7%; CI [-16.17,+17.14])
+  tg512 (c4): ctl 166.7 arm 164.1 -1.5% (band 19.7%; CI [-14.23,+11.22])
+  tg512 (c8): ctl 200.6 arm 196.3 -2.1% (band 8.5%; CI [-8.98,+4.70])
+== fresh-c1 T=0 probe, pass K of the arm paired with pass K of the control (decode tok/s, stalls excluded)
+  fresh-c1: +0.63% (noise 4.65%; n=16 CI [-4.1,+5.2] control boot-to-boot -1.23%, step +0.28%) flat
+== MTP acceptance per draft position (fresh c8, T=0), pooled per side
+  ctl: 0.847 0.696 0.570 0.464
+  arm: 0.852 0.701 0.576 0.471
+== path: arm pairs none on both ranks, images; KV pool per boot
+  ctl-p1: pairs 0/0 on both ranks; image ok; KV 3534137 tokens, 29.37 GiB available for KV
+  ctl-p2: pairs 0/0 on both ranks; image ok; KV 3519347 tokens, 29.25 GiB available for KV
+  ctl-p3: pairs 0/0 on both ranks; image ok; KV 3535616 tokens, 29.38 GiB available for KV
+  ctl-p4: pairs 0/0 on both ranks; image ok; KV 3524893 tokens, 29.3 GiB available for KV
+  arm-p1: pairs 0/0 on both ranks; image ok; KV 3527667 tokens, 29.32 GiB available for KV
+  arm-p2: pairs 0/0 on both ranks; image ok; KV 3520641 tokens, 29.26 GiB available for KV
+  arm-p3: pairs 0/0 on both ranks; image ok; KV 3513616 tokens, 29.2 GiB available for KV
+  arm-p4: pairs 0/0 on both ranks; image ok; KV 3525818 tokens, 29.3 GiB available for KV
+  KV pool arm vs ctl: -0.2% tokens, -0.05 GiB per rank
+better: none; in the main cells: none
+RULE2=FLAT
+
+== identity (k101/ident.py, c1, cross-boot)
+ident: 0 prompts stable across 4 control boots, arm identical on 0; 8 control-unstable (not judged)
+  prompt 0: control boots disagree (4 variants), arm matches one: False
+  prompt 1: control boots disagree (4 variants), arm matches one: False
+  prompt 2: control boots disagree (4 variants), arm matches one: False
+  prompt 3: control boots disagree (4 variants), arm matches one: False
+  prompt 4: control boots disagree (4 variants), arm matches one: False
+  prompt 5: control boots disagree (3 variants), arm matches one: False
+  prompt 6: control boots disagree (3 variants), arm matches one: False
+  prompt 7: control boots disagree (4 variants), arm matches one: False
+IDENT=UNSTABLE
+== identity under load (identc.py, 16 at once, 3 rounds per boot)
+  ctl-p1: 16/16 unstable
+  ctl-p2: 16/16 unstable
+  ctl-p3: 16/16 unstable
+  ctl-p4: 16/16 unstable
+  arm-p1: 16/16 unstable
+  arm-p2: 16/16 unstable
+  arm-p3: 16/16 unstable
+  arm-p4: 16/16 unstable
+  mean unstable prompts per boot: control 16.00, arm 16.00 (of 16)
+IDENTC=OK

@@ -1,0 +1,16 @@
+arm diff:
+   107c107
+   < name: qwen3.8-flash-next-2x-dgx-spark
+   ---
+   > name: qwen3.8-flash-next-2x-k107fix
+   153c153
+   < container: ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm
+   ---
+   > container: ghcr.io/ursuciprian/spark-vllm-b12x:k107fix-20261016-3657d13a-d21d7ade-10d0acc8
+   190a191,192
+   >   # k107fix arm: own runtime cache
+   >   XDG_CACHE_HOME: "/cache/runtime/k107fix"
+   194c196
+   <   VLLM_CACHE_ROOT: "/cache/runtime/vllm-2x-21e0b201-10d0acc8"
+   ---
+   >   VLLM_CACHE_ROOT: "/cache/runtime/k107fix/vllm"

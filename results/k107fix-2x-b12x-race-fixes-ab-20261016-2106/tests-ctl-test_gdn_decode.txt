@@ -1,0 +1,49 @@
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+......................................                                   [100%]
+=============================== warnings summary ===============================
+test_gdn_decode.py: 14 warnings
+  /usr/local/lib/python3.12/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_live_strided_views_are_correct_and_graph_replay_safe
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_bounded_views_reuse_planned_kernels[4]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_bounded_views_reuse_planned_kernels[16]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_research_qwen_cute_stages_are_graph_safe_and_correct[fp32-state]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_research_qwen_cute_stages_are_graph_safe_and_correct[bf16-state]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths0]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths1]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths2]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths3]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths4]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_planned_capacity_uses_correct_recurrence[query_lengths5]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_sharded_head_geometries_use_cute_recurrence[16qk-48v]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_sharded_head_geometries_use_cute_recurrence[8qk-24v]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_sharded_head_geometries_use_cute_recurrence[4qk-12v]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_public_qwen38_cute_path_is_graph_safe_without_replay_allocation
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_v_by_k_padded_slot_layout_matches_transposed_mathematical_oracle
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen3_8_flash_next_output_norm_preserves_parameter_dtype_rounding[0.08838834764831845-norm_dtype0]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen3_8_flash_next_output_norm_preserves_parameter_dtype_rounding[0.08838834764831845-norm_dtype1]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen3_8_flash_next_output_norm_preserves_parameter_dtype_rounding[1.0-norm_dtype0]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen3_8_flash_next_output_norm_preserves_parameter_dtype_rounding[1.0-norm_dtype1]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen_binding_rejects_equal_head_kda_execution
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_small_softplus_with_large_rate_preserves_decay[state_dtype0-query_lengths0]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_small_softplus_with_large_rate_preserves_decay[state_dtype0-query_lengths1]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_small_softplus_with_large_rate_preserves_decay[state_dtype1-query_lengths0]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_small_softplus_with_large_rate_preserves_decay[state_dtype1-query_lengths1]
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen_bf16_state_uses_cute_recurrence
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_padded_state_stride_matches_reference_without_copy
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_bind_rejects_noncontiguous_state_slot_contents
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_bind_rejects_overlapping_state_slots
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_accepted_column_selects_rollback_checkpoint
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_rejected_draft_restarts_next_iteration_from_accepted_checkpoint
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_bind_rejects_scratch_alias_with_mutable_output
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_distant_state_slots_across_requests_match_reference
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_zero_length_request_and_capacity_tail_are_zero
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_cuda_graph_replay_uses_device_counts_and_fixed_addresses
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_torch_compile_fullgraph_keeps_outer_op_opaque
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_qwen_grouped_state_slot_offset_past_int32_boundary
+PASSED ../b/tests/sequence/test_gdn_decode.py::test_caps_accept_divisible_head_ratios_and_reject_invalid_capacity
+38 passed, 14 warnings in 18.24s
