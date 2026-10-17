@@ -1,0 +1,9 @@
+k109-fi5863-moe-layer-probe result: one routed-MoE layer of the served checkpoint (E512 H2560 top-10, layer 5 experts timed, layers 5 and 47 for numerics), our pinned b12x MoE (the 2x v2.2.0 image: dynamic A4 with tile 32x128 and with no override, plus the weight-major decode kernel) against the SM12x CuTe DSL MoE backends now in FlashInfer main (W4A4 from flashinfer-ai/flashinfer#5863 and W4A16 from flashinfer-ai/flashinfer#5735, unified MoE API), on one Spark. Geometries: `tp1` is the single-Spark layer (I640), `tp2` the rank-0 shard of the 2x (I320). M 1 to 40 are decode verify batches (5 rows per sequence), M 2048 to 8192 prefill chunks. Each cell is a CUDA graph replay with L2 evicted before it.
+
+Operator only: the all-reduce and the rest of the step are not in it. The serving rule was fixed before the run: a serving A/B only for a geometry where a FlashInfer backend passes the accuracy gate, is at least 5% faster than the best b12x variant (geometric mean over the decode M or over the prefill M), has no M of that set below 0.97x, and keeps at most 2 GiB of extra GPU memory over 48 layers.
+
+Verdict: {VERDICT}
+
+```
+{REPORT}
+```

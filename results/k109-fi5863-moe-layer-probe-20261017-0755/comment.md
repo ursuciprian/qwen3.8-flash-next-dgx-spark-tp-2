@@ -1,0 +1,114 @@
+k109-fi5863-moe-layer-probe result: one routed-MoE layer of the served checkpoint (E512 H2560 top-10, layer 5 experts timed, layers 5 and 47 for numerics), our pinned b12x MoE (the 2x v2.2.0 image: dynamic A4 with tile 32x128 and with no override, plus the weight-major decode kernel) against the SM12x CuTe DSL MoE backends now in FlashInfer main (W4A4 from flashinfer-ai/flashinfer#5863 and W4A16 from flashinfer-ai/flashinfer#5735, unified MoE API), on one Spark. Geometries: `tp1` is the single-Spark layer (I640), `tp2` the rank-0 shard of the 2x (I320). M 1 to 40 are decode verify batches (5 rows per sequence), M 2048 to 8192 prefill chunks. Each cell is a CUDA graph replay with L2 evicted before it.
+
+Operator only: the all-reduce and the rest of the step are not in it. The serving rule was fixed before the run: a serving A/B only for a geometry where a FlashInfer backend passes the accuracy gate, is at least 5% faster than the best b12x variant (geometric mean over the decode M or over the prefill M), has no M of that set below 0.97x, and keeps at most 2 GiB of extra GPU memory over 48 layers.
+
+Verdict: anchor=OK fi-w4a4_tp1[real] decode=NO(x1.112 mem 10.8GiB) prefill=NO(x1.155 mem 10.8GiB); fi-w4a4_tp2[real] decode=GO(x1.133) prefill=GO(x1.262); fi-w4a16_tp1[real] decode=NO(x1.024 x1.024<1.05,min x0.96<0.97,mem 52.3GiB) prefill=NO(x0.206 x0.206<1.05,min x0.14<0.97,mem 52.3GiB); fi-w4a16_tp2[real] decode=GO(x1.087) prefill=NO(x0.284 x0.284<1.05,min x0.20<0.97) (b12x exit 0, FlashInfer exit 0)
+
+```
+routing/activations and configs:
+  real (b12x-auto): captured 16384 rows, router overlap 0.979, n_moe 49; ?
+  real (b12x-m32): captured 16384 rows, router overlap 0.979, n_moe 49; ?
+  real (b12x-wm): captured 16384 rows, router overlap 0.979, n_moe 49; ?
+  real (fi-w4a16): captured 16384 rows, router overlap 0.979, n_moe 49; FlashInfer sm12x_nvfp4_bf16 (W4A16), w13 globals folded on 0 experts
+  real (fi-w4a4): captured 16384 rows, router overlap 0.979, n_moe 49; FlashInfer sm12x_nvfp4 (W4A4), w13 globals folded on 0 experts
+  uniform (b12x-auto): synthetic; ?
+  uniform (b12x-m32): synthetic; ?
+  uniform (b12x-wm): synthetic; ?
+  uniform (fi-w4a16): synthetic; FlashInfer sm12x_nvfp4_bf16 (W4A16), w13 globals folded on 0 experts
+  uniform (fi-w4a4): synthetic; FlashInfer sm12x_nvfp4 (W4A4), w13 globals folded on 0 experts
+
+== tp1 (I 640) numerics: rel L2 error vs FP32 reference on the selected rows (<= 256) at M 2048 [fi-w4a4: rel L2 difference to the b12x-m32 output]
+   accuracy gate: err <= 1.10 x b12x-m32 + 0.005 in every cell and at every M; contract check (fi-w4a4): difference to b12x-m32 <= 0.5 x err(b12x-m32) in every cell and at every M
+variant              L5 real      L5 uniform        L47 real     L47 uniform  accuracy contract
+b12x-m32              0.1038          0.1879          0.1137          0.1980      PASS      N/A
+b12x-auto             0.1038          0.1879          0.1138          0.1980      PASS      N/A
+b12x-wm               0.1038          0.1879          0.1138          0.1980      PASS      N/A
+fi-w4a4        0.1056[0.107]   0.1643[0.176]   0.1150[0.118]   0.1586[0.206]      PASS     FAIL
+fi-w4a16              0.0020          0.0023          0.0021          0.0023      PASS      N/A
+  layer 5 real, error per M b12x-m32: 1=0.1522 5=0.1336 10=0.1183 20=0.1156 40=0.1177 2048=0.1038 3024=0.1038 6048=0.1038 8192=0.1038  b12x-auto: 1=0.1522 5=0.1336 10=0.1183 20=0.1155 40=0.1178 2048=0.1038 3024=0.1038 6048=0.1038 8192=0.1038  b12x-wm: 1=0.1514 5=0.1334 10=0.1182 20=0.1154 40=0.1177 2048=0.1038 3024=0.1038 6048=0.1038 8192=0.1038  fi-w4a4: 1=0.1515 5=0.1332 10=0.1208 20=0.1107 40=0.1155 2048=0.1056 3024=0.1056 6048=0.1056 8192=0.1056  fi-w4a16: 1=0.0024 5=0.0023 10=0.0021 20=0.0021 40=0.0019 2048=0.0020 3024=0.0020 6048=0.0020 8192=0.0020
+  layer 5 uniform, error per M b12x-m32: 1=0.1573 5=0.1588 10=0.1646 20=0.1606 40=0.1611 2048=0.1879 3024=0.1879 6048=0.1879 8192=0.1879  b12x-auto: 1=0.1573 5=0.1588 10=0.1645 20=0.1606 40=0.1611 2048=0.1879 3024=0.1879 6048=0.1879 8192=0.1879  b12x-wm: 1=0.1558 5=0.1587 10=0.1644 20=0.1605 40=0.1611 2048=0.1879 3024=0.1879 6048=0.1879 8192=0.1879  fi-w4a4: 1=0.1569 5=0.1510 10=0.1559 20=0.1553 40=0.1582 2048=0.1643 3024=0.1643 6048=0.1643 8192=0.1643  fi-w4a16: 1=0.0027 5=0.0025 10=0.0025 20=0.0024 40=0.0022 2048=0.0023 3024=0.0023 6048=0.0023 8192=0.0023
+
+== tp2 (I 320) numerics: rel L2 error vs FP32 reference on the selected rows (<= 256) at M 2048 [fi-w4a4: rel L2 difference to the b12x-m32 output]
+   accuracy gate: err <= 1.10 x b12x-m32 + 0.005 in every cell and at every M; contract check (fi-w4a4): difference to b12x-m32 <= 0.5 x err(b12x-m32) in every cell and at every M
+variant              L5 real      L5 uniform        L47 real     L47 uniform  accuracy contract
+b12x-m32              0.1138          0.1682          0.1193          0.1975      PASS      N/A
+b12x-auto             0.1138          0.1681          0.1193          0.1975      PASS      N/A
+b12x-wm               0.1138          0.1681          0.1193          0.1975      PASS      N/A
+fi-w4a4        0.1145[0.119]   0.1590[0.175]   0.1205[0.124]   0.1585[0.206]      PASS     FAIL
+fi-w4a16              0.0020          0.0023          0.0021          0.0023      PASS      N/A
+  layer 5 real, error per M b12x-m32: 1=0.1645 5=0.1334 10=0.1258 20=0.1171 40=0.1217 2048=0.1138 3024=0.1138 6048=0.1138 8192=0.1138  b12x-auto: 1=0.1645 5=0.1334 10=0.1258 20=0.1170 40=0.1217 2048=0.1138 3024=0.1138 6048=0.1138 8192=0.1138  b12x-wm: 1=0.1637 5=0.1339 10=0.1257 20=0.1170 40=0.1217 2048=0.1138 3024=0.1138 6048=0.1138 8192=0.1138  fi-w4a4: 1=0.1617 5=0.1353 10=0.1288 20=0.1060 40=0.1167 2048=0.1145 3024=0.1145 6048=0.1145 8192=0.1145  fi-w4a16: 1=0.0025 5=0.0023 10=0.0022 20=0.0021 40=0.0019 2048=0.0020 3024=0.0020 6048=0.0020 8192=0.0020
+  layer 5 uniform, error per M b12x-m32: 1=0.1475 5=0.1560 10=0.1673 20=0.1653 40=0.1646 2048=0.1682 3024=0.1681 6048=0.1682 8192=0.1681  b12x-auto: 1=0.1475 5=0.1560 10=0.1673 20=0.1653 40=0.1646 2048=0.1681 3024=0.1681 6048=0.1682 8192=0.1681  b12x-wm: 1=0.1440 5=0.1557 10=0.1671 20=0.1653 40=0.1646 2048=0.1681 3024=0.1682 6048=0.1682 8192=0.1681  fi-w4a4: 1=0.1484 5=0.1545 10=0.1577 20=0.1587 40=0.1612 2048=0.1590 3024=0.1590 6048=0.1590 8192=0.1590  fi-w4a16: 1=0.0025 5=0.0025 10=0.0025 20=0.0025 40=0.0022 2048=0.0023 3024=0.0023 6048=0.0023 8192=0.0023
+
+== anchor: b12x-m32 tp1 layer 5 vs k81 serving (routed MoE ms per layer per chunk); tp2: N/A
+  real: M 3024: 8.18 vs 8.98 (-9%); M 6048: 11.48 vs 12.57 (-9%)
+  uniform: M 3024: 7.91 vs 8.98 (-12%); M 6048: 10.48 vs 12.57 (-17%)
+ANCHOR=OK (closest: real at M 6048, -9%)
+
+== tp1 (I 640) speed, layer 5, real routing: us per call [backend, timing] and x = best b12x / variant; uniq = experts touched
+     M  uniq                        b12x-m32                       b12x-auto                         b12x-wm                         fi-w4a4                        fi-w4a16
+     1    10         216.8 [cap8192,g] x0.99         216.7 [cap8192,g] x0.99       214.7 [cap8192+w,g] x1.00       185.7 [sm12x_nvf,g] x1.16       147.2 [sm12x_nvf,g] x1.46
+     5    38         688.8 [cap8192,g] x0.79         694.0 [cap8192,g] x0.78       541.5 [cap8192+w,g] x1.00       484.0 [sm12x_nvf,g] x1.12       468.7 [sm12x_nvf,g] x1.16
+    10    56         767.6 [cap8192,g] x0.99         759.5 [cap8192,g] x1.00       832.7 [cap8192+w,g] x0.91       672.5 [sm12x_nvf,g] x1.13       764.3 [sm12x_nvf,g] x0.99
+    20   114        1426.1 [cap8192,g] x0.99        1414.9 [cap8192,g] x1.00      1483.4 [cap8192+w,g] x0.95      1282.4 [sm12x_nvf,g] x1.10      1470.2 [sm12x_nvf,g] x0.96
+    40   184        2236.3 [cap8192,g] x1.00        2226.9 [cap8192,g] x1.00        2227.9 [cap8192,g] x1.00      2026.8 [sm12x_nvf,g] x1.10      2238.0 [sm12x_nvf,g] x1.00
+  2048   473        7052.5 [cap8192,g] x1.00        7054.6 [cap8192,g] x1.00        7050.4 [cap8192,g] x1.00      6195.5 [sm12x_nvf,g] x1.14     22881.6 [sm12x_nvf,g] x0.31
+  3024   486        8184.0 [cap8192,g] x0.98        8018.3 [cap8192,g] x1.00        8005.3 [cap8192,g] x1.00      7135.4 [sm12x_nvf,g] x1.12     32902.3 [sm12x_nvf,g] x0.24
+  6048   501       11477.2 [cap8192,g] x1.00       12823.8 [cap8192,g] x0.89       13057.5 [cap8192,g] x0.88      9936.7 [sm12x_nvf,g] x1.16     81577.7 [sm12x_nvf,g] x0.14
+  8192   504       13955.3 [cap8192,g] x1.00       15221.0 [cap8192,g] x0.92       15178.2 [cap8192,g] x0.92     11561.7 [sm12x_nvf,g] x1.21     81894.6 [sm12x_nvf,g] x0.17
+
+== tp1 (I 640) speed, layer 5, uniform routing: us per call [backend, timing] and x = best b12x / variant; uniq = experts touched
+     M  uniq                        b12x-m32                       b12x-auto                         b12x-wm                         fi-w4a4                        fi-w4a16
+     1    10         214.7 [cap8192,g] x0.99         215.4 [cap8192,g] x0.99       213.3 [cap8192+w,g] x1.00       186.0 [sm12x_nvf,g] x1.15       147.5 [sm12x_nvf,g] x1.45
+     5    47         723.7 [cap8192,g] x0.91         725.7 [cap8192,g] x0.91       661.2 [cap8192+w,e] x1.00       578.2 [sm12x_nvf,g] x1.14       565.0 [sm12x_nvf,g] x1.17
+    10    89        1148.6 [cap8192,g] x0.99        1135.3 [cap8192,g] x1.00      1172.2 [cap8192+w,g] x0.97      1014.5 [sm12x_nvf,g] x1.12      1081.1 [sm12x_nvf,g] x1.05
+    20   167        2026.9 [cap8192,g] x0.99        2012.9 [cap8192,g] x1.00      2136.8 [cap8192+w,g] x0.94      1831.6 [sm12x_nvf,g] x1.10      2036.9 [sm12x_nvf,g] x0.99
+    40   274        3261.7 [cap8192,g] x1.00        3248.9 [cap8192,g] x1.00        3248.8 [cap8192,g] x1.00      2956.6 [sm12x_nvf,g] x1.10      3135.3 [sm12x_nvf,g] x1.04
+  2048   512        7197.4 [cap8192,g] x1.00        7197.9 [cap8192,g] x1.00        7200.0 [cap8192,g] x1.00      6540.0 [sm12x_nvf,g] x1.10     23514.9 [sm12x_nvf,g] x0.31
+  3024   512        7906.7 [cap8192,g] x0.98        7880.8 [cap8192,g] x0.98        7722.8 [cap8192,g] x1.00      7176.4 [sm12x_nvf,g] x1.08     31918.0 [sm12x_nvf,g] x0.24
+  6048   512       10477.3 [cap8192,g] x1.00       12406.5 [cap8192,g] x0.84       11970.8 [cap8192,g] x0.88      9522.9 [sm12x_nvf,g] x1.10     80675.3 [sm12x_nvf,g] x0.13
+  8192   512       12455.8 [cap8192,g] x1.00       14933.6 [cap8192,g] x0.83       14871.4 [cap8192,g] x0.84     11543.5 [sm12x_nvf,g] x1.08     81692.4 [sm12x_nvf,g] x0.15
+
+== tp2 (I 320) speed, layer 5, real routing: us per call [backend, timing] and x = best b12x / variant; uniq = experts touched
+     M  uniq                        b12x-m32                       b12x-auto                         b12x-wm                         fi-w4a4                        fi-w4a16
+     1    10         143.0 [cap8192,g] x0.91         142.8 [cap8192,g] x0.92       130.7 [cap8192+w,g] x1.00       131.0 [sm12x_nvf,g] x1.00        97.0 [sm12x_nvf,g] x1.35
+     5    38         372.4 [cap8192,g] x0.85         377.6 [cap8192,g] x0.84       317.2 [cap8192+w,g] x1.00       293.8 [sm12x_nvf,g] x1.08       272.1 [sm12x_nvf,g] x1.17
+    10    56         485.2 [cap8192,g] x0.97         486.1 [cap8192,g] x0.97       469.7 [cap8192+w,g] x1.00       398.5 [sm12x_nvf,g] x1.18       407.3 [sm12x_nvf,g] x1.15
+    20   114         843.5 [cap8192,g] x0.96         854.7 [cap8192,g] x0.95       810.7 [cap8192+w,g] x1.00       724.7 [sm12x_nvf,g] x1.12       788.8 [sm12x_nvf,g] x1.03
+    40   184        1293.1 [cap8192,g] x1.00        1312.5 [cap8192,g] x0.99        1311.4 [cap8192,g] x0.99      1116.9 [sm12x_nvf,g] x1.16      1278.3 [sm12x_nvf,g] x1.01
+  2048   473        4392.0 [cap8192,g] x1.00        4390.1 [cap8192,g] x1.00        4388.3 [cap8192,g] x1.00      3555.4 [sm12x_nvf,g] x1.23     11525.4 [sm12x_nvf,g] x0.38
+  3024   486        5345.6 [cap8192,g] x1.00        5343.9 [cap8192,g] x1.00        5334.4 [cap8192,g] x1.00      4279.1 [sm12x_nvf,g] x1.25     16439.5 [sm12x_nvf,g] x0.32
+  6048   501        8200.0 [cap8192,g] x1.00       10053.0 [cap8192,g] x0.82       10018.3 [cap8192,g] x0.82      6574.4 [sm12x_nvf,g] x1.25     40270.0 [sm12x_nvf,g] x0.20
+  8192   504       10451.2 [cap8192,g] x1.00       12369.2 [cap8192,g] x0.84       12315.6 [cap8192,g] x0.85      7912.6 [sm12x_nvf,g] x1.32     40439.0 [sm12x_nvf,g] x0.26
+
+== tp2 (I 320) speed, layer 5, uniform routing: us per call [backend, timing] and x = best b12x / variant; uniq = experts touched
+     M  uniq                        b12x-m32                       b12x-auto                         b12x-wm                         fi-w4a4                        fi-w4a16
+     1    10         143.0 [cap8192,g] x0.92         144.1 [cap8192,g] x0.91       131.8 [cap8192+w,g] x1.00       129.7 [sm12x_nvf,g] x1.02        96.0 [sm12x_nvf,g] x1.37
+     5    47         409.3 [cap8192,g] x0.93         411.6 [cap8192,g] x0.92       379.6 [cap8192+w,g] x1.00       344.8 [sm12x_nvf,g] x1.10       328.7 [sm12x_nvf,g] x1.15
+    10    89         695.5 [cap8192,g] x0.93         698.3 [cap8192,g] x0.92       645.4 [cap8192+w,g] x1.00       581.3 [sm12x_nvf,g] x1.11       612.6 [sm12x_nvf,g] x1.05
+    20   167        1175.4 [cap8192,g] x0.98        1193.7 [cap8192,g] x0.96      1149.7 [cap8192+w,g] x1.00      1015.2 [sm12x_nvf,g] x1.13      1102.7 [sm12x_nvf,g] x1.04
+    40   274        1858.3 [cap8192,g] x1.00        1888.0 [cap8192,g] x0.98        1881.0 [cap8192,g] x0.99      1608.4 [sm12x_nvf,g] x1.16      1848.0 [sm12x_nvf,g] x1.01
+  2048   512        4508.9 [cap8192,g] x1.00        4507.0 [cap8192,g] x1.00        4516.1 [cap8192,g] x1.00      3757.8 [sm12x_nvf,g] x1.20     11892.9 [sm12x_nvf,g] x0.38
+  3024   512        5096.2 [cap8192,g] x0.97        4962.5 [cap8192,g] x1.00        5173.5 [cap8192,g] x0.96      4305.1 [sm12x_nvf,g] x1.15     15826.7 [sm12x_nvf,g] x0.31
+  6048   512        7638.2 [cap8192,g] x1.00        8582.1 [cap8192,g] x0.89        8756.1 [cap8192,g] x0.87      6379.1 [sm12x_nvf,g] x1.20     40042.7 [sm12x_nvf,g] x0.19
+  8192   512       10051.0 [cap8192,g] x1.00       12786.9 [cap8192,g] x0.79       12737.8 [cap8192,g] x0.79      7691.2 [sm12x_nvf,g] x1.31     40409.8 [sm12x_nvf,g] x0.25
+* = numerics gate FAIL, NOANCHOR or missing: no speed claim; timing g = CUDA graph replay, e = eager
+
+== preparation (s: weights + plans or FlashInfer layer + first call) and GPU memory kept beyond the raw checkpoint tensors and the harness's own copies after the whole M sweep (MiB per layer; x48 if per layer)
+  tp1 b12x-m32: prep 16.6 s; kept 170 MiB per layer, 7.97 GiB x48
+  tp1 b12x-auto: prep 22.9 s; kept 237 MiB per layer, 11.11 GiB x48
+  tp1 b12x-wm: prep 21.9 s; kept 268 MiB per layer, 12.56 GiB x48
+  tp1 fi-w4a4: prep 2.8 s; kept 230 MiB per layer, 10.78 GiB x48
+  tp1 fi-w4a16: prep 2.4 s; kept 1116 MiB per layer, 52.31 GiB x48
+  tp2 b12x-m32: prep 7.9 s; kept -82 MiB per layer, -3.84 GiB x48
+  tp2 b12x-auto: prep 16.9 s; kept -82 MiB per layer, -3.84 GiB x48
+  tp2 b12x-wm: prep 18.1 s; kept -83 MiB per layer, -3.89 GiB x48
+  tp2 fi-w4a4: prep 0.9 s; kept -949 MiB per layer, -44.48 GiB x48
+  tp2 fi-w4a16: prep 0.5 s; kept -1337 MiB per layer, -62.67 GiB x48
+
+== serving rule (fixed before the run): GO-decode / GO-prefill = accuracy gate PASS, geometric mean of (best b12x / variant) >= 1.05 over M [5, 10, 20, 40] / [2048, 3024, 6048, 8192], no M of the set below 0.97, kept memory x48 <= 2 GiB
+  fi-w4a4_tp1[real] decode=NO(x1.112 mem 10.8GiB) prefill=NO(x1.155 mem 10.8GiB)
+  fi-w4a4_tp2[real] decode=GO(x1.133) prefill=GO(x1.262)
+  fi-w4a16_tp1[real] decode=NO(x1.024 x1.024<1.05,min x0.96<0.97,mem 52.3GiB) prefill=NO(x0.206 x0.206<1.05,min x0.14<0.97,mem 52.3GiB)
+  fi-w4a16_tp2[real] decode=GO(x1.087) prefill=NO(x0.284 x0.284<1.05,min x0.20<0.97)
+VERDICT anchor=OK fi-w4a4_tp1[real] decode=NO(x1.112 mem 10.8GiB) prefill=NO(x1.155 mem 10.8GiB); fi-w4a4_tp2[real] decode=GO(x1.133) prefill=GO(x1.262); fi-w4a16_tp1[real] decode=NO(x1.024 x1.024<1.05,min x0.96<0.97,mem 52.3GiB) prefill=NO(x0.206 x0.206<1.05,min x0.14<0.97,mem 52.3GiB); fi-w4a16_tp2[real] decode=GO(x1.087) prefill=NO(x0.284 x0.284<1.05,min x0.20<0.97)
+```
