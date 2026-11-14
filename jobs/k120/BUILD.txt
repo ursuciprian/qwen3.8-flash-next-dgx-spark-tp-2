@@ -1,0 +1,11 @@
+k120 arm image, built 2026-11-14 on a GitHub-hosted arm64 runner (spark-vllm-b12x build-b12x-overlay, from main):
+  run      https://github.com/ursuciprian/spark-vllm-b12x/actions/runs/43603027516
+  base     ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm (2x v2.2.0)
+  b12x_ref 35573bc400e9feec63e1fa06fffec5a2d716ba1e (ursuciprian/b12x feat/k120-2x-hc-bf16-race-fixes, PR #3)
+  vllm_ref none (the base image's vLLM 10d0acc8 stays)
+  tag      ghcr.io/ursuciprian/spark-vllm-b12x:k120-20261114-35573bc4-d21d7ade-10d0acc8
+Rebuild (only if the run failed):
+  gh workflow run build-b12x-overlay.yml -R ursuciprian/spark-vllm-b12x --ref main \
+    -f base_image=ghcr.io/ursuciprian/spark-vllm-b12x:k104s-20261016-21e0b201-d21d7ade-10d0acc8-warm \
+    -f b12x_ref=35573bc400e9feec63e1fa06fffec5a2d716ba1e \
+    -f tag=ghcr.io/ursuciprian/spark-vllm-b12x:k120-20261114-35573bc4-d21d7ade-10d0acc8 -f push=true
