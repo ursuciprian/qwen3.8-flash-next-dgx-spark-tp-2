@@ -1,12 +1,14 @@
 # k122/k123 profile helpers (2026-11-14), sourced after lib.sh by k122/run.sh and k123/run.sh (J, K, RES set).
 # Pieces reused, not rewritten:
-#   mods/vllm-decode-profiler  copy of tp-2 archive/mods/vllm-decode-profiler (origin/main): rank-local torch.profiler
+#   mods/vllm-decode-profiler  copy of tp-2 archive/mods/vllm-decode-profiler (origin/main) plus per-step markers
+#                              (record_function local_prof_step_<n> inside a window only): rank-local torch.profiler
 #                              around GPUModelRunner.execute_model, armed by a file in VLLM_LOCAL_PROF_TRIGGER_DIR,
 #                              VLLM_LOCAL_PROF_STEPS steps, trace /cache/runtime/prof/<label>/rank<tp rank>.json.
 #                              No collective RPC: the built-in --profiler-config path still has the follower-node
 #                              assert in vLLM 10d0acc8 (multiproc_executor.py collective_rpc), so it stays off TP=2.
 #   trig/collect/probe         r8_driver.sh stage_prof (tp-2 feat/r8 scripts): trigger file on both ranks mid-decode
-#                              via depth_decode_probe.py --trigger-cmd, traces copied per rank, step_breakdown.py
+#                              via depth_decode_probe.py --trigger-cmd, traces copied per rank once their size settles,
+#                              step_breakdown.py; meas counts b12x plan measurements on the running ranks
 #   mkprof                     tp2ab.sh mkarm style: every recipe edit counted, the shipped recipe file is only read
 # The profiler boots use their own runtime cache roots ($CRC/<own>: copies of the shipped b12x/triton/... dirs and of
 # the shipped VLLM_CACHE_ROOT), so no shipped cache dir is written. Traces land in $CRC/prof/$J-* (not a cache).
@@ -88,9 +90,13 @@ logs() { # dir tp
   docker exec "$(c0)" cat /tmp/sparkrun_serve.log > "$1/serve.log" 2>&1
   [ "$2" = 1 ] || on2 'c=$(docker ps -a --format "{{.Names}}" | grep node_1 | head -1); [ -n "$c" ] && docker exec $c cat /tmp/sparkrun_serve.log' > "$1/serve-node1.log" 2>&1; }
 
-trig() { # own label tp -> shell command that arms the profiler on every rank (one new file name per arm)
-  local c="n=go-\$(date +%s%N); echo $2 > $CRC/prof-trigger-$1/\$n"
-  [ "$3" = 1 ] && echo "$c" || echo "$c; ssh -n -o ConnectTimeout=10 $H2 \"echo $2 > $CRC/prof-trigger-$1/\$n\""; }
+trig() { # own label tp [stamp file] -> shell command that arms the profiler on every rank (one new file name per arm);
+  # with a stamp file it also writes the arming epoch there (window.py). Rank 1 (ssh) is armed first, then rank 0:
+  # rank 1's window no longer opens after rank 0's profiler has slowed the step; the ranks still differ by the ssh
+  # latency (a few steps), which the per-rank step markers make visible.
+  local c="n=go-\$(date +%s%N); ${4:+date +%s.%N > $4; }"
+  [ "$3" = 1 ] && echo "${c}echo $2 > $CRC/prof-trigger-$1/\$n" \
+    || echo "${c}ssh -n -o ConnectTimeout=10 $H2 \"echo $2 > $CRC/prof-trigger-$1/\$n\"; echo $2 > $CRC/prof-trigger-$1/\$n"; }
 pos() { curl -s -m 10 localhost:8000/metrics | grep -E '^vllm:spec_decode_num_(accepted|draft)_tokens(_per_pos)?_total'; }
 probe() { # dir tag depth conc offset [extra...]: r8_driver.sh probe, T=0, 2 repeats, 512 new tokens
   local d=$1 tag=$2 depth=$3 c=$4 off=$5; shift 5
@@ -98,14 +104,30 @@ probe() { # dir tag depth conc offset [extra...]: r8_driver.sh probe, T=0, 2 rep
   timeout -k 30 900 python3 "$PROBE" --base http://localhost:8000 --label "$tag" --corpus "$CORPUS" --depth "$depth" --new 2048 \
     --concurrency "$c" --repeats 2 --offset "$off" --max-tokens 512 --temperature 0 --out "$d/probe-$tag.json" "$@" > "$d/probe-$tag.log" 2>&1
   local rc=$?; pos > "$d/pos-$tag.after"; return $rc; }
-collect() { # label outdir tp [steps for step_breakdown, empty = none]
-  local i r; mkdir -p "$2"
-  for i in $(seq 1 36); do [ -f "$CRC/prof/$1/rank0.json" ] && break; sleep 5; done; sleep 15
-  cp "$CRC/prof/$1/rank0.json" "$2/" 2>> "$2/collect.log" || echo "no rank0 trace $1" >> "$2/collect.log"
-  [ "$3" = 1 ] || scp -q "$H2:$CRC/prof/$1/rank1.json" "$2/" 2>> "$2/collect.log" || echo "no rank1 trace $1" >> "$2/collect.log"
+fsize() { # host file -> size in bytes, 0 when missing
+  if [ "$1" = localhost ]; then stat -c %s "$2" 2>/dev/null || echo 0; else on2 "stat -c %s $2 2>/dev/null || echo 0"; fi; }
+settled() { # host file timeout_s -> 0 once the file has the same nonzero size on two polls 3 s apart
+  # (export_chrome_trace writes in place: a size check alone can copy a half-written trace)
+  local s0=-1 s1 i
+  for i in $(seq 1 $(( $3 / 3 ))); do s1=$(fsize $1 "$2"); [ "$s1" != 0 ] && [ "$s1" = "$s0" ] && return 0; s0=$s1; sleep 3; done
+  return 1; }
+collect() { # label outdir tp [steps for step_breakdown, empty = none] -> prints the count of usable results
+  # (breakdown-rank*.json with steps, else rank*.json.gz); t_end = mtime of the rank-0 trace (window end + export)
+  local i r f=$CRC/prof/$1; mkdir -p "$2"
+  if settled localhost "$f/rank0.json" 180; then cp "$f/rank0.json" "$2/" 2>> "$2/collect.log"; date -r "$f/rank0.json" +%s.%N > "$2/t_end"
+  else echo "no settled rank0 trace $1" >> "$2/collect.log"; fi
+  if [ "$3" != 1 ]; then settled $H2 "$f/rank1.json" 120 && scp -q "$H2:$f/rank1.json" "$2/" 2>> "$2/collect.log" \
+    || echo "no settled rank1 trace $1" >> "$2/collect.log"; fi
   if [ -n "${4:-}" ]; then for r in 0 1; do [ -f "$2/rank$r.json" ] && python3 "$BL/k122/step_breakdown.py" "$4" "$2/rank$r.json" \
-      --json "$2/breakdown-rank$r.json" > "$2/breakdown-rank$r.txt" 2>&1; done; fi
-  gzip -f "$2"/rank*.json 2>/dev/null; ls "$2"/rank*.json.gz 2>/dev/null | wc -l; }
+      --json "$2/breakdown-rank$r.json" > "$2/breakdown-rank$r.txt" 2>&1 || rm -f "$2/breakdown-rank$r.json"; done; fi
+  gzip -f "$2"/rank*.json 2>/dev/null
+  if [ -n "${4:-}" ]; then find "$2" -name 'breakdown-rank*.json' -size +0 | wc -l; else ls "$2"/rank*.json.gz 2>/dev/null | wc -l; fi; }
+meas() { # tp -> b12x plans measured so far ("<n> measured" summed over the serve logs of the running ranks)
+  local a b=0
+  a=$(docker exec "$(c0)" cat /tmp/sparkrun_serve.log 2>/dev/null | grep -ohE '\b[0-9]+ measured' | awk '{s+=$1} END {print s+0}')
+  [ "$1" = 1 ] || b=$(on2 "c=\$(docker ps --format '{{.Names}}' | grep node_1 | head -1); [ -n \"\$c\" ] && docker exec \$c cat /tmp/sparkrun_serve.log" 2>/dev/null \
+    | grep -ohE '\b[0-9]+ measured' | awk '{s+=$1} END {print s+0}')
+  echo $(( ${a:-0} + ${b:-0} )); }
 
 ancheck() { # CPU check of the decode analysis on a synthetic trace (step_breakdown.py + r8_profile_table.py)
   local t; t=$(mktemp -d)

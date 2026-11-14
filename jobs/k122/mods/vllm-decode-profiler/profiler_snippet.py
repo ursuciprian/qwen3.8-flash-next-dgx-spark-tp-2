@@ -23,6 +23,10 @@
 # Runs for VLLM_LOCAL_PROF_STEPS steps (default 100), then exports a chrome
 # trace to /cache/runtime/prof/<label>/rank<tp_rank>.json. Every profiler
 # action is try/except-guarded so a failure here can never break serving.
+# k122/k123 (2026-11-14): each profiled execute_model call runs inside a
+# record_function "local_prof_step_<n>" (n = 0..steps-1), so the trace shows
+# the window's step count and step bounds (k123an.py splits a prefill per
+# step with them). Outside a window nothing changes.
 import os as _lp_os
 import logging as _lp_logging
 
@@ -35,6 +39,7 @@ class _LocalStepProfiler:
         self.prof = None
         self.steps_left = 0
         self.label = None
+        self.wstep = 0
 
     def maybe_tick(self):
         trigger_dir = _lp_os.environ.get("VLLM_LOCAL_PROF_TRIGGER_DIR")
@@ -46,6 +51,7 @@ class _LocalStepProfiler:
             if self.prof is not None:
                 self.prof.step()
                 self.steps_left -= 1
+                self.wstep += 1
                 if self.steps_left <= 0:
                     self._finish()
                 return
@@ -80,6 +86,7 @@ class _LocalStepProfiler:
 
         self.steps_left = int(_lp_os.environ.get("VLLM_LOCAL_PROF_STEPS", "100") or 100)
         self.label = trigger_label or _lp_os.environ.get("VLLM_LOCAL_PROF_LABEL", "run")
+        self.wstep = 0
         self.prof = _t.profiler.profile(
             activities=[_t.profiler.ProfilerActivity.CPU, _t.profiler.ProfilerActivity.CUDA],
             record_shapes=False,
@@ -120,7 +127,23 @@ def _lp_profiled_execute_model(self, *args, **kwargs):
             _local_step_profiler.maybe_tick()
     except Exception:
         _lp_logger.exception("local step profiler wrapper failed")
-    return _lp_orig_execute_model(self, *args, **kwargs)
+    rf = None
+    if _local_step_profiler.prof is not None:
+        try:
+            import torch as _t
+
+            rf = _t.profiler.record_function(f"local_prof_step_{_local_step_profiler.wstep}")
+            rf.__enter__()
+        except Exception:
+            rf = None
+    try:
+        return _lp_orig_execute_model(self, *args, **kwargs)
+    finally:
+        if rf is not None:
+            try:
+                rf.__exit__(None, None, None)
+            except Exception:
+                pass
 
 
 GPUModelRunner.execute_model = _lp_profiled_execute_model
