@@ -21,7 +21,11 @@ RULE2: EMPTY (a counted boot measured nothing: missing cells, < 2 boots per side
 control on the arm path, a cell worse beyond noise or by the CI guard, acceptance off) | WIN (a REPORT_MAIN cell better
 beyond noise) | FLAT. REPORT_MAIN: cells separated by '|', e.g. 'tg512 (c1)|fresh-c1' or 'pp2048 (c1)|16K'; empty =
 no cell can make WIN (a correctness arm: FLAT is the good outcome).
-Usage: report2x.py <screen dir> [reps] | selftest
+k120 review additions: the image check needs one image line per rank (a missing rank-1 line fails); marker (BF16 path
+proof from the prebake serve logs of both ranks), testgate (GPU test regressions incl. a crash or a missing test on the
+arm) and verdict (RULE.md 7) are subcommands so run.sh and the selftest share one implementation.
+Usage: report2x.py <screen dir> [reps] | marker <rank0 log> <rank1 log> | testgate <res> <suite>... |
+       verdict T2 PATH PONG IDENT IDENTC GATE | selftest
 """
 import glob
 import json
@@ -208,7 +212,8 @@ def report(d, reps=3, main=None, envs=None, arm_img=None, ctl_img=None):
             have = [all(re.search(rf"^{re.escape(k)}={re.escape(v)}$", e, re.M) for e in b["env"]) for k, v in envs]
             anyp = [any(re.search(rf"^{re.escape(k)}={re.escape(v)}$", e, re.M) for e in b["env"]) for k, v in envs]
             imgs = b["image"].split()
-            img_ok = bool(imgs) and all(x == (arm_img if w == "arm" else ctl_img) for x in imgs[0::2]) if (arm_img or ctl_img) else True
+            # one "<Config.Image> <Id>" line per rank; a missing rank-1 line fails
+            img_ok = len(imgs[0::2]) == 2 and all(x == (arm_img if w == "arm" else ctl_img) for x in imgs[0::2]) if (arm_img or ctl_img) else True
             L.append(f"  {b['name']}: pairs {sum(have)}/{len(envs)} on both ranks; image {'ok' if img_ok else 'WRONG ' + ' '.join(imgs[0::2])}; "
                      f"KV {b['kv']} tokens, {b['kvgib']} GiB available for KV")
             if w == "arm" and (not all(have) or not img_ok):
@@ -238,8 +243,123 @@ def report(d, reps=3, main=None, envs=None, arm_img=None, ctl_img=None):
     return "\n".join(L)
 
 
+MARK_RUN = re.compile(r"k120 marker: BF16 path ran n=(\d+) k=(\d+) rows=(\d+)")
+MARK_PLAN = re.compile(r"k120 marker: plan .*")
+
+
+def marker(logs):
+    """serve logs of rank 0 and rank 1 of the prebake boot (mods/b12x-a16-marker) -> ("ENGAGED"|"NOT-ENGAGED", lines).
+    ENGAGED = every rank logged a BF16-path call on a narrow-N (<= 512), long-K (>= 8192) weight with >= 1264 rows."""
+    lines, ok = [], True
+    for r, p in enumerate(logs):
+        t = rd(p)
+        runs = [(int(n), int(k), int(m)) for n, k, m in MARK_RUN.findall(t)]
+        hit = [x for x in runs if x[0] <= 512 and x[1] >= 8192 and x[2] >= 1264]
+        plans = sorted(set(MARK_PLAN.findall(t)))
+        lines.append(f"  rank {r}: {len(plans)} plan decisions logged ({sum('engaged=True' in x for x in plans)} engaged), "
+                     f"BF16 path calls {' '.join(f'n{n}/k{k}/rows{m}' for n, k, m in runs) or 'none'}"
+                     + ("" if t else " (no serve log)"))
+        lines += [f"    {x[len('k120 marker: '):]}" for x in plans[:8]]
+        ok = ok and bool(hit)
+    if len(logs) != 2:
+        ok = False
+    return ("ENGAGED" if ok else "NOT-ENGAGED"), lines
+
+
+def outcomes(p):
+    """'<test id> <STATUS>' lines -> {id: status}"""
+    d = {}
+    for line in rd(p).splitlines():
+        f = line.split()
+        if len(f) == 2:
+            d[f[0]] = f[1]
+    return d
+
+
+def testgate(res, names):
+    """regressions of the GPU test gate: a test that passes on the control and fails, errors or does not run on the
+    arm, or a suite whose control run exits 0 while the arm run exits non-zero (crash, 124 = timeout)."""
+    reg = []
+    for b in names:
+        c, a = outcomes(os.path.join(res, f"tests-ctl-{b}.outcomes")), outcomes(os.path.join(res, f"tests-arm-{b}.outcomes"))
+        rc = {s: rd(os.path.join(res, f"tests-{s}-{b}.rc")).strip() or "missing" for s in ("ctl", "arm")}
+        for tid, st in sorted(c.items()):
+            if st != "PASSED":
+                continue
+            if a.get(tid) in ("FAILED", "ERROR"):
+                reg.append(f"{tid} {a[tid]} on the arm")
+            elif tid not in a:
+                reg.append(f"{tid} not run on the arm")
+        if rc["ctl"] == "0" and rc["arm"] != "0":
+            reg.append(f"{b}: arm exit {rc['arm']}, control exit 0")
+    return reg
+
+
+def verdict(t2, path, pong, ident, identc, gate):
+    """RULE.md 6 -> (VERDICT, reason). Quality failure or LOSS = REJECT; path not engaged or anything missing = EMPTY."""
+    if pong == "FAIL":
+        return "REJECT", "prebake pong failed"
+    if path != "ENGAGED":
+        return "EMPTY", "path not engaged" if path == "NOT-ENGAGED" else "path check missing"
+    bad = [x for x, b in (("IDENTC WORSE", identc == "WORSE"), ("IDENT FAIL (short prompts)", ident == "FAIL"),
+                          ("gate " + gate, gate.startswith("FAIL"))) if b]
+    if t2 == "LOSS" or bad:
+        return "REJECT", "; ".join((["RULE2 LOSS"] if t2 == "LOSS" else []) + bad)
+    miss = [x for x, b in ((f"RULE2 {t2}", t2 not in ("WIN", "FLAT")), (f"pong {pong}", pong != "OK"),
+                           (f"IDENT {ident}", ident not in ("PASS", "UNSTABLE")), (f"IDENTC {identc}", identc != "OK"),
+                           (f"gate {gate}", gate != "PASS")) if b]
+    if miss:
+        return "EMPTY", "; ".join(miss)
+    return ("SHIP-CANDIDATE" if t2 == "WIN" else "FLAT"), ""
+
+
+def selftest_gates():
+    import tempfile
+    t = tempfile.mkdtemp()
+    # path marker: both ranks engaged; rank 1 only plan lines -> NOT-ENGAGED; one log -> NOT-ENGAGED
+    run = "k120 marker: plan recipe=mxfp8 k=10240 n=336 expected_m=None sm=48 engaged=True\n" \
+          "k120 marker: BF16 path ran n=336 k=10240 rows=8192\n"
+    for f, s in (("r0.log", run), ("r1.log", run), ("r1b.log", run.split("\n")[0] + "\n"), ("r1c.log", "")):
+        open(os.path.join(t, f), "w").write(s)
+    p = lambda *f: [os.path.join(t, x) for x in f]
+    assert marker(p("r0.log", "r1.log"))[0] == "ENGAGED"
+    assert marker(p("r0.log", "r1b.log"))[0] == "NOT-ENGAGED"
+    assert marker(p("r0.log", "r1c.log"))[0] == "NOT-ENGAGED"
+    assert marker(p("r0.log"))[0] == "NOT-ENGAGED"
+    open(os.path.join(t, "r1d.log"), "w").write("k120 marker: BF16 path ran n=336 k=10240 rows=1000\n")
+    assert marker(p("r0.log", "r1d.log"))[0] == "NOT-ENGAGED", "rows below MIN_ROWS do not prove the path"
+    # test gate
+    def put(b, side, lines, rc):
+        open(os.path.join(t, f"tests-{side}-{b}.outcomes"), "w").write("".join(f"{x}\n" for x in lines))
+        open(os.path.join(t, f"tests-{side}-{b}.rc"), "w").write(f"{rc}\n")
+    put("a", "ctl", ["t::x PASSED", "t::y PASSED"], 0); put("a", "arm", ["t::x PASSED", "t::y PASSED"], 0)
+    assert testgate(t, ["a"]) == []
+    put("a", "arm", ["t::x PASSED", "t::y FAILED"], 1)
+    assert testgate(t, ["a"]) == ["t::y FAILED on the arm", "a: arm exit 1, control exit 0"]
+    # arm crash after the control passed: the crashed tests never report, rc 139
+    put("a", "arm", ["t::x PASSED"], 139)
+    r = testgate(t, ["a"])
+    assert r == ["t::y not run on the arm", "a: arm exit 139, control exit 0"], r
+    # control fails too (new module): not a regression
+    put("n", "ctl", ["t::z ERROR"], 2); put("n", "arm", ["t::z PASSED"], 0)
+    assert testgate(t, ["n"]) == []
+    # verdict mapping (RULE.md 6)
+    assert verdict("WIN", "ENGAGED", "OK", "PASS", "OK", "PASS")[0] == "SHIP-CANDIDATE"
+    assert verdict("FLAT", "ENGAGED", "OK", "UNSTABLE", "OK", "PASS")[0] == "FLAT"
+    assert verdict("FLAT", "NOT-ENGAGED", "OK", "PASS", "OK", "PASS") == ("EMPTY", "path not engaged")
+    assert verdict("EMPTY", "NOT-ENGAGED", "OK", "none", "none", "none") == ("EMPTY", "path not engaged")
+    assert verdict("FAILED", "none", "FAIL", "none", "none", "none")[0] == "REJECT"
+    assert verdict("LOSS", "ENGAGED", "OK", "EMPTY", "EMPTY", "none")[0] == "REJECT", "LOSS with missing identity"
+    assert verdict("WIN", "ENGAGED", "OK", "PASS", "OK", "FAIL (hardmode [80])")[0] == "REJECT"
+    assert verdict("WIN", "ENGAGED", "OK", "FAIL", "OK", "PASS")[0] == "REJECT"
+    assert verdict("WIN", "ENGAGED", "OK", "PASS", "WORSE", "none")[0] == "REJECT"
+    assert verdict("WIN", "ENGAGED", "OK", "PASS", "OK", "none")[0] == "EMPTY"
+    assert verdict("EMPTY", "ENGAGED", "OK", "PASS", "OK", "none")[0] == "EMPTY"
+
+
 def selftest():
     import tempfile
+    selftest_gates()
     t = tempfile.mkdtemp()
     pos = lambda a: "".join(f'vllm:spec_decode_num_accepted_tokens_per_pos_total{{position="{k}"}} {a[k] * 1000}\n'
                             f'vllm:spec_decode_num_draft_tokens_per_pos_total{{position="{k}"}} 1000\n' for k in range(4))
@@ -299,6 +419,15 @@ def selftest():
     open(os.path.join(t, "arm-p1", "image.txt"), "w").write(f"{CTL} sha256:x\n{CTL} sha256:x\n")
     assert "RULE2=EMPTY" in run("16K")
     open(os.path.join(t, "arm-p1", "image.txt"), "w").write(f"{ARM} sha256:x\n{ARM} sha256:x\n")
+    # rank-1 image line missing on an arm boot -> EMPTY; on a control boot -> LOSS
+    open(os.path.join(t, "arm-p1", "image.txt"), "w").write(f"{ARM} sha256:x\n")
+    o = run("16K")
+    assert "RULE2=EMPTY" in o and "arm-p1: arm path not engaged" in o, o
+    open(os.path.join(t, "arm-p1", "image.txt"), "w").write(f"{ARM} sha256:x\n{ARM} sha256:x\n")
+    open(os.path.join(t, "ctl-p2", "image.txt"), "w").write(f"{CTL} sha256:x\n")
+    assert "RULE2=LOSS" in run("16K")
+    open(os.path.join(t, "ctl-p2", "image.txt"), "w").write(f"{CTL} sha256:x\n{CTL} sha256:x\n")
+    assert "RULE2=WIN" in run("16K")
     # acceptance canary
     open(os.path.join(t, "arm-p1", "pos-c8.after"), "w").write(pos([0.70, 0.70, 0.57, 0.47]))
     assert "RULE2=LOSS" in run("16K") and "acceptance moved" in run("16K")
@@ -312,6 +441,13 @@ def selftest():
 if __name__ == "__main__":
     if sys.argv[1:2] == ["selftest"]:
         selftest()
+    elif sys.argv[1:2] == ["marker"]:      # marker <rank0 serve.log> <rank1 serve.log>
+        v, lines = marker(sys.argv[2:])
+        print("\n".join(lines)); print(f"PATH={v}")
+    elif sys.argv[1:2] == ["testgate"]:    # testgate <res> <suite>...: one regression per line, nothing = clean
+        print("\n".join(testgate(sys.argv[2], sys.argv[3:])))
+    elif sys.argv[1:2] == ["verdict"]:     # verdict T2 PATH PONG IDENT IDENTC GATE -> "VERDICT<TAB>reason"
+        print("\t".join(verdict(*sys.argv[2:8])))
     elif len(sys.argv) >= 2:
         print(report(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 3))
     else:

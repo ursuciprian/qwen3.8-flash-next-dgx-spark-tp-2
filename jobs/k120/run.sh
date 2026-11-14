@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
 # k120-2x-hc-bf16-race-fixes-ab (2026-11-14): the 1x v2.4.0 HC down-projection BF16 path (k100, a1ad1b69 line) on the
 # 2x, on top of the k107fix race fixes, with CuTe DSL 4.7.0 on both sides. k100b (2026-10-16) was stopped as confounded:
-# its arm ran DSL 4.6.2, the control 4.7.0. Here the arm differs from 2x v2.2.0 only in b12x code.
+# its arm ran DSL 4.6.2, the control 4.7.0. Here the arm differs from 2x v2.2.0 only in b12x code (checked: pip freeze).
 # Arm: ursuciprian/b12x feat/k120-2x-hc-bf16-race-fixes 35573bc4 = 3657d13a (21e0b201 + 668b95d6 GDN decode barrier,
 # upstream c9b29c91 + 49abfb30 MoE TMA fence, upstream 34eb648c + CuTe DSL pin 4.7.0) + c6b24615 4a04f21a 35573bc4
 # (k100b 590b3439 15e110a1 46df047e cherry-picked clean; same code diff as b45fe867..a1ad1b69). Image: build-b12x-overlay
-# on the k104s image, no vLLM overlay (run 43603027516), tag in $K/arm.conf. Decision rule: $K/RULE.md, copied into $RES
-# and hashed in the log before the first boot.
+# on the k104s image, no vLLM overlay (run 43603027516), tag in $K/arm.conf. Decision rule: $K/RULE.md, copied with the
+# harness into $RES/job and hashed in the log before the first boot; the screen and the judge run from those copies.
 #   pull     waits <= 90 min for the image on ghcr, pulls it on both Sparks, same Id; checks the b12x commit, the two
-#            fixes and the BF16 path file in the installed files and CuTe DSL 4.7.0 in the image.
+#            fixes and the BF16 path file in the installed files, CuTe DSL 4.7.0, and that `pip list --format=freeze`
+#            of the arm image differs from the control image in the b12x line only (else the job refuses to start)
 #   tests    GPU tests of the branch on dgx-01 (GDN decode, deferred checkpoints, three NVFP4 MoE suites, A16 dequant
-#            BF16 path), in the control image and then the arm image; a test that passes on the control and fails on the
-#            arm stops the job; failures on both, skips and timeouts are recorded only (the A16 dequant test cannot pass
-#            on the control: its module is new).
-#   screen   tp2ab.sh (control = k104s recipe and image by name): stage, bake (+ pong), ctl arm arm ctl ctl arm arm ctl,
-#            cold TTFT 16K/64K/128K, fresh-c8 acceptance, fresh-c1 paired, benchy pp2048 + tg512 c1/c4/c8/c16, plus
-#            ident.py (c1 across boots) and identc.py (16 at once, 3 rounds, stability inside each boot).
-#   judge    RULE.md: SHIP-CANDIDATE = RULE2 WIN (a target cell 16K/64K/128K/pp2048 better, nothing worse c1..c16,
-#            acceptance within 0.03) + IDENTC OK + IDENT PASS/UNSTABLE; FLAT = RULE2 FLAT, same quality; REJECT = LOSS or
-#            a quality failure; EMPTY = no verdict.
-# ETA ~4.5 h (image wait 0 if built, pull ~10, tests ~70 on both images, stage+bake ~35 with a cold b12x compile, 8 boots
-# x ~19 min) + restore ~6 min. Nothing ships from this job; no poster mapping (results stay on dgx-01).
+#            BF16 path; test sources checked against $K/b12x-src.sha256 = 35573bc4), in the control image and then the
+#            arm image. Regression (stops the job) = a test that passes on the control and fails, errors or does not run
+#            on the arm, or a suite the control finishes with exit 0 and the arm does not (crash, 124 = timeout).
+#            Failures on both and skips are recorded only (the A16 dequant test cannot pass on the control).
+#   screen   tp2ab.sh (control = k104s recipe and image by name): stage, bake (+ pong + BF16 path marker on both
+#            ranks), ctl arm arm ctl ctl arm arm ctl, cold TTFT 16K/64K/128K, fresh-c8 acceptance, fresh-c1 paired,
+#            benchy pp2048 + tg512 c1/c4/c8/c16, ident.py (c1 across boots, short prompts judged) and identc.py; then
+#            the k104 release quality gate on one arm boot when the outcome is still WIN or FLAT
+#   judge    RULE.md 6 (report2x.py verdict): SHIP-CANDIDATE / FLAT / REJECT / EMPTY (path not engaged or missing)
+# ETA ~6 h 30 min (image wait 0 if built, pull ~10, tests ~70 on both images, stage + bake ~55 with a cold b12x compile
+# and the arm's own AOT compile in both bake boots, 8 boots x ~19 min, gate boot + gate ~1 h 40 when WIN/FLAT) +
+# restore ~6 min. Nothing ships from this job; no poster mapping (results stay on dgx-01).
 # Contract (backlog/runner.sh): both GPU locks; exit 75 while busy; STATE DONE/SKIPPED/FAILED; comment.md + RESULT.
 # Pair: started by qwen-pairrun.sh, which holds ~/GEN-AI/ds41/pair/PAIR.LOCK around the runner.
 NEEDS="dgx01 dgx02"
@@ -46,25 +48,36 @@ img_ok() { # the b12x commit, both fixes and the BF16 path in the installed file
     && inimg "grep -q 'wait until every warp is done with the last one' $S/b12x/sequence/gdn_decode/_cute_kernels.py" \
     && inimg "test -s $S/b12x/gemm/blockscaled/_a16_dequant.py" \
     && inimg "ls -d $S/nvidia_cutlass_dsl-4.7.0.dist-info" > /dev/null; }
+freeze() { docker run --rm --network none --entrypoint python3 "$1" -m pip list --format=freeze 2>/dev/null | LC_ALL=C sort; }
+pip_ok() { # out: arm and control images differ in the b12x distribution only (k100b was confounded by a DSL change)
+  local c a; c=$(freeze "$V22"); a=$(freeze "$ARM_IMG")
+  { echo "pip list --format=freeze, $V22 (<) vs $ARM_IMG (>):"; diff <(echo "$c") <(echo "$a"); } > "$1"
+  [ "$(echo "$c" | grep -c .)" -gt 20 ] && [ "$(echo "$a" | grep -c .)" -gt 20 ] || { echo "pip list failed in an image" >> "$1"; return 1; }
+  ! diff <(echo "$c") <(echo "$a") | grep '^[<>]' | grep -viqE '^[<>] b12x([ =@]|$)'; }
+srcok() { [ -d "$K/b12x-src" ] && ( cd "$K/b12x-src" && sha256sum -c --quiet "$K/b12x-src.sha256" ); }
 pytest_in() { # image cmd: pytest from pip into /tmp/pyl inside the image, the branch's tests at /b (k100b, CI layout)
   docker run --rm --init --name k120-tests --gpus all --ipc=host --entrypoint bash -e CUTE_DSL_ARCH=sm_121a \
     -e XDG_CACHE_HOME=/tmp/cache -e B12X_COMPILE_WORKERS=2 -v "$K/b12x-src:/b:ro" "$1" -c "
     timeout 300 python3 -m pip install -q --break-system-packages --target /tmp/pyl --no-deps $PYT || exit 3
     cd /tmp && PYTHONPATH=/tmp/pyl $2" 9>&-; }
 outcomes() { # pytest -rA log -> "<test id> PASSED|FAILED|ERROR|SKIPPED" lines, sorted
-  sed -nE 's/^(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS) ([^ ]+).*/\2 \1/p' "$1" | sort -u; }
+  sed -nE 's/^(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS) ([^ ]+).*/\2 \1/p' "$1" | LC_ALL=C sort -u; }
 if [ "${1:-}" = --dry-run ]; then rc=0
   timeout 300 sparkrun registry update qwen38-flashnext > /dev/null 2>&1 < /dev/null || echo "note: 2x registry update failed (the run retries)"
   for f in $TESTS tests/conftest.py; do [ -s "$K/b12x-src/$f" ] || { echo "missing $K/b12x-src/$f"; rc=1; }; done
-  for f in "$K"/tp2ab.sh "$K"/arm.conf; do bash -n "$f" || { echo "syntax: $f"; rc=1; }; done
+  srcok > /dev/null 2>&1 && echo "b12x-src: test sources match 35573bc4" || { echo "b12x-src: test sources differ from $K/b12x-src.sha256 (35573bc4)"; rc=1; }
+  for f in "$K"/tp2ab.sh "$K"/arm.conf "$K"/mods/b12x-a16-marker/run.sh; do bash -n "$f" || { echo "syntax: $f"; rc=1; }; done
   [ -s "$K/RULE.md" ] && echo "rule: RULE.md sha256 $(sha256sum "$K/RULE.md" | cut -c1-12)" || { echo "missing $K/RULE.md"; rc=1; }
   bash "$K/tp2ab.sh" --dry-run 2>&1 | sed 's/^/tp2ab: /'; [ "${PIPESTATUS[0]}" = 0 ] || rc=1
   timeout 120 docker manifest inspect "$ARM_IMG" > /dev/null 2>&1 && echo "arm image on ghcr: $ARM_IMG" \
     || echo "note: $ARM_IMG not on ghcr yet: trigger the build in $K/BUILD.txt first (the job waits <= 90 min, then fails)"
+  if docker image inspect "$ARM_IMG" > /dev/null 2>&1 && docker image inspect "$V22" > /dev/null 2>&1; then
+    t=$(mktemp); pip_ok "$t" && echo "pip freeze: only b12x differs" || { echo "pip freeze: arm differs beyond b12x (the job would refuse):"; sed 's/^/  /' "$t"; rc=1; }; rm -f "$t"
+  else echo "note: pip freeze check runs after the pull (an image is not local yet)"; fi
   echo "lib.sh shipped 2x tag: $SHIPPED_TAG_DEFAULT; registry 2x container: $(sed -n 's/^container: *//p' "$REGF" 2>/dev/null)"
   shipped_ok || echo "note: they disagree (release switch half done?): the job refuses to start until lib.sh and the registry agree"
   [ "$SHIPPED_TAG_DEFAULT" = "${V22#*:}" ] || echo "note: lib.sh still restores $SHIPPED_TAG_DEFAULT, not v2.2.0 (fine before the release switch)"
-  for f in "$K"/*.sh "$K"/*.py "$K"/arm.conf; do grep -qiE "$PRIV" "$f" && { echo "private pattern in $f"; rc=1; }; done
+  for f in "$K"/*.sh "$K"/*.py "$K"/arm.conf "$K"/mods/*/*; do grep -qiE "$PRIV" "$f" && { echo "private pattern in $f"; rc=1; }; done
   others_busy && echo "other GPU jobs: busy (the runner waits)" || echo "other GPU jobs: clear"
   sed -n 's/^# ETA /ETA /p' "$K/run.sh"; echo "dry-run exit=$rc"; exit $rc; fi
 
@@ -75,8 +88,9 @@ shipped_ok || { echo "FAILED: k120 not started: lib.sh restores $SHIPPED_TAG_DEF
 job_begin
 eval "$(trap -p EXIT | sed "s/^trap -- '/trap -- 'docker rm -f k120-tests > \/dev\/null 2>\&1; /")"
 echo "$RES" > "$K/RESULT"; rm -f "$K/comment.md"; mkdir -p "$RES/job"
-cp "$K"/run.sh "$K"/tp2ab.sh "$K"/report2x.py "$K"/identc.py "$K"/arm.conf "$K"/RULE.md "$RES/job/"
-log "rule fixed before any boot: RULE.md sha256 $(sha256sum "$RES/job/RULE.md" | cut -c1-64)"
+cp -r "$K"/run.sh "$K"/tp2ab.sh "$K"/report2x.py "$K"/identc.py "$K"/ident.py "$K"/arm.conf "$K"/RULE.md "$K"/b12x-src.sha256 "$K"/mods "$RES/job/"
+log "rule fixed before any boot: RULE.md sha256 $(sha256sum "$RES/job/RULE.md" | cut -c1-64); harness sha256 $(cat "$RES"/job/tp2ab.sh "$RES"/job/report2x.py "$RES"/job/ident.py "$RES"/job/identc.py | sha256sum | cut -c1-16)"
+srcok > "$RES/b12x-src.check" 2>&1 || { FINAL="FAILED: k120 test sources in $K/b12x-src are not 35573bc4 ($RES/b12x-src.check)"; exit 1; }
 st "running: pull arm image on both Sparks"
 docker image inspect "$ARM_IMG" > /dev/null 2>&1 || { ghcr_wait && child timeout 3600 docker pull -q "$ARM_IMG" >> "$RES/pull.txt" 2>&1 9>&-; } \
   || { FINAL="FAILED: pull $ARM_IMG on dgx01 (not on ghcr after 90 min or pull error; was the build in BUILD.txt triggered? $RES/pull.txt)"; exit 1; }
@@ -84,47 +98,47 @@ x $H2 "docker image inspect $ARM_IMG > /dev/null 2>&1" || child timeout 3600 ssh
   >> "$RES/pull.txt" 2>&1 9>&- || { FINAL="FAILED: pull $ARM_IMG on dgx02 ($RES/pull.txt)"; exit 1; }
 [ "$(x $H1 "docker image inspect -f '{{.Id}}' $ARM_IMG")" = "$(x $H2 "docker image inspect -f '{{.Id}}' $ARM_IMG")" ] || { FINAL="FAILED: arm image Id differs between Sparks"; exit 1; }
 img_ok || { FINAL="FAILED: $ARM_IMG does not carry b12x $B12X_SHA with both fixes and CuTe DSL 4.7.0"; exit 1; }
+pip_ok "$RES/pipdiff.txt" || { FINAL="FAILED: k120 not started: the arm image differs from v2.2.0 beyond the b12x line ($RES/pipdiff.txt)"; exit 1; }
 stop_all
 st "running: GPU tests of the branch, control image then arm image (dgx-01)"
-# Gate: a test that passes on the control image (v2.2.0, b12x 21e0b201: the same test files) and fails or errors on
-# the arm image stops the job before any boot. Failures present on both, skips and timeouts are recorded, not gated.
-TR=; REG=; for t in $TESTS; do b=$(basename "$t" .py)
+# Gate (RULE.md 1): no test that passes on the control image (v2.2.0, b12x 21e0b201: the same test files) may fail, error
+# or go missing on the arm image, and no suite may crash or time out on the arm when it exits 0 on the control.
+TR=; NAMES=; for t in $TESTS; do b=$(basename "$t" .py); NAMES="$NAMES $b"
   for side in ctl arm; do img=$V22; [ $side = arm ] && img=$ARM_IMG
     child pytest_in "$img" "timeout -k 10 900 python3 -m pytest -q -p no:cacheprovider --import-mode=append -rA /b/$t" > "$RES/tests-$side-$b.txt" 2>&1
     echo $? > "$RES/tests-$side-$b.rc"; docker rm -f k120-tests > /dev/null 2>&1
     outcomes "$RES/tests-$side-$b.txt" > "$RES/tests-$side-$b.outcomes"; done
-  r=$(join "$RES/tests-ctl-$b.outcomes" "$RES/tests-arm-$b.outcomes" | awk '$2 == "PASSED" && ($3 == "FAILED" || $3 == "ERROR") {print $1}')
-  [ -n "$r" ] && REG="$REG $r"
   TR="$TR $b=ctl:exit$(cat "$RES/tests-ctl-$b.rc")/$(grep -c ' PASSED$' "$RES/tests-ctl-$b.outcomes")p,arm:exit$(cat "$RES/tests-arm-$b.rc")/$(grep -c ' PASSED$' "$RES/tests-arm-$b.outcomes")p/$(grep -cE ' (FAILED|ERROR)$' "$RES/tests-arm-$b.outcomes")f"; done
-echo "GPU tests (exit/passed/failed per side; 124 = timeout):$TR; regressions (pass on control, fail on arm):${REG:- none}" > "$RES/tests.txt"
-[ -z "$REG" ] || { FINAL="FAILED: k120 GPU test regressions on the arm:$REG ($RES/tests-*.txt)"; exit 1; }
-st "running: TP=2 A/B (stage, bake, ctl arm arm ctl ctl arm arm ctl, identity probes)"
-child env RES2="$RES/tp2" GPU_LOCK_HELD=1 bash "$K/tp2ab.sh" > "$RES/tp2.nohup" 2>&1 < /dev/null
-T2=$(sed -n 's/^RULE2=//p' "$RES/tp2/$J-tp2.txt" 2>/dev/null | tail -1); T2=${T2:-FAILED}
-ID=$(sed -n 's/^IDENT=//p' "$RES/tp2/$J-tp2.txt" 2>/dev/null | tail -1); IC=$(sed -n 's/^IDENTC=//p' "$RES/tp2/$J-tp2.txt" 2>/dev/null | tail -1)
-case "$T2:${ID:-none}:${IC:-none}" in
-  WIN:PASS:OK|WIN:UNSTABLE:OK) V=SHIP-CANDIDATE ;;
-  FLAT:PASS:OK|FLAT:UNSTABLE:OK) V=FLAT ;;
-  EMPTY:*|FAILED:*|*:EMPTY:*|*:none:*|*:*:EMPTY|*:*:none) V=EMPTY ;;
-  *) V=REJECT ;; esac   # RULE.md 6
+python3 "$RES/job/report2x.py" testgate "$RES" $NAMES > "$RES/tests-regressions.txt" 2>&1 || echo "testgate crashed" >> "$RES/tests-regressions.txt"
+REG=$(grep -c . "$RES/tests-regressions.txt")
+echo "GPU tests (exit/passed/failed per side; 124 = timeout):$TR; regressions: $([ "$REG" = 0 ] && echo none || tr '\n' ';' < "$RES/tests-regressions.txt")" > "$RES/tests.txt"
+[ "$REG" = 0 ] || { FINAL="FAILED: k120 GPU test regressions on the arm: $(head -3 "$RES/tests-regressions.txt" | tr '\n' ';') ($RES/tests-regressions.txt)"; exit 1; }
+st "running: TP=2 A/B (stage, bake + path marker, ctl arm arm ctl ctl arm arm ctl, identity probes, gate)"
+child env K="$RES/job" RES2="$RES/tp2" GPU_LOCK_HELD=1 bash "$RES/job/tp2ab.sh" > "$RES/tp2.nohup" 2>&1 < /dev/null
+T2O=$RES/tp2/$J-tp2.txt
+val() { sed -n "s/^$1=//p" "$T2O" 2>/dev/null | tail -1; }
+T2=$(val RULE2); T2=${T2:-FAILED}; PV=$(val PATH); PO=$(val PONG); ID=$(val IDENT); IC=$(val IDENTC); GT=$(val GATE)
+VR=$(python3 "$RES/job/report2x.py" verdict "$T2" "${PV:-none}" "${PO:-none}" "${ID:-none}" "${IC:-none}" "${GT:-none}")
+V=${VR%%$'\t'*}; WHY=${VR#*$'\t'}; [ "$WHY" = "$VR" ] && WHY=; V=${V:-EMPTY}
+SUM="VERDICT=$V${WHY:+ ($WHY)} RULE2=$T2 PATH=${PV:-none} PONG=${PO:-none} IDENT=${ID:-none} IDENTC=${IC:-none} GATE=${GT:-none}"
 { echo "k120 $(TZ=Europe/Bucharest date '+%F %T %Z'): b12x ${B12X_SHA:0:8} (HC BF16 path + GDN decode CTA barrier + MoE TMA fence, DSL 4.7.0) on the 2x v2.2.0 ($ARM_IMG) vs 2x v2.2.0 ($V22), TP=2, 4 boots per side"
-  echo "VERDICT=$V RULE2=$T2 IDENT=${ID:-none} IDENTC=${IC:-none}"; echo; echo "== GPU tests in the arm image (dgx-01)"; cat "$RES/tests.txt"
-  echo; cat "$RES/tp2/$J-tp2.txt" 2>/dev/null
+  echo "$SUM"; echo; echo "== GPU tests (dgx-01)"; cat "$RES/tests.txt"; echo; cat "$RES/pipdiff.txt"
+  echo; cat "$T2O" 2>/dev/null
   grep -h ABORT "$RES"/guard-dgx0?.log 2>/dev/null | sed 's/^/memory guard: /'; } > "$RES/k120.txt"
 mkdir -p "$K/private"; grep -rIliE "$PRIV" "$RES" 2>/dev/null | while read -r f; do log "private pattern in $f: moved to $K/private"; mv "$f" "$K/private/$(echo "${f#$RES/}" | tr / _)"; done
-{ echo "k120 result: I tested the HC down-projection BF16 path of 1x v2.4.0 on the 2x, together with the two b12x race fixes, against the 2x v2.2.0 itself, TP=2, 4 boots per side in the order ctl arm arm ctl ctl arm arm ctl. The arm image is the v2.2.0 image with b12x \`${B12X_SHA:0:8}\` and nothing else changed (same vLLM, same CuTe DSL 4.7.0, same FlashInfer). The decision rule was written before the first boot (RULE.md in the results). Nothing ships from this job."
-  echo; echo "\`VERDICT=$V\` (\`RULE2=$T2\`, identity \`IDENT=${ID:-none}\`, identity under load \`IDENTC=${IC:-none}\`). GPU tests:\`$TR\`."
+{ echo "k120 result: I tested the HC down-projection BF16 path of 1x v2.4.0 on the 2x, together with the two b12x race fixes, against the 2x v2.2.0 itself, TP=2, 4 boots per side in the order ctl arm arm ctl ctl arm arm ctl. The arm image is the v2.2.0 image with b12x \`${B12X_SHA:0:8}\` and nothing else changed (pip freeze differs in the b12x line only; same vLLM, CuTe DSL 4.7.0, FlashInfer). The decision rule was written before the first boot (RULE.md in the results). Nothing ships from this job."
+  echo; echo "\`$SUM\`. GPU tests:\`$TR\`."
   case $V in
-    SHIP-CANDIDATE) echo "A target cell (cold TTFT 16K/64K/128K or pp2048) is better beyond noise, no cell from c1 to c16 is worse, MTP acceptance did not move and the completions are as stable as on v2.2.0. The BF16 path can go into the next 2x release with the fixes." ;;
-    FLAT) echo "No target cell moved beyond noise and nothing is worse. The race fixes stay a ship candidate on their own (k107fix); the BF16 path brings no measurable gain on the 2x." ;;
-    REJECT) echo "A cell is worse beyond noise or a quality check failed, so the BF16 path does not go into the 2x." ;;
-    *) echo "Some measurements are missing, so this run gives no verdict." ;; esac
+    SHIP-CANDIDATE) echo "A target cell (cold TTFT 16K/64K/128K or pp2048) is better beyond noise, no cell from c1 to c16 is worse, MTP acceptance did not move, the BF16 path ran on both ranks, short-prompt completions match v2.2.0, completions are as stable under load as on v2.2.0 and the arm passes the release quality gate. The BF16 path can go into the next 2x release with the fixes." ;;
+    FLAT) echo "No target cell moved beyond noise and nothing is worse; the BF16 path ran on both ranks and the quality checks pass. The race fixes stay a ship candidate on their own (k107fix); the BF16 path brings no measurable gain on the 2x." ;;
+    REJECT) echo "A cell is worse beyond noise or a quality check failed ($WHY), so the BF16 path does not go into the 2x." ;;
+    *) echo "No verdict: $WHY." ;; esac
   echo; echo '```'; head -c 55000 "$RES/k120.txt"; echo '```'
   echo; echo "Results: {RESULTS_URL}"; } > "$K/comment.md"
 sed -i -e 's/\xe2\x80\x94/-/g' -e 's/\xc2\xb7/-/g' "$K/comment.md"
 if grep -qiE "$PRIV" "$K/comment.md" || grep -qE '192\.168\.|dgx-0[0-9]\.local' "$K/comment.md"; then
   mv "$K/comment.md" "$K/private/"; FINAL="FAILED: k120 comment.md matched the private or LAN pattern (not posted; $RES)"; exit 1; fi
 cp "$K/comment.md" "$RES/comment.md"
-case $V in SHIP-CANDIDATE|FLAT|REJECT) FINAL="DONE: k120 VERDICT=$V RULE2=$T2 IDENT=${ID:-none} IDENTC=${IC:-none} ($RES/k120.txt)" ;;
-  *) FINAL="FAILED: k120 VERDICT=$V RULE2=$T2 IDENT=${ID:-none} IDENTC=${IC:-none} ($RES/k120.txt)" ;; esac
+case $V in SHIP-CANDIDATE|FLAT|REJECT) FINAL="DONE: k120 $SUM ($RES/k120.txt)" ;;
+  *) FINAL="FAILED: k120 $SUM ($RES/k120.txt)" ;; esac
 exit 0
